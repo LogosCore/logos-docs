@@ -1,0 +1,30 @@
+/* Tailwind v4 + Starlight integration.
+   Order of layers matters so Starlight's own styles win where they should. */
+@layer base, starlight, theme, components, utilities;
+
+@import '@astrojs/starlight-tailwind';
+@import 'tailwindcss/theme.css' layer(theme);
+@import 'tailwindcss/utilities.css' layer(utilities);
+
+/* --- Full-width content layout ---------------------------------------------
+   The right-hand "On this page" column is replaced by a floating overlay
+   (see TwoColumnContent override + FloatingTableOfContents), so let the main
+   content span the full available width and reclaim the header's reserved
+   TOC gap. These rules are unlayered, so they win over Starlight's defaults. */
+:root {
+  --sl-content-width: 100%;
+}
+
+@media (min-width: 50rem) {
+  /* The TOC no longer occupies a column, so the header shouldn't reserve space
+     for one — let the search box stretch across the full content width. */
+  :root[data-has-toc] {
+    --__toc-width: 0rem;
+  }
+}
+
+/* Project-specific Starlight theme tokens can be overridden here, e.g.:
+:root {
+  --sl-color-accent: oklch(68% 0.21 250);
+}
+*/

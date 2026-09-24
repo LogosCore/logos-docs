@@ -1,0 +1,20 @@
+---
+// Override: drop Starlight's right-hand TOC column so the main content can use the
+// full available width. The "On this page" navigation is provided instead by a
+// floating, button-triggered overlay (FloatingTableOfContents).
+import FloatingTableOfContents from '../components/FloatingTableOfContents.astro';
+
+const { toc } = Astro.locals.starlightRoute;
+---
+
+<div class="main-pane"><slot /></div>
+{toc && <FloatingTableOfContents toc={toc} />}
+
+<style>
+  @layer starlight.core {
+    .main-pane {
+      isolation: isolate;
+      width: 100%;
+    }
+  }
+</style>

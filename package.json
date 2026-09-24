@@ -1,0 +1,27 @@
+{
+  "name": "logos-docs",
+  "type": "module",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Product and technical documentation for the Logos project",
+  "scripts": {
+    "dev": "astro dev",
+    "start": "astro dev",
+    "build": "astro build",
+    "preview": "astro preview",
+    "astro": "astro",
+    "check": "astro check"
+  },
+  "dependencies": {
+    "@astrojs/starlight": "^0.36.0",
+    "astro": "^5.14.0",
+    "astro-mermaid": "^1.1.0",
+    "mermaid": "^11.12.0",
+    "sharp": "^0.34.0"
+  },
+  "devDependencies": {
+    "@astrojs/starlight-tailwind": "^4.0.1",
+    "@tailwindcss/vite": "^4.1.13",
+    "tailwindcss": "^4.1.13"
+  }
+}
