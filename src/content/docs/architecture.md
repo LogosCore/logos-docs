@@ -27,7 +27,7 @@ title: "Architecture Draft"
 - Core exposes a dedicated channel sync HTTP endpoint (`POST /api/channel/sync`).
 - Channel->core minion traffic is request/response over HTTP.
 - On inbound request, core returns an encrypted outbound payload in the same HTTP response (tasking may be embedded inside ciphertext).
-- Channel applies configurable obfuscation profiles to map transport fields <-> canonical fields (`id`, `encrypted_data`).
+- Channel applies configurable transposition profiles to map transport fields <-> canonical fields (`id`, `encrypted_data`).
 - Profile management between core and channel uses RabbitMQ RPC control calls.
 - Only core Logos services hold decryption keys and perform decrypt/verify operations.
 - Messages should be schema-versioned and idempotent where possible.

@@ -62,7 +62,7 @@ title: "Tech Requirements"
 - Security-relevant actions must be logged with actor, action, and time.
 - Logs must be queryable for incident investigation.
 - Module-originated actions must be traceable to message IDs/correlation IDs.
-- Obfuscation profile changes must be auditable.
+- Transposition profile changes must be auditable.
 
 ## Non-Functional Requirements
 
