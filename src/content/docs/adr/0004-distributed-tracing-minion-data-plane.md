@@ -60,7 +60,7 @@ captured within the same trace (not a new hop).
 
 ### 2. Trust boundary — tracing begins at the channel, never the minion
 
-The minion is implant code on a compromised target and is **never** part of the
+The minion is a code on a target and is **never** part of the
 observability plane:
 
 - Trace context is **never propagated onto the target host**. The minion emits

@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What This Repo Is
 
-This is the **documentation site** for the Logos project — a modular command-and-control platform. It is an [Astro](https://astro.build/) + [Starlight](https://starlight.astro.build/) static site containing Markdown docs and a GitHub Actions deployment pipeline. There is no application code here; the Go packages and modules are in separate repositories.
+This is the **documentation site** for the Logos project — a modular team operations platform. It is an [Astro](https://astro.build/) + [Starlight](https://starlight.astro.build/) static site containing Markdown docs and a GitHub Actions deployment pipeline. There is no application code here; the Go packages and modules are in separate repositories.
 
 ## Build and Serve
 
