@@ -43,20 +43,13 @@ export default defineConfig({
       },
       sidebar: [
         {
-          label: "Home",
-          link: "/",
-        },
-        {
           label: "Foundations",
           items: [
-            { slug: "project-scope" },
-            { slug: "tech-requirements" },
             { slug: "architecture" },
             { slug: "core-infrastructure" },
             { slug: "core-responsibilities" },
             { slug: "module-types" },
             { slug: "message-flow-full" },
-            { slug: "future-steps" },
           ],
         },
         {
@@ -74,14 +67,6 @@ export default defineConfig({
             { slug: "contracts/module-lifecycle" },
             { slug: "contracts/channel-core-sync" },
             { slug: "contracts/channel-core-rpc" },
-          ],
-        },
-        {
-          label: "ADR",
-          items: [
-            { slug: "adr" },
-            { slug: "adr/0004-distributed-tracing-minion-data-plane" },
-            { slug: "adr/0005-oidc-authentication" },
           ],
         },
       ],
