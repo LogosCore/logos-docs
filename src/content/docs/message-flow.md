@@ -1,12 +1,21 @@
 ---
-title: "Channel Message Flow (Isolated)"
+title: "Channel Message Flow"
 ---
 
-This page documents **channel-only** flow and responsibilities.
+This page documents the **channel-to-core data-plane flow** — how a minion's
+traffic reaches core and how core's response gets back.
 
-It intentionally excludes internal core processing layers such as minion factories.
+## Envelope-Centric View
 
-## Channel-Centric Sequence
+The core Server defines one contract surface for all channel modules: a pair of
+canonical JSON envelopes exchanged over HTTP. How a channel module receives
+traffic from a minion, what transport it uses, and how it extracts or embeds
+fields is **the channel's concern and out of scope for core**.
+
+Core sees only:
+
+1. An `inbound.minion_message` envelope arriving at `POST /api/channel/sync`.
+2. An `outbound.minion_message` envelope returned in the HTTP response.
 
 ```mermaid
 sequenceDiagram
@@ -15,25 +24,37 @@ sequenceDiagram
     participant CH as Channel Module
     participant CS as Core Server
 
-    I->>CH: transport message (transpositioned id + encrypted_data)
-    CH->>CH: resolve profile (hint -> brute-force enabled profiles)
-    CH->>CH: de-transpose to canonical id + encrypted_data
+    I->>CH: transport-specific traffic
+    CH->>CH: extract id + encrypted_data (channel's logic)
     CH->>CS: POST /api/channel/sync (inbound.minion_message)
-    CS-->>CH: HTTP 200 outbound.minion_message (encrypted_data)
-    CH->>CH: re-transpose response by active profile
-    CH-->>I: transport response (transpositioned id + encrypted_data)
+    CS-->>CH: HTTP 200 (outbound.minion_message)
+    CH->>CH: embed encrypted_data into transport response (channel's logic)
+    CH-->>I: transport-specific response
 ```
 
-## Channel Responsibilities
+## What Core Requires
 
-- Transport adaptation (HTTP/Telegram/etc.).
-- Transposition profile resolution and mapping.
-- Canonicalization to `id` + `encrypted_data`.
-- Forwarding canonical request to core sync endpoint.
-- Returning core response to minion in transport form.
+A well-formed `inbound.minion_message` with:
+
+- `id` — identifies the minion session.
+- `encrypted_data` — opaque blob, never inspected by the channel.
+- `source.module_instance` — the registered channel instance sending it.
+- Standard envelope fields (`message_id`, `type`, `version`, `timestamp`).
+
+See [Channel ↔ Core: HTTP Sync](./contracts/channel-core-sync/) for the full
+envelope schema.
+
+## What Core Returns
+
+An `outbound.minion_message` with:
+
+- The same `id` for correlation.
+- `encrypted_data` — opaque response blob (or empty/no-op when nothing is pending).
 
 ## Channel Boundaries
 
 - Channel does **not** decrypt payload plaintext.
 - Channel does **not** execute core business logic.
 - Channel does **not** own minion-factory semantics.
+- How a channel maps transport fields to/from the canonical envelope is an
+  implementation detail invisible to core.

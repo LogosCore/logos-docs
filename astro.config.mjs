@@ -63,10 +63,6 @@ export default defineConfig({
           label: "Channels",
           items: [
             { slug: "message-flow" },
-            { slug: "channel-transposition-profiles" },
-            { slug: "channel-transposition-yaml-reference" },
-            { slug: "channel-transposition-examples" },
-            { slug: "channel-authoring-15min" },
           ],
         },
         {
@@ -84,9 +80,6 @@ export default defineConfig({
           label: "ADR",
           items: [
             { slug: "adr" },
-            { slug: "adr/0001-golang-channel-core-foundation" },
-            { slug: "adr/0002-amqp-contract-conventions" },
-            { slug: "adr/0003-module-registration-lifecycle" },
             { slug: "adr/0004-distributed-tracing-minion-data-plane" },
             { slug: "adr/0005-oidc-authentication" },
           ],

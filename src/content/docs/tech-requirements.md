@@ -42,27 +42,24 @@ title: "Tech Requirements"
 - Channel modules act as transport-only relays and must not own Server protocol semantics.
 - Core Server services must resolve key material/context using `id` and perform decrypt/verify.
 
-## FR-07: Channel Transposition Profiles
+## FR-07: Channel Envelope Delivery
 
-- Channel modules must support multiple enabled transposition profiles per channel.
-- Profiles must define mapping/transposition rules for `profile_id` (optional hint), `id`, and `encrypted_data` in transport fields.
-- Profiles must be persisted in storage as YAML documents.
-- Channel modules must expose RabbitMQ RPC management actions for profile CRUD/activation/validation.
-- Channel must brute-force all enabled profiles when hint is absent or invalid.
+- Channel modules must deliver well-formed `inbound.minion_message` envelopes to core.
+- How a channel extracts `id` and `encrypted_data` from its transport is the channel's implementation detail.
+- Channel modules must validate envelopes before sending to core.
+- Channel modules must expose RabbitMQ RPC management endpoints for operational control.
 
-## FR-08: Transposition Match Resolution and Performance
+## FR-08: Channel Performance
 
-- On inbound, channel should first resolve profile by transport `profile_id` hint when available.
-- If hint is absent/invalid, channel must select profile by matching enabled profiles and decoding to canonical fields.
-- Profile create/update must validate and reject ambiguous overlap with existing enabled profiles.
-- Channel should optimize profile selection using usage frequency and source-to-profile affinity cache.
+- Channel modules should handle inbound traffic efficiently at expected load.
+- Channel modules should optimize their transport-to-envelope extraction path.
 
 ## FR-09: Auditability
 
 - Security-relevant actions must be logged with actor, action, and time.
 - Logs must be queryable for incident investigation.
 - Module-originated actions must be traceable to message IDs/correlation IDs.
-- Transposition profile changes must be auditable.
+- Channel configuration changes must be auditable.
 
 ## Non-Functional Requirements
 

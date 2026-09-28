@@ -15,20 +15,22 @@ title: "Architecture Draft"
 
 - The logical conversation is **minion ↔ core Server**.
 - A channel module is only a transport relay between minion and core Server.
-- Channel modules shuffle opaque encrypted blobs plus minimal routing metadata (`id`).
+- Channel modules deliver canonical envelopes containing opaque encrypted blobs plus minimal routing metadata (`id`).
 - Channel modules are not protocol peers for minion business logic and must stay plaintext-blind.
+- How a channel module receives traffic from its transport and extracts the
+  canonical fields is the channel's implementation detail — core defines only
+  the envelope contract.
 
 ## Communication Model
 
 - Modules do not call each other directly by default.
 - Core server and modules communicate over RabbitMQ channels.
 - Minion-to-Logos payloads are application-layer encrypted end-to-end.
-- Channel modules do not decrypt minion payloads; they relay metadata + encrypted blobs.
+- Channel modules do not decrypt minion payloads; they relay `id` + `encrypted_data` in canonical envelopes.
 - Core exposes a dedicated channel sync HTTP endpoint (`POST /api/channel/sync`).
-- Channel->core minion traffic is request/response over HTTP.
+- Channel → core minion traffic is request/response over HTTP.
 - On inbound request, core returns an encrypted outbound payload in the same HTTP response (tasking may be embedded inside ciphertext).
-- Channel applies configurable transposition profiles to map transport fields <-> canonical fields (`id`, `encrypted_data`).
-- Profile management between core and channel uses RabbitMQ RPC control calls.
+- Channel management between core and channel uses RabbitMQ RPC control calls.
 - Only core Logos services hold decryption keys and perform decrypt/verify operations.
 - Messages should be schema-versioned and idempotent where possible.
 - Critical flows should use acknowledgements/retries and dead-letter queues.
@@ -58,7 +60,7 @@ title: "Architecture Draft"
 
 ## Pending Decisions
 
-1. ~~RabbitMQ exchange/queue naming conventions and routing-key strategy.~~ Resolved in [ADR-0002](../adr/0002-amqp-contract-conventions/) — see [AMQP Routing Conventions](../contracts/amqp-conventions/).
-2. ~~Message contract format and versioning policy.~~ Resolved in [ADR-0002](../adr/0002-amqp-contract-conventions/) — see [AMQP Message Envelope](../contracts/amqp-envelope/).
+1. ~~RabbitMQ exchange/queue naming conventions and routing-key strategy.~~  Resolved — see [AMQP Routing Conventions](../contracts/amqp-conventions/).
+2. ~~Message contract format and versioning policy.~~  Resolved — see [AMQP Message Envelope](../contracts/amqp-envelope/).
 3. ~~Database engine and schema partitioning strategy.~~ Resolved — see [Core Infrastructure](../core-infrastructure/) (MongoDB).
 4. Module packaging and lifecycle policy (enable/disable/version compatibility).

@@ -11,17 +11,19 @@ Channel modules provide transport paths between minions and the core Server plat
 ### Responsibilities
 
 - Accept inbound minion traffic from a specific transport/platform.
-- Extract/maintain minimal routing metadata (`id` + channel context).
+- Extract `id` and `encrypted_data` from the transport (channel-defined logic).
 - Treat minion payload as opaque encrypted blob (no decrypt/inspect).
-- Send inbound HTTP request to core sync endpoint (`POST /api/channel/sync`).
-- Wait for HTTP response from core and relay returned encrypted payload back to minion.
-- Implement transport-specific response delivery (`poll`/long-poll/webhook reply/etc.).
-- Load and apply transposition profiles (extract/re-embed `id` and `encrypted_data`).
-- Resolve profile selection from transport `profile_id` hint when present; otherwise match against enabled profiles.
-- Persist and manage YAML transposition profiles.
-- Expose RabbitMQ RPC management actions for profile CRUD/activation/validation.
-- Maintain usage statistics and source-affinity cache for profile selection optimization.
+- Build an `inbound.minion_message` envelope and send it to core's sync endpoint (`POST /api/channel/sync`).
+- Receive `outbound.minion_message` from core and relay `encrypted_data` back to the minion via the transport.
+- Register with core on startup via [Module Lifecycle](../contracts/module-lifecycle/).
 - Handle transport-specific concerns (sessions, polling cadence, retries, rate limits).
+
+### What core requires from a channel
+
+A well-formed `inbound.minion_message` envelope — nothing more. How a channel
+receives traffic, what transport protocol it uses, and how it extracts the
+canonical fields is entirely the channel's implementation detail. Core defines
+the envelope contract in [Channel ↔ Core: HTTP Sync](../contracts/channel-core-sync/).
 
 ### Examples
 
@@ -35,7 +37,7 @@ Channel modules provide transport paths between minions and the core Server plat
 
 - Keep transport logic isolated from business/tasking logic.
 - Channel modules are blind to minion plaintext by design.
-- Channel role is packet/blob shuffling + HTTP relay reliability, not Logos semantics.
+- Channel role is envelope delivery, not Logos semantics.
 - The real protocol peer is core Server, not the channel module.
 - Enforce per-channel authentication and abuse controls.
 - Expose channel health and queue lag metrics.
@@ -110,8 +112,9 @@ Crypto boundary rules:
 The wire-level contracts these modules use are specified in the
 [Contracts](../contracts/overview/) section:
 
-1. Base message envelope and versioning — [ADR-0002](../adr/0002-amqp-contract-conventions/) / [AMQP Message Envelope](../contracts/amqp-envelope/).
+1. Base message envelope and versioning — [AMQP Message Envelope](../contracts/amqp-envelope/).
 2. Exchange/queue naming convention — [AMQP Routing Conventions](../contracts/amqp-conventions/).
-3. The first concrete module↔core contract — [Channel ↔ Core: Profile RPC](../contracts/channel-core-rpc/).
+3. Data-plane envelope — [Channel ↔ Core: HTTP Sync](../contracts/channel-core-sync/).
+4. Management RPC — [Channel ↔ Core: Management RPC](../contracts/channel-core-rpc/).
 
 Still open: minion-factory build-coordination contract, and module packaging/lifecycle policy.

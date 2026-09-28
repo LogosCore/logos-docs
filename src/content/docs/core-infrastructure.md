@@ -56,7 +56,7 @@ rationale and trust boundary.
 
 ## RabbitMQ — Message Bus
 
-- **Role**: asynchronous communication backbone between core server and all modules. Carries bidirectional control-plane RPC — module lifecycle (register/heartbeat/deregister, module→core) and management (e.g. transposition profile CRUD, core→module) — plus event notifications and coordination messages. Does **not** carry minion traffic — that flows via the HTTP sync endpoint.
+- **Role**: asynchronous communication backbone between core server and all modules. Carries bidirectional control-plane RPC — module lifecycle (register/heartbeat/deregister, module→core) and management (e.g. channel configuration, core→module) — plus event notifications and coordination messages. Does **not** carry minion traffic — that flows via the HTTP sync endpoint.
 - **Why RabbitMQ**: mature AMQP broker with exchange/queue routing patterns suited to module-type-based message routing, dead-letter queues for reliability ([FR-05](../tech-requirements/)), and per-queue ACLs for trust boundary enforcement.
 - **Connections**: Core Server (publisher/consumer), Channel Modules, Minion Factory Modules — all communicate over AMQP.
 
@@ -67,10 +67,9 @@ rationale and trust boundary.
 - **Connections**: Core Server is the primary read/write client.
 
 :::note
-MongoDB does **not** store transposition profiles. Each channel module owns its
-profiles as YAML files on local disk, persisted with Docker volumes. Core manages
-them only through the [profile RPC contract](../contracts/channel-core-rpc/). See
-[ADR-0002](../adr/0002-amqp-contract-conventions/).
+MongoDB does **not** store channel configuration. Each channel module owns its
+configuration locally, persisted with Docker volumes. Core manages it only
+through the [Management RPC contract](../contracts/channel-core-rpc/).
 :::
 
 :::note
@@ -101,7 +100,7 @@ MongoDB resolves the database engine decision listed as pending in the
 | From | To | Protocol | Purpose |
 |---|---|---|---|
 | Core Server | RabbitMQ | AMQP | Module coordination, RPC, events |
-| Channel Modules | RabbitMQ | AMQP | Profile management RPC, event publishing |
+| Channel Modules | RabbitMQ | AMQP | Channel management RPC, event publishing |
 | Minion Factories | RabbitMQ | AMQP | Build coordination |
 | Channel Modules | Core Server | HTTP | Minion sync (`POST /api/channel/sync`) |
 | Core Server | MongoDB | MongoDB wire protocol | State persistence, audit logs |

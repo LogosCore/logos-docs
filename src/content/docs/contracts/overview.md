@@ -17,9 +17,11 @@ exactly one of them.
 | **Control plane** | RabbitMQ (AMQP) | Module management, coordination, events | RPC + pub/sub |
 
 - The **data plane** moves minion payloads. It is deliberately minimal and
-  plaintext-blind: channels relay `id` + `encrypted_data` and never decrypt.
+  plaintext-blind: channels deliver a canonical envelope with `id` +
+  `encrypted_data` and never decrypt. Core cares only about the envelope — how
+  a channel extracts those fields from its transport is the channel's business.
   See [Channel ↔ Core: HTTP Sync](../channel-core-sync/).
-- The **control plane** carries everything else — module lifecycle, profile
+- The **control plane** carries everything else — module lifecycle, channel
   management, build coordination, health/events. It never carries minion
   ciphertext. It is built on a shared [AMQP envelope](../amqp-envelope/) and
   [routing conventions](../amqp-conventions/).
@@ -32,7 +34,7 @@ servers depending on the operation:
 | Flow | Direction | RPC server | Operations |
 |---|---|---|---|
 | Lifecycle | module → core | **core** (`logos.core.rpc`) | `module.register`, `module.heartbeat`, `module.deregister` |
-| Management | core → module | **module** (`logos.<type>.rpc.<instance>`) | `transposition.profile.*` |
+| Management | core → module | **module** (`logos.<type>.rpc.<instance>`) | channel configuration management |
 | Events | module → core | — (pub/sub) | audit/notifications on `logos.events` |
 
 Registration bootstraps everything else: core cannot issue a management RPC to a
@@ -47,7 +49,7 @@ graph LR
 
     CH -- "HTTP sync: id + encrypted_data" --> CS
     CH -- "AMQP RPC: register / heartbeat" --> CS
-    CS -- "AMQP RPC: profile mgmt" --> CH
+    CS -- "AMQP RPC: management" --> CH
     CH -- "AMQP events" --> CS
     IP -- "AMQP RPC: register / heartbeat" --> CS
     IP -- "AMQP: build coordination" --> CS
@@ -73,13 +75,10 @@ Every contract in this section, regardless of surface, follows the same baseline
 |---|---|---|---|
 | [HTTP Sync](../channel-core-sync/) | Data plane | Channel ↔ Core | Specified |
 | [Module Lifecycle](../module-lifecycle/) | Control plane | Module (client) → Core (server) | Specified |
-| [Transposition Profile RPC](../channel-core-rpc/) | Control plane | Core (client) → Channel (server) | Specified |
+| [Management RPC](../channel-core-rpc/) | Control plane | Core (client) → Channel (server) | Specified |
 
 Foundational specs the control-plane contracts build on:
 
 - [AMQP Message Envelope](../amqp-envelope/) — the shared base envelope.
 - [AMQP Routing Conventions](../amqp-conventions/) — exchange/queue/routing-key naming.
 
-The envelope and naming conventions are frozen in
-[ADR-0002](../../adr/0002-amqp-contract-conventions/); the bidirectional
-registration model in [ADR-0003](../../adr/0003-module-registration-lifecycle/).

@@ -5,7 +5,6 @@ title: "AMQP Routing Conventions"
 This page freezes the RabbitMQ exchange, queue, and routing-key naming strategy
 for the control plane. It resolves the "exchange/queue naming conventions and
 routing-key strategy" item from the [Architecture Draft](../../architecture/#pending-decisions)
-and is recorded in [ADR-0002](../../adr/0002-amqp-contract-conventions/).
 
 All names are lowercase, dot-separated, and prefixed with `logos.` to namespace
 the platform on a shared broker.
@@ -15,7 +14,7 @@ the platform on a shared broker.
 | Exchange | Type | Purpose |
 |---|---|---|
 | `logos.core.rpc` | `direct` | Module → core RPC requests (lifecycle: register/heartbeat/deregister). |
-| `logos.channel.rpc` | `direct` | Core → channel RPC requests (profile management). |
+| `logos.channel.rpc` | `direct` | Core → channel RPC requests (channel management). |
 | `logos.factory.rpc` | `direct` | Core ↔ minion-factory RPC (build coordination). |
 | `logos.events` | `topic` | Module → core event notifications (fan-in). |
 
@@ -32,7 +31,7 @@ request queue; the *caller* is the RPC **client**.
 | Operation class | Client | Server (owns queue) |
 |---|---|---|
 | Lifecycle (`module.*`) | module | **core** — `logos.core.rpc` |
-| Management (`transposition.profile.*`, ...) | core | **module** — `logos.<module-type>.rpc.<instance>` |
+| Management (channel configuration, ...) | core | **module** — `logos.<module-type>.rpc.<instance>` |
 
 A module learns *its own* server queue name by convention (below); core learns a
 module's server queue from the `rpc_queue` field the module sends at
@@ -96,7 +95,7 @@ AMQP properties:
 | `reply_to` | `amq.rabbitmq.reply-to` |
 | `correlation_id` | same ULID as the envelope `correlation_id` |
 | `content_type` | `application/json` |
-| `type` | the envelope `type` (e.g. `transposition.profile.create`) |
+| `type` | the envelope `type` (e.g. `module.config.update`) |
 
 ## Events: publish/subscribe
 
@@ -109,13 +108,13 @@ hierarchical:
 
 Examples:
 
-- `channel.http-1.profile.activated`
-- `channel.http-1.profile.match_failed`
+- `channel.http-1.config.updated`
+- `channel.http-1.sync.unmatched`
 - `factory.go-1.build.completed`
 
 Core binds subscriber queues with wildcards:
 
-- `channel.*.profile.*` — all channel profile events
+- `channel.*.config.*` — all channel config events
 - `factory.*.build.*` — all factory build events
 - `#` — everything (audit sink)
 
@@ -138,5 +137,5 @@ Core binds subscriber queues with wildcards:
 | Module RPC request queue | `logos.<module-type>.rpc.<instance>` | `logos.channel.rpc.http-1` |
 | Module RPC routing key | `<instance>` | `http-1` |
 | Event exchange | `logos.events` | `logos.events` |
-| Event routing key | `<module-type>.<instance>.<event>` | `channel.http-1.profile.activated` |
+| Event routing key | `<module-type>.<instance>.<event>` | `channel.http-1.config.updated` |
 | Dead-letter exchange | `logos.dlx` | `logos.dlx` |

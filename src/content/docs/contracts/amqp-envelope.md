@@ -5,7 +5,6 @@ title: "AMQP Message Envelope"
 All control-plane messages on the RabbitMQ surface share one base envelope.
 Contracts define only their `payload`; the surrounding fields are identical
 everywhere. This is the format frozen in
-[ADR-0002](../../adr/0002-amqp-contract-conventions/).
 
 For routing/exchange/queue naming see [AMQP Routing Conventions](../amqp-conventions/).
 
@@ -17,7 +16,7 @@ Every AMQP message — request, reply, or event — carries these fields:
 {
   "message_id": "01JNX6R8VQ2H3CN4K9EJ1T2Z7M",
   "correlation_id": "01JNX6R8VQ2H3CN4K9EJ1T2Z7M",
-  "type": "transposition.profile.create",
+  "type": "module.config.update",
   "version": "1.0",
   "timestamp": "2026-06-20T21:05:12.481Z",
   "source": {
@@ -32,7 +31,7 @@ Every AMQP message — request, reply, or event — carries these fields:
 |---|---|---|---|
 | `message_id` | ULID string | yes | Unique id for this message. Basis for idempotent processing. |
 | `correlation_id` | ULID string | RPC only | Ties a reply to its request. Set equal to `message_id` on the originating request; copied verbatim onto the reply. Optional for fire-and-forget events. |
-| `type` | string | yes | Dotted operation/event name (e.g. `transposition.profile.create`). |
+| `type` | string | yes | Dotted operation/event name (e.g. `module.config.update`). |
 | `version` | string | yes | Contract version `MAJOR.MINOR`. Consumers reject unknown major versions. |
 | `timestamp` | RFC3339 string | yes | Producer's send time (UTC). |
 | `source` | object | yes | Origin descriptor: `service` (`core` / `channel` / `minion-factory`) and `instance` (deployment instance id). |
@@ -47,7 +46,7 @@ RPC replies use the same base envelope with an added result block. The reply's
 {
   "message_id": "01JNX7D8H8QY3G6P2R4X1K8ABC",
   "correlation_id": "01JNX6R8VQ2H3CN4K9EJ1T2Z7M",
-  "type": "transposition.profile.create",
+  "type": "module.config.update",
   "version": "1.0",
   "timestamp": "2026-06-20T21:05:12.690Z",
   "source": {
@@ -72,8 +71,8 @@ RPC replies use the same base envelope with an added result block. The reply's
 {
   "status": "error",
   "error": {
-    "code": "overlap_conflict",
-    "message": "profile would ambiguously match enabled profile p-2b77df"
+    "code": "validation_failed",
+    "message": "configuration change failed validation"
   },
   "payload": {}
 }

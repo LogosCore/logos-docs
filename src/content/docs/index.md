@@ -30,6 +30,6 @@ The project exists to enable people to:
 ## Structure
 
 - **Foundations** — project scope, technical requirements, architecture draft, core responsibilities, module taxonomy, full-system message flow.
-- **Channels** — channel-specific message flow, message contracts, transposition profiles (concepts, YAML reference, examples), and a 15-minute channel authoring guide.
-- **Go Packages Ecosystem** — docs for shared Go packages: protocol message contracts and channel runtime SDK.
+- **Channels** — channel message flow and envelope contract with core.
+- **Contracts** — data-plane and control-plane wire contracts between modules and core.
 - **ADR** — Architecture Decision Records for major technical choices.

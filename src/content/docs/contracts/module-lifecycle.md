@@ -10,7 +10,6 @@ until that module has registered.
 
 It builds on the shared [AMQP envelope](../amqp-envelope/) and
 [routing conventions](../amqp-conventions/), and the model is recorded in
-[ADR-0003](../../adr/0003-module-registration-lifecycle/).
 
 ## Roles and direction
 

@@ -3,67 +3,77 @@ title: "Channel ↔ Core: HTTP Sync"
 ---
 
 This is the **data-plane** contract between a channel module and the core Server.
-It carries minion traffic as opaque encrypted blobs over HTTP. For the
-control-plane (profile management) contract between the same parties, see
-[Channel ↔ Core: Profile RPC](../channel-core-rpc/).
+It defines the two canonical envelopes that carry minion traffic as opaque
+encrypted blobs over HTTP.
 
-## Model
+How a channel module receives traffic from a minion, what transport protocol it
+uses, and how it extracts or embeds the canonical fields is entirely the
+channel's concern and outside this contract.
 
-- Canonical channel-core model is only `id` + `encrypted_data`.
-- Minion/channel transport may use transposition placement (headers/query/cookies/body/etc.) defined by active profile.
-- Channel normalizes transport payload to canonical form before calling core.
-- Channel sends HTTP request to core: `POST /api/channel/sync`.
-- Core responds with `outbound.minion_message` containing encrypted data.
-- Channel applies profile mapping for outbound transport response.
+## Endpoint
 
----
+```
+POST /api/channel/sync
+Content-Type: application/json
+```
 
-## `inbound.minion_message` (HTTP request body)
+## `inbound.minion_message` (request body)
 
-Purpose: channel-to-core request carrying inbound encrypted minion data.
-
-### Body (v1)
+Channel → core. One per inbound minion interaction.
 
 ```json
 {
-  "message_id": "01JNX6R8VQ2H3CN4K9EJ1T2Z7M",
+  "message_id": "http-main-1741554312481000000",
   "type": "inbound.minion_message",
   "version": "1.0",
   "timestamp": "2026-03-09T21:05:12.481Z",
   "source": {
-    "module": "channel-http",
-    "module_instance": "channel-http-1",
-    "transport": "http",
+    "module": "channel-core",
+    "module_instance": "http-main",
+    "transport": "channel",
     "tenant": "default"
   },
-  "id": "s-2b77df",
+  "id": "550e8400-e29b-41d4-a716-446655440000",
   "encrypted_data": "QkM4V1R...",
   "meta": {
-    "receive_count": 1,
     "trace_id": "tr-6fd92d8b"
   }
 }
 ```
 
-### Validation rules
+### Field reference
 
-Channel-side (minion -> channel):
-- Require non-empty `id`.
-- Require non-empty `encrypted_data`.
-- Treat `encrypted_data` as opaque.
+| Field | Required | Description |
+|---|---|---|
+| `message_id` | yes | Unique per request. Used by core for idempotency dedup. |
+| `type` | yes | Must be `"inbound.minion_message"`. |
+| `version` | yes | `"1.0"`. |
+| `timestamp` | yes | RFC 3339. |
+| `source.module` | yes | Identifies the sending module kind. |
+| `source.module_instance` | yes | The registered instance id. Core checks this against the registration gate. |
+| `source.transport` | yes | Transport identifier (e.g. `"channel"`). |
+| `source.tenant` | yes | Tenant scope (e.g. `"default"`). |
+| `id` | yes | Minion/session identifier. Opaque to channel. |
+| `encrypted_data` | yes | Opaque encrypted payload. Channel must not inspect or modify. |
+| `meta` | no | Optional metadata (e.g. `trace_id`). |
 
-Core-side (HTTP request body):
-- Require `type == inbound.minion_message`.
-- Require `id` and `encrypted_data`.
-- Require parseable RFC3339 `timestamp`.
+### Core-side validation
+
+1. `type == "inbound.minion_message"`.
+2. `message_id`, `id`, `encrypted_data`, `source.module_instance` are non-empty.
+3. `timestamp` parses as RFC 3339.
+4. **Registration gate** — `source.module_instance` must be registered via the
+   [Module Lifecycle](../module-lifecycle/) contract. Unregistered → **403**.
+   Registry unavailable → **503** (fails closed).
+5. **Idempotency** — `message_id` is deduped via `SetNX` with a TTL window.
+   Replay of an already-seen `message_id` returns a valid no-op outbound
+   (not an error).
 
 ---
 
-## `outbound.minion_message` (HTTP response body)
+## `outbound.minion_message` (response body)
 
-Purpose: core-to-channel response for the same `id`, carrying only encrypted outbound data.
-
-### Body (v1)
+Core → channel. Returned in the same HTTP response.
 
 ```json
 {
@@ -71,7 +81,7 @@ Purpose: core-to-channel response for the same `id`, carrying only encrypted out
   "type": "outbound.minion_message",
   "version": "1.0",
   "timestamp": "2026-03-09T21:05:12.690Z",
-  "id": "s-2b77df",
+  "id": "550e8400-e29b-41d4-a716-446655440000",
   "encrypted_data": "U2FtcGxlRW5jcnlwdGVkQmxvYg==",
   "meta": {
     "status": "ok",
@@ -80,26 +90,38 @@ Purpose: core-to-channel response for the same `id`, carrying only encrypted out
 }
 ```
 
-### Response semantics
+### Field reference
 
-- Response exposes only one payload field: `encrypted_data`.
-- `encrypted_data` is opaque to channel.
-- When no work is pending, core returns an empty/no-op encrypted payload.
-- Channel relays `encrypted_data` to minion unchanged.
+| Field | Required | Description |
+|---|---|---|
+| `message_id` | yes | Core-assigned, unique. |
+| `type` | yes | `"outbound.minion_message"`. |
+| `version` | yes | `"1.0"`. |
+| `timestamp` | yes | RFC 3339. |
+| `id` | yes | Same `id` from the inbound message. |
+| `encrypted_data` | yes | Opaque encrypted response payload. May be empty/no-op when nothing is pending. |
+| `meta` | no | Optional (e.g. `status`, `trace_id`). |
 
-### Validation rules
+### Channel-side validation
 
-Channel-side (HTTP response body):
-- Require `type == outbound.minion_message`.
-- Require matching `id`.
-- Require `encrypted_data` field.
-- Treat `encrypted_data` as opaque.
+1. `type == "outbound.minion_message"`.
+2. `id` matches the inbound request's `id`.
+3. `encrypted_data` is present (treat as opaque).
 
 ---
 
-## Processing expectations
+## Response codes
 
-- Channel sends `inbound.minion_message` to `POST /api/channel/sync` per minion inbound message.
-- Core processes inbound payload and returns `outbound.minion_message` in the same HTTP exchange.
-- Core decrypts/verifies inbound and encrypts outbound; channel never decrypts.
-- Core may return an empty/no-op encrypted payload when no task is pending for that `id`.
+| Code | Meaning |
+|---|---|
+| **200** | Success. Body is `outbound.minion_message`. |
+| **400** | Invalid inbound envelope (missing/malformed fields). |
+| **403** | `source.module_instance` is not registered. |
+| **503** | Registration gate unavailable (fails closed). |
+
+## Processing semantics
+
+- One `inbound.minion_message` per HTTP request, one `outbound.minion_message` per response.
+- Core decrypts inbound and encrypts outbound. Channel never decrypts.
+- When no work is pending for an `id`, core returns an empty/no-op `encrypted_data`.
+- Channel relays `encrypted_data` to the minion unchanged.

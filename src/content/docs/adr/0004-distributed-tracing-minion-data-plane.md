@@ -84,11 +84,11 @@ collector would create an attributable signature and reveal Logos infrastructure
   request header.
 - **AMQP** (core ↔ module RPC, used by the future factory leg): `traceparent`
   carried in **AMQP message headers**, *not* as a field in the
-  [ADR-0002 envelope](../0002-amqp-contract-conventions/). This keeps the frozen
+  the [AMQP envelope](../../contracts/amqp-envelope/). This keeps the frozen
   business envelope stable and the transport/observability concern separate.
 - `trace_id` and `correlation_id` **coexist with distinct jobs**: `trace_id` is
   the end-to-end causal tree; `correlation_id` remains the per-RPC
-  request↔reply pairing from ADR-0002, unchanged.
+  request↔reply pairing, unchanged.
 
 ### 4. Export topology — push-only gateway collector
 
@@ -193,7 +193,7 @@ backend later remains a backend-only change.
   intentionally invisible to tracing. Auditing those is a separate concern
   (FR-09), deferred.
 - Carrying context in AMQP **headers** (not the envelope) favors a stable
-  ADR-0002 contract and standard W3C propagation over a single self-documenting
+  the AMQP envelope contract and standard W3C propagation over a single self-documenting
   envelope field.
 - Minting a fresh root at the channel (discarding inbound minion context) trades
   a theoretical minion-to-server trace continuity — which we never want — for a
