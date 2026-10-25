@@ -35,9 +35,9 @@ graph LR
 
 | Aspect | Value |
 |---|---|
-| Exchange | `logos.channel.rpc` (direct) |
+| Exchange | `logos.<module-type>.rpc` (direct), e.g. `logos.channel.rpc` |
 | Routing key | the module's `<instance>` |
-| Request queue | the `rpc_queue` the module sent at registration, by convention `logos.channel.rpc.<instance>` |
+| Request queue | the `rpc_queue` the module sent at registration, by convention `logos.<module-type>.rpc.<instance>` |
 | Reply | direct reply-to (`amq.rabbitmq.reply-to`), `correlation_id` echoed |
 | Body | [AMQP envelope](../amqp-envelope/) / RPC reply envelope, version `1.0` |
 

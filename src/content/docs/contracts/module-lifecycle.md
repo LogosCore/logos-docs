@@ -117,6 +117,9 @@ Request:
   [minion connection schema](../minion-connection/), the parameters minions are
   given to reach this channel. An invalid schema fails the registration with
   `validation_failed`; a registration without one clears the stored schema.
+- Other top-level fields are type-specific declarations, like `connection` for
+  channels. The Go SDK adds them with `lifecycle.WithRegisterField`; the
+  fields above are reserved.
 
 Reply `payload`:
 

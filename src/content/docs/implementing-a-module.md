@@ -3,9 +3,11 @@ title: "Implementing a Module"
 ---
 
 This page is the practical companion to the [contracts](../contracts/overview/):
-what a module has to do to live on the control plane, and how
+what a module has to do to live on the control plane, and how the Go SDKs do
+it: [`logos-golang-module-core`](https://github.com/logoscore/logos-golang-module-core)
+for every module type, and
 [`logos-golang-channel-core`](https://github.com/logoscore/logos-golang-channel-core)
-does it for Go modules. The [HTTP channel](https://github.com/logoscore/logos-http-channel)
+on top of it for channels. The [HTTP channel](https://github.com/logoscore/logos-http-channel)
 is the worked example throughout.
 
 ## What every module does
@@ -61,10 +63,18 @@ The last point matters on the data plane: core answers a sync request from an
 instance that is not registered with `403`. A module that deregisters before
 its in-flight requests finish fails them.
 
-## With `logos-golang-channel-core`
+## With the Go SDKs
 
-The SDK implements all of the above. A module writes only what is specific to
-it.
+The SDKs implement all of the above. A module writes only what is specific to
+it. They are layered by module type:
+
+| SDK | For | Holds |
+|---|---|---|
+| `logos-golang-module-core` | every module type | The control plane: session, lifecycle, management, log tail, logging. |
+| `logos-golang-channel-core` (v3) | channels | `channel.Run` (the session as a channel, with the [connection schema](../contracts/minion-connection/)) and the channel data-plane helpers (profiles, transforms, sync client). |
+| minion-factory SDK | minion factories | Planned. |
+
+The module-core packages:
 
 | Package | Gives you |
 |---|---|
@@ -72,7 +82,10 @@ it.
 | `pkg/mgmt` | `mgmt.Server`: validates your manifest, serves `mgmt.config.apply` / `action.invoke` / `state.get` (validation, stale revisions, `restart` handling, action timeouts and dedupe, secret redaction). |
 | `pkg/logstream` | `logstream.Hub`: the [live log tail](../contracts/module-logs/) — recent-record buffer, leased streams, rate limit, publishing. |
 | `pkg/logging` | `logging.New`: an `slog` logger writing JSON (or text) at a managed level, teed into the hub; `logging.Headers` for HTTP request headers. |
-| `pkg/lifecycle` | The register / heartbeat / deregister client that `module.Run` drives. |
+| `pkg/lifecycle` | The register / heartbeat / deregister client that `module.Run` drives. `WithRegisterField` adds what a module type declares at registration. |
+
+A channel calls `channel.Run` from channel-core instead of `module.Run`. It sets
+module_type `channel` and declares `Config.Connection` at registration.
 
 ### Wiring
 
@@ -108,16 +121,20 @@ srv.Status(func() map[string]any {
 // The control-plane session. Give it a context of its own, so it outlives
 // the shutdown signal until your servers have drained.
 regCtx, stopReg := context.WithCancel(context.Background())
-go module.Run(regCtx, module.Config{
-    AMQPURL: cfg.RabbitMQURL,
-    Identity: lifecycle.Identity{
-        ModuleType: "channel",
-        ModuleName: "http",
-        Instance:   cfg.ChannelID,
-        Version:    version,
+schema := connection.Schema()
+go channel.Run(regCtx, channel.Config{
+    Config: module.Config{
+        AMQPURL: cfg.RabbitMQURL,
+        Identity: lifecycle.Identity{
+            ModuleType: channel.ModuleType,
+            ModuleName: "http",
+            Instance:   cfg.ChannelID,
+            Version:    version,
+        },
+        Management: srv,
+        Logs:       logs, // declares the "logs" capability
     },
-    Management: srv,
-    Logs:       logs, // declares the "logs" capability
+    Connection: &schema, // the minion connection schema
 })
 
 <-ctx.Done()            // SIGTERM
@@ -131,8 +148,8 @@ runtime config behind an atomic swap or a lock.
 
 ### What stays in the module
 
-`logos-golang-channel-core` is plumbing only. Anything that depends on what a
-module *is* belongs in the module:
+The SDKs are plumbing only. Anything that depends on what a module *is*
+belongs in the module:
 
 - the manifest — which properties, actions and status values exist;
 - what applying a value means, and what an action does (`drain` returns 404
@@ -147,7 +164,7 @@ module *is* belongs in the module:
 | Actions | `drain` (high risk), `resume`, `check_core` (probes core's sync endpoint) |
 | Status values | request / success / failure / core-error / rejected / too-large counters, last core error and its time, `draining` |
 | Capabilities | `logs` |
-| Connection schema | `base_url`, TLS, headers and timing parameters for minions (see [Minion Connection Schema](../contracts/minion-connection/#http-channel-version-2)), declared through `module.Config.Connection` |
+| Connection schema | `base_url`, TLS, headers and timing parameters for minions (see [Minion Connection Schema](../contracts/minion-connection/#http-channel-version-2)), declared through `channel.Config.Connection` |
 
 Besides plain requests it accepts **WebSockets** on any path: each binary
 frame is one message in the same packed format, relayed to core as a sync
@@ -163,10 +180,12 @@ logged once, as one structured line.
 
 ## Design notes
 
-- **One SDK, no reinvention.** Every channel needs the same session handling,
-  management server and log tail. Putting them in channel-core means a new
-  channel only writes its transport and its manifest — and fixes to the
-  plumbing reach every channel.
+- **Shared plumbing, layered by type.** Every module needs the same session
+  handling, management server and log tail. Putting them in module-core means
+  a new module only writes its own job and its manifest, and fixes to the
+  plumbing reach every module. What only one type needs (a channel's
+  connection schema, a factory's builds) goes in that type's SDK, never in
+  module-core.
 - **Plumbing only in the SDK.** Channel-specific behaviour, even when common
   (most channels can be paused somehow), stays in the module: only the module
   knows what pausing means for its transport. The SDK never adds actions or

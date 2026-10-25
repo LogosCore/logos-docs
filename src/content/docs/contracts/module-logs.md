@@ -151,7 +151,7 @@ A module that declares `logs`:
 - may produce `debug` records for a stream that asks for them even when its own
   output level is higher — without changing its own output.
 
-`logos-golang-channel-core` does all of this in `pkg/logstream`; see
+`logos-golang-module-core` does all of this in `pkg/logstream`; see
 [Implementing a Module](../../implementing-a-module/).
 
 ## What core does
