@@ -84,7 +84,7 @@ half-managed.
   ],
   "status": [
     { "key": "requests_total", "type": "int", "label": "Requests" },
-    { "key": "draining", "type": "bool", "label": "Draining" }
+    { "key": "draining", "type": "bool", "label": "Draining", "alert": true }
   ],
   "capabilities": ["logs"]
 }
@@ -118,7 +118,11 @@ prompt the UI shows before running it, up to 16 `params`, and
 
 A **status value** (`key`, `type`, `label`, `description`, `unit`) is reported
 by the module in its heartbeat `metrics` under `key`. Core shows the latest
-value; it never stores history.
+value; it never stores history. For `bool`, `enum` and `string` values the
+module may declare `alert`: the value that needs an operator's attention (for
+example `true` for `draining`). The UI highlights a matching value and shows any
+other as normal; without `alert`, values are shown neutrally — core cannot know
+which value of a module's status is bad.
 
 `capabilities` lists optional features the module serves, such as `logs`.
 Unknown capabilities are ignored.
