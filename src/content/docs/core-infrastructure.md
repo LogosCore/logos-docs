@@ -56,7 +56,7 @@ rationale and trust boundary.
 
 ## RabbitMQ — Message Bus
 
-- **Role**: asynchronous communication backbone between core server and all modules. Carries bidirectional control-plane RPC — module lifecycle (register/heartbeat/deregister, module→core) and management (e.g. channel configuration, core→module) — plus event notifications and coordination messages. Does **not** carry minion traffic — that flows via the HTTP sync endpoint.
+- **Role**: asynchronous communication backbone between core server and all modules. Carries bidirectional control-plane RPC — module lifecycle (register/heartbeat/deregister, module→core) and management (configuration, actions and the live log tail, core→module) — plus live log batches, event notifications and coordination messages. Does **not** carry minion traffic — that flows via the HTTP sync endpoint.
 - **Why RabbitMQ**: mature AMQP broker with exchange/queue routing patterns suited to module-type-based message routing, dead-letter queues for reliability, and per-queue ACLs for trust boundary enforcement.
 - **Connections**: Core Server (publisher/consumer), Channel Modules, Minion Factory Modules — all communicate over AMQP.
 
@@ -67,9 +67,12 @@ rationale and trust boundary.
 - **Connections**: Core Server is the primary read/write client.
 
 :::note
-MongoDB does **not** store channel configuration. Each channel module owns its
-configuration locally, persisted with Docker volumes. Core manages it only
-through the [Management RPC contract](../contracts/channel-core-rpc/).
+MongoDB stores the **desired** configuration of each managed module instance
+(`module_instance_config`), its change history and action invocations. The
+module itself persists nothing: it applies what core sends at registration and
+on every change, and reports what it applied. See
+[Module Management](../contracts/module-management/). Module logs are never
+stored in core.
 :::
 
 :::note

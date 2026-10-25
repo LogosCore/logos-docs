@@ -41,7 +41,7 @@ A well-formed `inbound.minion_message` with:
 - `source.module_instance` — the registered channel instance sending it.
 - Standard envelope fields (`message_id`, `type`, `version`, `timestamp`).
 
-See [Channel ↔ Core: HTTP Sync](./contracts/channel-core-sync/) for the full
+See [Channel ↔ Core: HTTP Sync](../contracts/channel-core-sync/) for the full
 envelope schema.
 
 ## What Core Returns

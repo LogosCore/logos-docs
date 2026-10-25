@@ -34,7 +34,9 @@ servers depending on the operation:
 | Flow | Direction | RPC server | Operations |
 |---|---|---|---|
 | Lifecycle | module → core | **core** (`logos.core.rpc`) | `module.register`, `module.heartbeat`, `module.deregister` |
-| Management | core → module | **module** (`logos.<type>.rpc.<instance>`) | channel configuration management |
+| Management | core → module | **module** (`logos.<type>.rpc.<instance>`) | `mgmt.config.apply`, `mgmt.action.invoke`, `mgmt.state.get` |
+| Log tail control | core → module | **module** (same queue) | `mgmt.logs.start`, `mgmt.logs.stop` |
+| Log batches | module → core | — (pub/sub on `logos.module.logs`) | live log records, while a stream is open |
 | Events | module → core | — (pub/sub) | audit/notifications on `logos.events` |
 
 Registration bootstraps everything else: core cannot issue a management RPC to a
@@ -49,7 +51,8 @@ graph LR
 
     CH -- "HTTP sync: id + encrypted_data" --> CS
     CH -- "AMQP RPC: register / heartbeat" --> CS
-    CS -- "AMQP RPC: management" --> CH
+    CS -- "AMQP RPC: management, log tail" --> CH
+    CH -- "AMQP: log batches" --> CS
     CH -- "AMQP events" --> CS
     IP -- "AMQP RPC: register / heartbeat" --> CS
     IP -- "AMQP: build coordination" --> CS
@@ -68,14 +71,22 @@ Every contract in this section, regardless of surface, follows the same baseline
 - **Crypto boundary** — minion payload crypto belongs to core Logos services only.
   Control-plane contracts never transport `encrypted_data`, and channels stay
   plaintext-blind on the data plane.
+- **Modules describe themselves; core does not interpret them** — what a
+  module can be managed on, its status values, action results and log records
+  are declared or produced by the module and shown by core as they are. Core
+  holds no knowledge of any particular module.
 
 ## Contracts in this section
 
 | Contract | Surface | Parties | Status |
 |---|---|---|---|
 | [HTTP Sync](../channel-core-sync/) | Data plane | Channel ↔ Core | Specified |
-| [Module Lifecycle](../module-lifecycle/) | Control plane | Module (client) → Core (server) | Specified |
-| [Management RPC](../channel-core-rpc/) | Control plane | Core (client) → Channel (server) | Specified |
+| [Module Lifecycle](../module-lifecycle/) | Control plane | Module (client) → Core (server) | Implemented |
+| [Module Management](../module-management/) | Control plane | Core (client) → Module (server) | Prototype |
+| [Module Logs](../module-logs/) | Control plane | Core ↔ Module | Prototype |
+
+To build a module against these contracts, see
+[Implementing a Module](../../implementing-a-module/).
 
 Foundational specs the control-plane contracts build on:
 

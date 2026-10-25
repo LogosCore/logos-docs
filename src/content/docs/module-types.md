@@ -115,6 +115,10 @@ The wire-level contracts these modules use are specified in the
 1. Base message envelope and versioning — [AMQP Message Envelope](../contracts/amqp-envelope/).
 2. Exchange/queue naming convention — [AMQP Routing Conventions](../contracts/amqp-conventions/).
 3. Data-plane envelope — [Channel ↔ Core: HTTP Sync](../contracts/channel-core-sync/).
-4. Management RPC — [Channel ↔ Core: Management RPC](../contracts/channel-core-rpc/).
+4. Lifecycle — [Module Lifecycle](../contracts/module-lifecycle/).
+5. Management — [Module Management](../contracts/module-management/) and the
+   [live log tail](../contracts/module-logs/).
+
+For building a module against them, see [Implementing a Module](../implementing-a-module/).
 
 Still open: minion-factory build-coordination contract, and module packaging/lifecycle policy.

@@ -36,4 +36,4 @@ sequenceDiagram
 - Minion Factory is an internal core-side processing layer.
 - How a channel extracts `id` + `encrypted_data` from its transport, or embeds
   the response back, is the channel's implementation detail. Core only sees the
-  canonical envelopes defined in [Channel ↔ Core: HTTP Sync](./contracts/channel-core-sync/).
+  canonical envelopes defined in [Channel ↔ Core: HTTP Sync](../contracts/channel-core-sync/).

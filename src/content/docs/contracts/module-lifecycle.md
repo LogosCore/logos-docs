@@ -9,13 +9,15 @@ control-plane contract depends on: core cannot issue management RPC to a module
 until that module has registered.
 
 It builds on the shared [AMQP envelope](../amqp-envelope/) and
-[routing conventions](../amqp-conventions/), and the model is recorded in
+[routing conventions](../amqp-conventions/). A module that can be managed also
+declares its [management manifest](../module-management/#the-manifest) here and
+receives its configuration in the register reply.
 
 ## Roles and direction
 
 For lifecycle operations the **module is the RPC client** and **core is the RPC
-server**. This is the opposite direction from management contracts like
-[Channel ↔ Core: Profile RPC](../channel-core-rpc/), where core is the client.
+server**. This is the opposite direction from [Module Management](../module-management/),
+where core is the client.
 The control plane is bidirectional; ownership is per-operation, not global.
 
 ```mermaid
@@ -24,11 +26,13 @@ sequenceDiagram
     participant M as Module (starting up)
     participant CORE as Core (RPC server: logos.core.rpc)
     M->>M: declare own RPC queue, start consuming
-    M->>CORE: module.register (type, name, instance, version, description, rpc_queue)
-    CORE-->>M: ack (heartbeat_interval, bootstrap config)
+    M->>CORE: module.register (identity, rpc_queue, management manifest, applied_revision)
+    CORE-->>M: ack (heartbeat_interval, config incl. management config)
     Note over CORE,M: core persists the registration → can now call the module
+    M->>M: apply the management config
+    M->>CORE: module.heartbeat (applied_revision) — right away, not one interval later
     loop every heartbeat_interval
-        M->>CORE: module.heartbeat (instance, status)
+        M->>CORE: module.heartbeat (instance, status, metrics, applied_revision)
         CORE-->>M: ack
     end
     M->>CORE: module.deregister (instance, reason)
@@ -74,7 +78,15 @@ Request:
   "instance": "http-1",
   "version": "1.2.0",
   "rpc_queue": "logos.channel.rpc.http-1",
-  "description": "HTTPS/DNS Logos channel — primary beacon listener."
+  "description": "HTTPS/DNS Logos channel — primary beacon listener.",
+  "management": {
+    "schema_version": "1",
+    "properties": [ … ],
+    "actions": [ … ],
+    "status": [ … ],
+    "capabilities": ["logs"]
+  },
+  "applied_revision": 0
 }
 ```
 
@@ -90,6 +102,12 @@ Request:
   module (see [routing conventions](../amqp-conventions/#rpc-requestreply)).
 - `description` is optional free-text the module reports about itself, surfaced
   on the admin Modules page.
+- `management` is optional: the module's
+  [management manifest](../module-management/#the-manifest). Without it the
+  module is registered but not manageable. An invalid manifest fails the whole
+  registration with `validation_failed`.
+- `applied_revision` is the configuration revision the process has applied — 0
+  for a fresh process. Core uses it to see whether the module is in sync.
 
 Reply `payload`:
 
@@ -101,13 +119,24 @@ Reply `payload`:
   "heartbeat_grace_misses": 3,
   "config": {
     "policy": {},
-    "feature_flags": {}
+    "feature_flags": {},
+    "management": {
+      "revision": 6,
+      "values": { "max_body_bytes": 4194304, "log_level": "debug" }
+    }
   }
 }
 ```
 
 Core persists the registration in its module registry (MongoDB) and may now issue
 management RPC to `rpc_queue`.
+
+`config.management` is present when the module sent a manifest. It is the same
+configuration an [`mgmt.config.apply`](../module-management/#mgmtconfigapply)
+would carry: the module applies it before serving, and this first apply is also
+when `restart` properties take effect. The module then heartbeats **at once**
+with the new `applied_revision`, so core sees it in sync immediately rather than
+one interval later.
 
 **Re-registration is idempotent (takeover).** If an `instance` re-registers — for
 example after a restart — core upserts the existing record and resumes; it does
@@ -131,9 +160,10 @@ Request:
   "instance": "http-1",
   "status": "healthy",
   "metrics": {
-    "profiles_enabled": 4,
-    "sync_in_flight": 2
-  }
+    "requests_total": 1532,
+    "draining": false
+  },
+  "applied_revision": 6
 }
 ```
 
@@ -141,7 +171,14 @@ Request:
 whether it can do its job. It carries no module-specific states — a channel
 paused by an admin, for example, stays `healthy` and shows the pause in its
 management status values. `metrics` is an optional, lightweight liveness
-snapshot — not a metrics-pipeline substitute.
+snapshot — not a metrics-pipeline substitute. A managed module puts its
+declared [status values](../module-management/#fields) here; core shows the
+latest ones and keeps no history.
+
+`applied_revision` (managed modules) is the configuration revision the module
+has applied. When it differs from the desired revision, core pushes the
+configuration again (drift repair, see
+[Module Management](../module-management/#delivery)).
 
 Reply `payload`:
 
@@ -149,8 +186,9 @@ Reply `payload`:
 { "instance": "http-1", "ack": true, "config_changed": false }
 ```
 
-When `config_changed` is `true`, the module should re-`register` (or a future
-`module.get_config`) to pull the updated bootstrap config.
+When `config_changed` is `true`, the module should re-`register` to pull the
+updated bootstrap config. Management configuration does not use this flag:
+core pushes it with `mgmt.config.apply`.
 
 Errors: `unknown_instance` (no active registration — module should re-`register`).
 
