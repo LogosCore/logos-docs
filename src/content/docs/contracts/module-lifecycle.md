@@ -137,8 +137,11 @@ Request:
 }
 ```
 
-`status` is one of `healthy`, `degraded`, `draining`. `metrics` is an optional,
-lightweight liveness snapshot — not a metrics-pipeline substitute.
+`status` is one of `healthy`, `degraded`: the module's own judgement of
+whether it can do its job. It carries no module-specific states — a channel
+paused by an admin, for example, stays `healthy` and shows the pause in its
+management status values. `metrics` is an optional, lightweight liveness
+snapshot — not a metrics-pipeline substitute.
 
 Reply `payload`:
 
