@@ -52,7 +52,10 @@ sequenceDiagram
 7. **On losing the broker connection**, reconnect with back-off and start over
    from step 1. Registering again is a takeover, not an error.
 8. **On shutdown**, stop accepting work, let in-flight work finish while still
-   registered, and only then **deregister**.
+   registered, and only then **deregister**. Long-lived client connections
+   (WebSockets, streams) need closing explicitly: a server's own shutdown
+   usually does not wait for them. Close them gently — answer what is in
+   flight, then "going away" — before deregistering.
 
 The last point matters on the data plane: core answers a sync request from an
 instance that is not registered with `403`. A module that deregisters before
@@ -144,6 +147,13 @@ module *is* belongs in the module:
 | Actions | `drain` (high risk), `resume`, `check_core` (probes core's sync endpoint) |
 | Status values | request / success / failure / core-error / rejected counters, last core error and its time, `draining` |
 | Capabilities | `logs` |
+
+Besides plain requests it accepts **WebSockets** on any path: each binary
+frame is one message in the same packed format, relayed to core as a sync
+like a request (`source.transport: "websocket"`), with a few messages in flight
+per connection and the same minion UUID answered in order. Its manifest adds
+connection limits, ping and idle settings, connection counters and a
+`close_connections` action; drain also closes open connections.
 
 Its environment holds what core must not change: how to reach core
 (`LOGOS_SYNC_BASE_URL`, `CORE_SYNC_TIMEOUT`), the broker credentials, the log
