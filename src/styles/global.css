@@ -58,3 +58,83 @@
 :root[data-theme='light'] {
   --sl-color-accent: var(--color-neutral-900);
 }
+
+/* --- Monochrome Mermaid diagrams -------------------------------------------
+   Mermaid renders client-side with inline, id-scoped styles, so these rules
+   need !important. They use Starlight's tokens (mapped to the neutral scale
+   above), so diagrams follow light and dark mode like the rest of the page.
+   Covers the diagram types the docs use: flowchart, sequence, state. */
+pre.mermaid svg {
+  --mm-surface: var(--sl-color-gray-6);
+  --mm-line: var(--sl-color-gray-3);
+  --mm-text: var(--sl-color-white);
+  --mm-bg: var(--sl-color-black);
+}
+
+/* Text everywhere. */
+pre.mermaid svg text,
+pre.mermaid svg tspan,
+pre.mermaid svg .nodeLabel,
+pre.mermaid svg .edgeLabel,
+pre.mermaid svg .label,
+pre.mermaid svg span {
+  fill: var(--mm-text) !important;
+  color: var(--mm-text) !important;
+}
+
+/* Boxes: sequence actors and notes, flowchart and state nodes, groups. */
+pre.mermaid svg .actor,
+pre.mermaid svg rect.actor,
+pre.mermaid svg .note,
+pre.mermaid svg .labelBox,
+pre.mermaid svg .node rect,
+pre.mermaid svg .node circle,
+pre.mermaid svg .node ellipse,
+pre.mermaid svg .node polygon,
+pre.mermaid svg .node path,
+pre.mermaid svg .cluster rect,
+pre.mermaid svg .statediagram-state rect,
+pre.mermaid svg .stateGroup rect {
+  fill: var(--mm-surface) !important;
+  stroke: var(--mm-line) !important;
+}
+
+/* Lines and arrows. */
+pre.mermaid svg .actor-line,
+pre.mermaid svg .messageLine0,
+pre.mermaid svg .messageLine1,
+pre.mermaid svg .loopLine,
+pre.mermaid svg .flowchart-link,
+pre.mermaid svg .edgePath .path,
+pre.mermaid svg .transition {
+  stroke: var(--mm-line) !important;
+}
+pre.mermaid svg marker path,
+pre.mermaid svg .arrowheadPath,
+pre.mermaid svg #arrowhead path,
+pre.mermaid svg .marker {
+  fill: var(--mm-line) !important;
+  stroke: var(--mm-line) !important;
+}
+
+/* Edge labels sit on the page background. */
+pre.mermaid svg .edgeLabel,
+pre.mermaid svg .edgeLabel rect,
+pre.mermaid svg .labelBkg {
+  background-color: var(--mm-bg) !important;
+  fill: var(--mm-bg) !important;
+}
+
+/* Filled marks: sequence numbers, state start/end. Text on them is inverted. */
+pre.mermaid svg .sequenceNumber {
+  fill: var(--mm-bg) !important;
+}
+pre.mermaid svg marker circle,
+pre.mermaid svg #sequencenumber,
+pre.mermaid svg .state-start,
+pre.mermaid svg .state-end,
+pre.mermaid svg circle.state-start,
+pre.mermaid svg circle.state-end {
+  fill: var(--mm-text) !important;
+  stroke: var(--mm-text) !important;
+}

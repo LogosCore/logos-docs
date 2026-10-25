@@ -17,9 +17,12 @@ export default defineConfig({
   },
   integrations: [
     // astro-mermaid must run before Starlight so it can transform ```mermaid fences.
+    // Grayscale base theme; colours come from the site's own tokens in
+    // src/styles/global.css, which follow light and dark mode. autoTheme is off
+    // because it forces mermaid's violet "default" theme in light mode.
     mermaid({
-      theme: "default",
-      autoTheme: true,
+      theme: "neutral",
+      autoTheme: false,
     }),
     starlight({
       title: "Logos Docs",
