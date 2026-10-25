@@ -100,10 +100,13 @@ Properties and action parameters share one field description:
 | `type` | One of the [field types](#field-types). |
 | `label`, `description` | Shown in the UI. Up to 120 and 1000 characters. |
 | `group`, `order`, `unit`, `placeholder` | UI hints only. |
+| `format` | For `string`: what the value is, so the UI can offer a helper. A hint, never validated; unknown formats are ignored. Known: `user_agent` (an HTTP User-Agent; the UI offers a generator by OS, browser and version). |
 | `required` | A value must be present (and, for strings, non-empty). |
 | `default` | The module's own value when core holds none — typically what it read from its env. Must satisfy the field's own constraints. Never set for `secret`. |
 | `min`, `max` | Numbers for `int` / `number` / `bytes`, duration strings for `duration`. |
-| `pattern`, `max_length` | For string-like types (each item of a `string_list`). |
+| `pattern`, `max_length` | For string-like types (each item of a `string_list`, each value of a `string_map`). |
+| `key_pattern` | For `string_map`: what every key must match. |
+| `max_items` | For `string_list` and `string_map`: most items or entries. |
 | `options` | For `enum`: `value`, optional `label` and `description` (shown under the label in the option list). |
 
 A **property** adds `apply`:
@@ -140,7 +143,8 @@ Unknown capabilities are ignored.
 | `bytes` | integer | not negative; `min`, `max` |
 | `url` | string | absolute URL (scheme and host) |
 | `secret` | string | write-only: never returned by core or by the module |
-| `string_list` | array of strings | each item checked like a `string` |
+| `string_list` | array of strings | each item checked like a `string`; `max_items` |
+| `string_map` | object of string keys to string values | keys non-empty and matching `key_pattern`; each value checked like a `string`; `max_items`. Key order is not kept. |
 
 ### Limits
 

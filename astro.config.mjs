@@ -75,6 +75,7 @@ export default defineConfig({
             { slug: "contracts/channel-core-sync" },
             { slug: "contracts/module-management" },
             { slug: "contracts/module-logs" },
+            { slug: "contracts/minion-connection" },
             { slug: "implementing-a-module" },
           ],
         },

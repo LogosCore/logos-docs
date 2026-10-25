@@ -145,8 +145,9 @@ module *is* belongs in the module:
 |---|---|
 | Properties | `max_body_bytes` (bytes, live), `log_level` (enum `debug` / `info` / `warn` / `error`, live) |
 | Actions | `drain` (high risk), `resume`, `check_core` (probes core's sync endpoint) |
-| Status values | request / success / failure / core-error / rejected counters, last core error and its time, `draining` |
+| Status values | request / success / failure / core-error / rejected / too-large counters, last core error and its time, `draining` |
 | Capabilities | `logs` |
+| Connection schema | `base_url`, TLS, headers and timing parameters for minions (see [Minion Connection Schema](../contracts/minion-connection/#http-channel-version-2)), declared through `module.Config.Connection` |
 
 Besides plain requests it accepts **WebSockets** on any path: each binary
 frame is one message in the same packed format, relayed to core as a sync

@@ -86,7 +86,12 @@ Request:
     "status": [ … ],
     "capabilities": ["logs"]
   },
-  "applied_revision": 0
+  "applied_revision": 0,
+  "connection": {
+    "schema_version": "1",
+    "version": 1,
+    "fields": [ … ]
+  }
 }
 ```
 
@@ -108,6 +113,10 @@ Request:
   registration with `validation_failed`.
 - `applied_revision` is the configuration revision the process has applied — 0
   for a fresh process. Core uses it to see whether the module is in sync.
+- `connection` is optional, for channels: the
+  [minion connection schema](../minion-connection/), the parameters minions are
+  given to reach this channel. An invalid schema fails the registration with
+  `validation_failed`; a registration without one clears the stored schema.
 
 Reply `payload`:
 
