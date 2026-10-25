@@ -8,6 +8,10 @@ import tailwindcss from "@tailwindcss/vite";
 export default defineConfig({
   site: "https://logos.github.io",
   base: "/logos-docs/",
+  // There is no home page: the site root opens the first sidebar page.
+  redirects: {
+    "/": "/logos-docs/architecture/",
+  },
   vite: {
     plugins: [tailwindcss()],
   },
