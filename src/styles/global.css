@@ -23,8 +23,38 @@
   }
 }
 
-/* Project-specific Starlight theme tokens can be overridden here, e.g.:
-:root {
-  --sl-color-accent: oklch(68% 0.21 250);
+/* --- Monochrome theme, matching core's UI ---------------------------------
+   Core's palette is Tailwind's neutral scale (oklch, zero chroma). Starlight
+   defaults to an indigo accent and blue-tinted grays; both are mapped to
+   neutral here (starlight-tailwind derives the --sl-color-* tokens from these). */
+@theme {
+  --color-accent-50: var(--color-neutral-50);
+  --color-accent-100: var(--color-neutral-100);
+  --color-accent-200: var(--color-neutral-200);
+  --color-accent-300: var(--color-neutral-300);
+  --color-accent-400: var(--color-neutral-400);
+  --color-accent-500: var(--color-neutral-500);
+  --color-accent-600: var(--color-neutral-600);
+  --color-accent-700: var(--color-neutral-700);
+  --color-accent-800: var(--color-neutral-800);
+  --color-accent-900: var(--color-neutral-900);
+  --color-accent-950: var(--color-neutral-950);
+  --color-gray-50: var(--color-neutral-50);
+  --color-gray-100: var(--color-neutral-100);
+  --color-gray-200: var(--color-neutral-200);
+  --color-gray-300: var(--color-neutral-300);
+  --color-gray-400: var(--color-neutral-400);
+  --color-gray-500: var(--color-neutral-500);
+  --color-gray-600: var(--color-neutral-600);
+  --color-gray-700: var(--color-neutral-700);
+  --color-gray-800: var(--color-neutral-800);
+  --color-gray-900: var(--color-neutral-900);
+  --color-gray-950: var(--color-neutral-950);
 }
-*/
+
+/* Light mode: the accent (sidebar highlight, links) is near-black, like core's
+   primary (neutral-900 = oklch(0.205 0 0)). Dark mode already resolves to
+   neutral-200, like core's dark primary. */
+:root[data-theme='light'] {
+  --sl-color-accent: var(--color-neutral-900);
+}
