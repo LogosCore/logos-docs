@@ -7,8 +7,9 @@ what a module has to do to live on the control plane, and how the Go SDKs do
 it: [`logos-golang-module-core`](https://github.com/logoscore/logos-golang-module-core)
 for every module type, and
 [`logos-golang-channel-core`](https://github.com/logoscore/logos-golang-channel-core)
-on top of it for channels. The [HTTP channel](https://github.com/logoscore/logos-http-channel)
-is the worked example throughout.
+on top of it for channels, and `logos-golang-factory-core` for factories. The
+[HTTP channel](https://github.com/logoscore/logos-http-channel) is the worked
+example throughout.
 
 ## What every module does
 
@@ -72,20 +73,23 @@ it. They are layered by module type:
 |---|---|---|
 | `logos-golang-module-core` | every module type | The control plane: session, lifecycle, management, log tail, logging. |
 | `logos-golang-channel-core` (v3) | channels | `channel.Run` (the session as a channel, with the [connection schema](../contracts/minion-connection/)) and the channel data-plane helpers (profiles, transforms, sync client). |
-| factory SDK | factories | Planned. |
+| `logos-golang-factory-core` | factories | `factory.Run` (the session as a factory, declaring the [build schema](../contracts/minion-build/) and serving its builds), the `Builder` and `Job` a factory builds with, and `factorytest` to run a builder in its tests. Unreleased, like the draft contract it implements. |
 
 The module-core packages:
 
 | Package | Gives you |
 |---|---|
-| `pkg/module` | `module.Run`: the whole session — connect, inbox, register, heartbeat, deregister, reconnect with back-off (1 s doubling to 30 s), session events logged through `slog`. |
-| `pkg/mgmt` | `mgmt.Server`: validates your manifest, serves `mgmt.config.apply` / `action.invoke` / `state.get` (validation, stale revisions, `restart` handling, action timeouts and dedupe, secret redaction). |
+| `pkg/module` | `module.Run`: the whole session — connect, inbox, register, heartbeat, deregister, reconnect with back-off (1 s doubling to 30 s), session events logged through `slog`. `Config.Handlers` adds a module type's own operations to the inbox, and `Config.Core` lets the module call core itself. |
+| `pkg/mgmt` | `mgmt.Server`: validates your manifest, serves `mgmt.config.apply` / `action.invoke` / `state.get` (validation, stale revisions, `restart` handling, action timeouts and dedupe, secret redaction). `mgmt.Router` serves the inbox: management next to a module type's operations. |
 | `pkg/logstream` | `logstream.Hub`: the [live log tail](../contracts/module-logs/) — recent-record buffer, leased streams, rate limit, publishing. |
 | `pkg/logging` | `logging.New`: an `slog` logger writing JSON (or text) at a managed level, teed into the hub; `logging.Headers` for HTTP request headers. |
-| `pkg/lifecycle` | The register / heartbeat / deregister client that `module.Run` drives. `WithRegisterField` adds what a module type declares at registration. |
+| `pkg/lifecycle` | The register / heartbeat / deregister client that `module.Run` drives. `WithRegisterField` adds what a module type declares at registration. `CoreClient` calls core over the current session. |
 
 A channel calls `channel.Run` from channel-core instead of `module.Run`. It sets
-module_type `channel` and declares `Config.Connection` at registration.
+module_type `channel` and declares `Config.Connection` at registration. A
+factory calls `factory.Run` from factory-core: module_type `factory`, its build
+schema declared under `build`, and `factory.build` / `factory.build.cancel`
+served on the inbox.
 
 ### Wiring
 
