@@ -83,7 +83,7 @@ The module-core packages:
 | `pkg/mgmt` | `mgmt.Server`: validates your manifest, serves `mgmt.config.apply` / `action.invoke` / `state.get` (validation, stale revisions, `restart` handling, action timeouts and dedupe, secret redaction). `mgmt.Router` serves the inbox: management next to a module type's operations. `Server.Extend` lets a type SDK add a section of its own to a module's manifest. |
 | `pkg/logstream` | `logstream.Hub`: the [live log tail](../contracts/module-logs/) — recent-record buffer, leased streams, rate limit, publishing. |
 | `pkg/logging` | `logging.New`: an `slog` logger writing JSON (or text) at a managed level, teed into the hub; `logging.Headers` for HTTP request headers. |
-| `pkg/lifecycle` | The register / heartbeat / deregister client that `module.Run` drives. `WithRegisterField` adds what a module type declares at registration. `CoreClient` calls core over the current session. |
+| `pkg/lifecycle` | The register / heartbeat / deregister client that `module.Run` drives. `Identity` carries what the module says about itself, including an optional [icon](../contracts/module-lifecycle/#moduleregister). `WithRegisterField` adds what a module type declares at registration. `CoreClient` calls core over the current session. |
 
 A channel calls `channel.Run` from channel-core instead of `module.Run`. It sets
 module_type `channel` and declares `Config.Connection` at registration. A

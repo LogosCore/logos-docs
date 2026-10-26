@@ -79,6 +79,7 @@ Request:
   "version": "1.2.0",
   "rpc_queue": "logos.channel.rpc.http-1",
   "description": "HTTPS/DNS Logos channel — primary beacon listener.",
+  "icon": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\"><circle cx=\"12\" cy=\"12\" r=\"9\"/></svg>",
   "management": {
     "schema_version": "1",
     "properties": [ … ],
@@ -107,6 +108,19 @@ Request:
   module (see [routing conventions](../amqp-conventions/#rpc-requestreply)).
 - `description` is optional free-text the module reports about itself, surfaced
   on the admin Modules page.
+- `icon` is optional: the module's own SVG icon, shown next to it in the app.
+  Without one, the app shows its type's default (a radio tower for channels, a
+  factory for factories). The app draws it as a single-colour glyph in its text
+  colour, like its built-in icons, so draw shapes on a transparent background
+  (`stroke="currentColor"` on a 24×24 `viewBox` matches them); colours are not
+  kept. It must be at most 16 KiB of well-formed XML with one root `<svg>` in
+  the SVG namespace, built only from shapes, structure (`g`, `defs`, `symbol`,
+  `use`), gradients, clipping, masks and text: no scripts, `foreignObject`,
+  images, styles, animations or event handlers, and no references outside the
+  icon (`href` and `url()` only to `#id`). Core drops an icon that breaks these
+  rules, with a warning in its log; the module still registers. How a module
+  keeps its icon (a file embedded at build time, a constant, something
+  generated) is up to it.
 - `management` is optional: the module's
   [management manifest](../module-management/#the-manifest). Without it the
   module is registered but not manageable. An invalid manifest fails the whole
@@ -122,7 +136,8 @@ Request:
   can build and which parameters each build takes.
 - Other top-level fields are type-specific declarations, like `connection` for
   channels. The Go SDK adds them with `lifecycle.WithRegisterField`; the
-  fields above are reserved.
+  fields above are reserved. The SDK sends `Identity.Icon` as `icon` and refuses
+  to start with one that breaks the rules (`protocol.ValidateIcon`).
 
 Reply `payload`:
 
