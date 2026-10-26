@@ -170,12 +170,13 @@ fields. Uploads are capped by a core setting (default 64 MiB).
 A file is kept while a preset or a build record refers to it; an upload nothing
 refers to is removed after a day. Deleting an operation deletes its files.
 
-In a build request, a file value is replaced by what the factory needs to
-fetch it:
+In a build request, a file value stays the file's id, and the request's
+`files` holds each file the values name, under its id, with what the factory
+needs to fetch it:
 
 ```json
 {
-  "id": "0f9a2c1e-…", "name": "app.ico", "size": 4286,
+  "id": "0f9a2c1e-6f1b-4a43-9d4e-2b9b3c1d7e55", "name": "app.ico", "size": 4286,
   "sha256": "9f2c…", "media_type": "image/x-icon",
   "url": "http://logos-seaweedfs-s3:8333/…?X-Amz-Signature=…"
 }
@@ -287,14 +288,14 @@ Request `payload`:
 {
   "build_id": "01M6A3Q9X7J0B5KQZC2V1RS8TN",
   "minion_id": "5b0c4f6e-8a1d-4c2b-9e7f-3d2a1b0c9e8f",
-  "target": "windows-service",
+  "target": "windows-exe",
   "platform": "windows/amd64",
   "schema_version": 1,
   "values": {
     "kill_date": "2027-01-31T00:00:00Z",
     "guardrails": ["domain_joined"],
     "debug": false,
-    "service_name": "WinTelemetry"
+    "icon": "0f9a2c1e-6f1b-4a43-9d4e-2b9b3c1d7e55"
   },
   "connections": [
     {
@@ -307,7 +308,15 @@ Request `payload`:
       "values": { "method": "POST", "path_prefix": "/cdn/assets/" }
     }
   ],
-  "crypto": { "suite": "x25519-xchacha20poly1305" },
+  "files": {
+    "0f9a2c1e-6f1b-4a43-9d4e-2b9b3c1d7e55": {
+      "id": "0f9a2c1e-6f1b-4a43-9d4e-2b9b3c1d7e55", "name": "app.ico", "size": 4286,
+      "sha256": "9f2c41d0e5a8b7c6d5e4f3a2b1c0d9e8f7a6b5c4d3e2f1a0b9c8d7e6f5a4b3c2",
+      "media_type": "image/x-icon",
+      "url": "http://logos-seaweedfs-s3:8333/…?X-Amz-Signature=…"
+    }
+  },
+  "crypto": { "suite": "x25519-xchacha20poly1305", "material": { "…": "…" } },
   "artifact": { "upload_url": "http://logos-seaweedfs-s3:8333/…?X-Amz-Signature=…", "max_size": 268435456 },
   "deadline": "2026-10-26T14:30:00Z",
   "actor": { "type": "user", "id": "6ab79922…", "name": "admin" }
@@ -319,9 +328,10 @@ Request `payload`:
 | `build_id` | ULID, the build's identity. A repeated `build_id` is the same build. |
 | `minion_id` | UUIDv4: the `id` the minion sends on the [data plane](../channel-core-sync/). |
 | `target`, `platform`, `schema_version` | What to build, against which version of the factory's schema. |
-| `values` | Every field of the target that has a value or a default; `file` values as in [Build files](#build-files). |
+| `values` | Every field of the target that has a value or a default. A `file` field holds the file's id. |
+| `files` | The files the values name (connection parameter values included), by id, as in [Build files](#build-files). |
 | `connections` | The chosen endpoints, in the order the minion tries them: each one's [export](../minion-connection/#the-export) as `endpoint`, and its [connection parameter](#connection-parameters) `values`, defaults filled in. |
-| `crypto` | Present when the factory declares `crypto`: the suite core chose and its key material, as the payload crypto contract defines it. |
+| `crypto` | Present when the factory declares `crypto`: the `suite` core chose, and its key `material` as the payload crypto contract defines it. |
 | `artifact` | Where to upload the artifact: a presigned upload URL valid until the deadline, and the largest size accepted (a core setting, default 256 MiB). |
 | `deadline` | When core stops waiting. |
 | `actor` | Who started the build, for the factory's own logs. |
@@ -369,7 +379,8 @@ Request `payload` when the build succeeded:
   "status": "succeeded",
   "artifact": {
     "filename": "WinTelemetry.exe", "size": 2412544,
-    "sha256": "4be1…", "media_type": "application/vnd.microsoft.portable-executable"
+    "sha256": "28afe4a10a4a7d593623dcd1eee11f519b056d2bfdda4c7b0bd7a57fc3a5fc8b",
+    "media_type": "application/vnd.microsoft.portable-executable"
   },
   "capabilities": ["shell", "upload", "download"],
   "warnings": ["debug build: strings are not obfuscated"],
@@ -383,7 +394,7 @@ and when it failed:
 {
   "build_id": "01M6A3Q9X7J0B5KQZC2V1RS8TN",
   "status": "failed",
-  "error": { "code": "compile_failed", "message": "service_name collides with a system service" },
+  "error": { "code": "compile_failed", "message": "go build exited with status 1" },
   "log": "…"
 }
 ```
