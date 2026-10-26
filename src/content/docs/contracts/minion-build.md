@@ -262,7 +262,8 @@ Core sends the build to a live instance of the kind that declares the latest
 schema version. An instance at capacity replies `busy`, and core tries the next
 one. When all are busy, the build stays `QUEUED`, and core tries again as builds
 finish or instances register. How many builds an instance runs at once is the
-factory's own setting.
+factory's own setting, which operators change live, and a drained instance
+replies `busy` to every new build (see [Managing a factory](#managing-a-factory)).
 
 ### Operations
 
@@ -471,12 +472,37 @@ Members also see every factory kind with its current build schema (kind,
 version, targets and fields, nothing about instances), which the forms are
 built from.
 
+## Managing a factory
+
+A factory is [managed](../module-management/) like any module: it declares
+properties, actions and status values in its manifest and can serve the
+[live log tail](../module-logs/). Its builds, though, run inside the SDK, so
+**factory-core adds a builds section** to every factory's management, next to
+what the factory declares itself (or as all of it, when the factory declares
+nothing). Core sees an ordinary manifest:
+
+| | Key | |
+|---|---|---|
+| Property | `max_concurrent_builds` | `int`, `live`, group "Builds". How many builds the instance runs at once; a `factory.build` beyond it gets `busy`. Starts at the factory's own setting. Lowering it lets running builds finish. |
+| Action | `drain` | Take no new builds (`busy`) until resumed; running builds finish. A repeated `factory.build` for a build already accepted is still accepted. |
+| Action | `resume` | Take builds again. |
+| Status | `builds_running` | Builds running now. |
+| Status | `builds_accepted_total`, `builds_succeeded_total`, `builds_failed_total`, `builds_cancelled_total` | Since the process started. Cancelled: core cancelled the build or no longer waited for it. |
+| Status | `builds_refused_total` | `busy` replies: at the limit, drained or stopping. |
+| Status | `last_build_failure`, `last_build_failure_at` | The last failed build's `code: message`, and when (`datetime`). |
+| Status | `draining` | `bool`, alert on `true`. |
+
+These keys are taken: a factory's own manifest cannot use them. The Go SDK adds
+the section with module-core's `mgmt.Server.Extend`, which runs the factory's
+own `ApplyFunc` first, so a change the factory refuses never reaches the
+section.
+
 ## Error codes
 
 | Code | Used in | Meaning |
 |---|---|---|
 | `validation_failed` | all | Malformed payload, or a request the factory cannot build. |
-| `busy` | `factory.build` | The instance runs as many builds as it can. |
+| `busy` | `factory.build` | The instance runs as many builds as it may, is drained, or is stopping. |
 | `unsupported_version` | `factory.build` | The request's `schema_version` is not the one this instance declares, or the envelope's major version is unknown. |
 | `not_found` | `factory.build.progress`, `factory.build.result` | Core no longer waits for this build. |
 | `internal_error` | all | Unexpected failure. |
@@ -508,6 +534,10 @@ Core's own reasons for a failed build, kept in its record: `timeout`,
   instance before offering it there, and puts it back in the queue when the
   instance is busy or does not answer, so no report finds the build not yet
   its instance's.
+- **The SDK manages what it runs.** A factory's builds run inside
+  factory-core, so only the SDK can count them, refuse new ones or change how
+  many run at once. It serves that management itself, with the same keys on
+  every factory, rather than leaving each factory to expose its internals.
 - **Core owns identity and keys.** Core generates the minion id and keys; they
   only pass through the factory into the artifact. They never appear in a form,
   a preset or a build record.

@@ -73,14 +73,14 @@ it. They are layered by module type:
 |---|---|---|
 | `logos-golang-module-core` | every module type | The control plane: session, lifecycle, management, log tail, logging. |
 | `logos-golang-channel-core` (v3) | channels | `channel.Run` (the session as a channel, with the [connection schema](../contracts/minion-connection/)) and the channel data-plane helpers (profiles, transforms, sync client). |
-| `logos-golang-factory-core` | factories | `factory.Run` (the session as a factory, declaring the [build schema](../contracts/minion-build/) and serving its builds), the `Builder` and `Job` a factory builds with, and `factorytest` to run a builder in its tests. Unreleased, like the draft contract it implements. |
+| `logos-golang-factory-core` | factories | `factory.Run` (the session as a factory, declaring the [build schema](../contracts/minion-build/) and serving its builds), the `Builder` and `Job` a factory builds with, and `factorytest` to run a builder in its tests. It adds a [builds section](../contracts/minion-build/#managing-a-factory) to the factory's management. Unreleased, like the draft contract it implements. |
 
 The module-core packages:
 
 | Package | Gives you |
 |---|---|
 | `pkg/module` | `module.Run`: the whole session — connect, inbox, register, heartbeat, deregister, reconnect with back-off (1 s doubling to 30 s), session events logged through `slog`. `Config.Handlers` adds a module type's own operations to the inbox, and `Config.Core` lets the module call core itself. |
-| `pkg/mgmt` | `mgmt.Server`: validates your manifest, serves `mgmt.config.apply` / `action.invoke` / `state.get` (validation, stale revisions, `restart` handling, action timeouts and dedupe, secret redaction). `mgmt.Router` serves the inbox: management next to a module type's operations. |
+| `pkg/mgmt` | `mgmt.Server`: validates your manifest, serves `mgmt.config.apply` / `action.invoke` / `state.get` (validation, stale revisions, `restart` handling, action timeouts and dedupe, secret redaction). `mgmt.Router` serves the inbox: management next to a module type's operations. `Server.Extend` lets a type SDK add a section of its own to a module's manifest. |
 | `pkg/logstream` | `logstream.Hub`: the [live log tail](../contracts/module-logs/) — recent-record buffer, leased streams, rate limit, publishing. |
 | `pkg/logging` | `logging.New`: an `slog` logger writing JSON (or text) at a managed level, teed into the hub; `logging.Headers` for HTTP request headers. |
 | `pkg/lifecycle` | The register / heartbeat / deregister client that `module.Run` drives. `WithRegisterField` adds what a module type declares at registration. `CoreClient` calls core over the current session. |
@@ -88,8 +88,10 @@ The module-core packages:
 A channel calls `channel.Run` from channel-core instead of `module.Run`. It sets
 module_type `channel` and declares `Config.Connection` at registration. A
 factory calls `factory.Run` from factory-core: module_type `factory`, its build
-schema declared under `build`, and `factory.build` / `factory.build.cancel`
-served on the inbox.
+schema declared under `build`, `factory.build` / `factory.build.cancel`
+served on the inbox, and the builds section added to its management. A factory
+passes its own `Management` and `Logs` as a channel does. Without management of
+its own it still has the builds section, so `Logs` works either way.
 
 ### Wiring
 
@@ -152,8 +154,9 @@ runtime config behind an atomic swap or a lock.
 
 ### What stays in the module
 
-The SDKs are plumbing only. Anything that depends on what a module *is*
-belongs in the module:
+The SDKs are plumbing only, with one exception: factory-core runs a factory's
+builds, so it also serves their management (the builds section). Anything that
+depends on what a module *is* belongs in the module:
 
 - the manifest — which properties, actions and status values exist;
 - what applying a value means, and what an action does (`drain` returns 404
