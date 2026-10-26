@@ -429,7 +429,7 @@ instance cannot be reached, and ignores a result that still arrives.
 | State | When |
 |---|---|
 | `QUEUED` | Core accepted the build and waits for a factory instance to take it. |
-| `BUILDING` | An instance accepted it. |
+| `BUILDING` | Offered to an instance, and taken by it. Core marks it before the offer: a factory reports as soon as it accepts, which can be before its reply arrives. An instance that does not take it puts it back to `QUEUED`. |
 | `SUCCEEDED` | The result arrived and the artifact checked out. The minion exists from now on. |
 | `FAILED` | The factory reported a failure, the artifact did not check out (`artifact_mismatch`), the build timeout passed (`timeout`), or the instance was declared dead (`factory_lost`). |
 | `CANCELLED` | An operator cancelled it. |
@@ -502,6 +502,12 @@ Core's own reasons for a failed build, kept in its record: `timeout`,
   channel schema also keeps endpoints shareable by every factory. They travel
   next to the endpoint export rather than inside it, so a channel that later
   adds a field with the same key changes nothing for minions already built.
+- **A build is building before it is offered.** A factory accepts a build and
+  starts on it at once, reporting progress as it goes; its reply can reach core
+  after its first report. Core therefore records the build as building on an
+  instance before offering it there, and puts it back in the queue when the
+  instance is busy or does not answer, so no report finds the build not yet
+  its instance's.
 - **Core owns identity and keys.** Core generates the minion id and keys; they
   only pass through the factory into the artifact. They never appear in a form,
   a preset or a build record.
