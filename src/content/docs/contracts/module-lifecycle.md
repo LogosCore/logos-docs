@@ -255,12 +255,39 @@ stateDiagram-v2
     Registered --> Deregistered: module.deregister
     Dead --> Registered: module.register (takeover)
     Deregistered --> Registered: module.register
-    Dead --> [*]
-    Deregistered --> [*]
+    Registered --> Blocked: operator blocks
+    Dead --> Blocked: operator blocks
+    Deregistered --> Blocked: operator blocks
+    Blocked --> Deregistered: operator unblocks
+    Dead --> [*]: operator deletes
+    Deregistered --> [*]: operator deletes
 ```
 
-Core stops issuing management RPC to an instance once it is `Dead` or
-`Deregistered`, and resumes after a fresh `module.register`.
+Core stops issuing management RPC to an instance once it is `Dead`,
+`Deregistered` or `Blocked`, and resumes after a fresh `module.register`.
+
+### Operators
+
+An operator with `module:delete` (never an agent key) changes an instance's
+state from the Modules page:
+
+- **Block**, in any state but blocked. Core refuses the instance's
+  `module.register` with `instance_blocked`, its heartbeats with
+  `unknown_instance` and its traffic (the data-plane gate), until it is
+  unblocked. A running instance is cut off at once and cannot come back: its
+  next heartbeat leads it to register again, which is refused. Core records
+  when, who and an optional reason. The Go SDK logs the block and asks again
+  every 30 s, so a running instance comes back by itself once unblocked.
+- **Unblock** leaves the instance `Deregistered`, free to register again.
+- **Delete**, only for a `Deregistered` or `Dead` instance: its row leaves the
+  registry. Its stored configuration and history stay, and an instance that
+  registers again under the same id gets them back. A registered instance
+  would only register again (block it instead), and a blocked instance's row
+  is its block.
+
+Nothing else removes an instance: core keeps deregistered and dead instances
+listed until an operator deletes them. An operator cannot deregister a running
+instance; that would last only until its next heartbeat.
 
 ## Error codes
 
@@ -269,13 +296,12 @@ Core stops issuing management RPC to an instance once it is `Dead` or
 | `validation_failed` | Malformed lifecycle payload. |
 | `unsupported_version` | Module declares a contract major version core cannot serve. |
 | `unknown_instance` | Heartbeat/deregister for an instance with no active registration. |
+| `instance_blocked` | Register from an instance an operator blocked; refused until it is unblocked. |
 | `internal_error` | Unexpected core-side failure (registry I/O, etc.). |
 
 ## Auditing
 
 Core records lifecycle transitions in its audit log and may emit them onto
-`logos.events` for observers:
-
-- `module.<instance>.registered`
-- `module.<instance>.deregistered`
-- `module.<instance>.declared_dead`
+`logos.events` for observers, routed as `<module_type>.<instance>.<event>`
+(envelope type `module.<event>`), where the event is one of `registered`,
+`deregistered`, `declared_dead`, `blocked`, `unblocked` and `deleted`.
