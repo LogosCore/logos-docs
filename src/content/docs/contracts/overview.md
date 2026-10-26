@@ -84,6 +84,8 @@ Every contract in this section, regardless of surface, follows the same baseline
 | [Module Lifecycle](../module-lifecycle/) | Control plane | Module (client) → Core (server) | Implemented |
 | [Module Management](../module-management/) | Control plane | Core (client) → Module (server) | Prototype |
 | [Module Logs](../module-logs/) | Control plane | Core ↔ Module | Prototype |
+| [Minion Connection Schema](../minion-connection/) | Control plane | Channel → Core | Prototype |
+| [Minion Build](../minion-build/) | Control plane | Core ↔ Factory | Draft |
 
 To build a module against these contracts, see
 [Implementing a Module](../../implementing-a-module/).

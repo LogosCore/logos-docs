@@ -34,9 +34,9 @@ Content lives in `src/content/docs/` (English only; the site is single-locale wi
 
 - **Foundations** — Architecture, requirements, core responsibilities, module taxonomy, full-system message flow
 - **Channels** — Channel message flow and envelope contract with core
-- **Contracts** — wire contracts between modules and core: AMQP envelope and routing, module lifecycle, HTTP sync (data plane), module management, module logs (live tail), plus the "Implementing a Module" guide (checklist + the Go SDKs: `logos-golang-module-core`, with `logos-golang-channel-core` on top)
+- **Contracts** — wire contracts between modules and core: AMQP envelope and routing, module lifecycle, HTTP sync (data plane), module management, module logs (live tail), minion connection schema, minion build (draft), plus the "Implementing a Module" guide (checklist + the Go SDKs: `logos-golang-module-core`, with `logos-golang-channel-core` on top)
 
-There is no ADR section: design reasoning lives in a **Design notes** section at the end of the contract page it belongs to. Contract pages state facts from the code (protocol types, module-core, channel-core, core) — check a field or limit there before documenting it.
+There is no ADR section: design reasoning lives in a **Design notes** section at the end of the contract page it belongs to. Contract pages state facts from the code (protocol types, module-core, channel-core, core) — check a field or limit there before documenting it. The exception is a page that opens with a `:::caution[Draft]` aside: it records an agreed design before it is built. When the code lands, check the page against it, drop the aside, and set its status in the overview's contracts table.
 
 ## Key Concepts for Editing Docs
 

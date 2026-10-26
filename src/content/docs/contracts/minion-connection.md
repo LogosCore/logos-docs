@@ -123,7 +123,7 @@ defaults, so a minion needs no knowledge of the schema itself.
 A minion that can speak several channel kinds gets an **ordered list** of
 connection settings and falls back through it. Each minion must support at
 least one of the kinds it is given. Creating minions with these settings is the
-factory's job and is not part of this contract yet.
+factory's job: see [Minion Build](../minion-build/) (draft).
 
 ## HTTP channel, version 2
 
@@ -144,7 +144,8 @@ factory's job and is not part of this contract yet.
 
 There is no transport, method or path parameter: the channel accepts plain
 requests and WebSockets, any method, any path, and the minion is free to use and
-switch between them.
+switch between them. A factory that lets operators choose them declares its own
+[connection parameters](../minion-build/#connection-parameters) (draft).
 
 ## Design notes
 

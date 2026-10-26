@@ -76,6 +76,7 @@ export default defineConfig({
             { slug: "contracts/module-management" },
             { slug: "contracts/module-logs" },
             { slug: "contracts/minion-connection" },
+            { slug: "contracts/minion-build" },
             { slug: "implementing-a-module" },
           ],
         },

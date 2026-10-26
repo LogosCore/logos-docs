@@ -117,6 +117,9 @@ Request:
   [minion connection schema](../minion-connection/), the parameters minions are
   given to reach this channel. An invalid schema fails the registration with
   `validation_failed`; a registration without one clears the stored schema.
+- `build` is optional, for factories: the
+  [build schema](../minion-build/#the-build-schema) (draft), what the factory
+  can build and which parameters each build takes.
 - Other top-level fields are type-specific declarations, like `connection` for
   channels. The Go SDK adds them with `lifecycle.WithRegisterField`; the
   fields above are reserved.

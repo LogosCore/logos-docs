@@ -48,7 +48,8 @@ Factory modules build minions. They define minion families and lifecycle behavio
 
 ### Responsibilities
 
-- Build/generate minions for a target platform/profile.
+- Build/generate minions for a target platform/profile, declaring what can be
+  built and with which parameters in a [build schema](../contracts/minion-build/).
 - Define the command set supported by a specific minion family.
 - Preprocess operator/core commands into minion-specific wire format.
 - Postprocess raw minion responses into structured events/results.
@@ -118,7 +119,9 @@ The wire-level contracts these modules use are specified in the
 4. Lifecycle — [Module Lifecycle](../contracts/module-lifecycle/).
 5. Management — [Module Management](../contracts/module-management/) and the
    [live log tail](../contracts/module-logs/).
+6. What minions are given to reach a channel — [Minion Connection Schema](../contracts/minion-connection/).
+7. Builds — [Minion Build](../contracts/minion-build/) (draft).
 
 For building a module against them, see [Implementing a Module](../implementing-a-module/).
 
-Still open: factory build-coordination contract, and module packaging/lifecycle policy.
+Still open: the factory command contract, and module packaging/lifecycle policy.
