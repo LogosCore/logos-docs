@@ -484,8 +484,8 @@ nothing). Core sees an ordinary manifest:
 | | Key | |
 |---|---|---|
 | Property | `max_concurrent_builds` | `int`, `live`, group "Builds". How many builds the instance runs at once; a `factory.build` beyond it gets `busy`. Starts at the factory's own setting. Lowering it lets running builds finish. |
-| Action | `drain` | Take no new builds (`busy`) until resumed; running builds finish. A repeated `factory.build` for a build already accepted is still accepted. |
-| Action | `resume` | Take builds again. |
+| Action | `drain` | Take no new builds (`busy`) until resumed; running builds finish. A repeated `factory.build` for a build already accepted is still accepted. Available while not draining. |
+| Action | `resume` | Take builds again. Available while draining. |
 | Status | `builds_running` | Builds running now. |
 | Status | `builds_accepted_total`, `builds_succeeded_total`, `builds_failed_total`, `builds_cancelled_total` | Since the process started. Cancelled: core cancelled the build or no longer waited for it. |
 | Status | `builds_refused_total` | `busy` replies: at the limit, drained or stopping. |

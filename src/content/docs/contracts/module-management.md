@@ -116,12 +116,14 @@ A **property** adds `apply`:
   module reports the key in `restart_required`, and the UI says so.
 
 An **action** has a `name`, `risk` (`low` or `high`), an optional `confirm`
-prompt the UI shows before running it, up to 16 `params`, and
-`timeout_seconds` (default 30, at most 60).
+prompt the UI shows before running it, up to 16 `params`,
+`timeout_seconds` (default 30, at most 60), and optional `available_when`
+[conditions](#action-conditions).
 
 A **status value** (`key`, `type`, `label`, `description`, `unit`) is reported
-by the module in its heartbeat `metrics` under `key`. Core shows the latest
-value; it never stores history. For `bool`, `enum` and `string` values the
+by the module in its heartbeat `metrics` under `key`, and in
+[`mgmt.state.get`](#mgmtstateget), which core calls after every action. Core
+shows the latest value; it never stores history. For `bool`, `enum` and `string` values the
 module may declare `alert`: the value that needs an operator's attention (for
 example `true` for `draining`). The UI highlights a matching value and shows any
 other as normal; without `alert`, values are shown neutrally — core cannot know
@@ -129,6 +131,72 @@ which value of a module's status is bad.
 
 `capabilities` lists optional features the module serves, such as `logs`.
 Unknown capabilities are ignored.
+
+### Action conditions
+
+Some actions only make sense in some states: draining a channel that already
+drains, or closing WebSockets when none is open, changes nothing. An action
+says when it is available with `available_when`, a list of conditions that must
+all hold:
+
+```json
+{
+  "schema_version": "1",
+  "actions": [
+    {
+      "name": "drain",
+      "label": "Drain",
+      "risk": "high",
+      "available_when": [
+        { "status": "draining", "op": "eq", "value": false, "message": "Already draining" }
+      ]
+    },
+    {
+      "name": "resume",
+      "label": "Resume",
+      "risk": "low",
+      "available_when": [
+        { "status": "draining", "op": "eq", "value": true, "message": "Not draining" }
+      ]
+    },
+    {
+      "name": "close_connections",
+      "label": "Close WebSockets",
+      "risk": "high",
+      "available_when": [
+        { "status": "ws_connections_open", "op": "gt", "value": 0 }
+      ]
+    }
+  ],
+  "status": [
+    { "key": "draining", "type": "bool", "label": "Draining", "alert": true },
+    { "key": "ws_connections_open", "type": "int", "label": "WebSocket connections" }
+  ]
+}
+```
+
+Each condition compares the current value of a `status` value or of a
+`property` (its effective value), declared in the same manifest, with `value`:
+
+| `op` | Holds when the current value is | Types |
+|---|---|---|
+| `eq`, `ne` | equal, not equal to `value` | `string`, `int`, `number`, `bool`, `enum`, `duration`, `bytes`, `url`, `datetime` |
+| `gt`, `gte`, `lt`, `lte` | above, at least, below, at most `value` | `int`, `number`, `bytes`, `duration`, `datetime` |
+| `in` | one of the list `value` | as `eq` |
+
+`value` is a value of the subject's type, a list of them for `in`; for an
+`enum` property, one of its options. Secrets, lists and maps cannot be
+compared. `message` says why the action is unavailable while the condition does
+not hold; without one, the reason is made from the subject's label, such as
+"Requires WebSocket connections above 0".
+
+Core shows each action as available or not, with the reason, evaluated against
+the latest status values and the effective configuration, and the UI disables
+an unavailable action. That is advice: the module checks again when the action
+is invoked, against its live values, and refuses it with `action_unavailable`
+(module-core does this for every action). Core never refuses on its own, since
+its copy of the status can be behind. A condition on a value that is not
+reported, or not of its type, holds: whoever knows the value decides.
 
 ### Field types
 
@@ -154,6 +222,7 @@ Unknown capabilities are ignored.
 | Params per action / options per enum | 16 / 64 |
 | Label / description length | 120 / 1000 |
 | Action timeout | 60 s |
+| Conditions per action / values of an `in` condition / message length | 8 / 64 / 120 |
 
 ## Configuration
 
@@ -310,11 +379,16 @@ Reply `payload` on success:
 
 `result` is any JSON value; core stores and shows it as returned. A failure is
 an error reply: `action_failed` (the action returned an error, panicked or timed
-out), `validation_failed` (bad params) or `not_found` (unknown action).
+out), `action_unavailable` (its [conditions](#action-conditions) do not hold;
+the message says why), `validation_failed` (bad params) or `not_found` (unknown
+action). A repeated `invocation_id` gets its first answer, refusal included.
 
 Core records every invocation — actor, params, status (`RUNNING`, `SUCCEEDED`,
 `FAILED`, `TIMED_OUT`), result or error, start and end time — and runs it
-synchronously: the operator's request returns when the action finishes.
+synchronously: the operator's request returns when the action finishes. Once the
+module has answered, core reads its status with `mgmt.state.get`, so the
+action's effect, and which actions are available now, show without waiting for
+the next heartbeat.
 
 ### `mgmt.state.get`
 
@@ -359,6 +433,7 @@ in stored action params.
 | `validation_failed` | Malformed payload, unknown property or param, invalid value. |
 | `not_found` | Unknown action (or log streaming not supported). |
 | `action_failed` | The action failed, panicked or timed out. |
+| `action_unavailable` | The action's `available_when` does not hold; the message says why. |
 | `unsupported_version` | Unknown envelope major version. |
 | `internal_error` | Unexpected module-side failure. |
 
@@ -383,6 +458,13 @@ in stored action params.
   URL, timeouts) and deployment concerns (log format) stay in its env: a wrong
   value pushed from the UI could cut the module off from the core that would
   have to fix it.
+- **Conditions are declared, and the module has the last word.** Only the
+  module knows which of its states make an action pointless, so it says so in
+  the manifest, as data core and the UI can evaluate without knowing the
+  module, like `alert`. Conditions are a flat list that must all hold, which
+  covers the cases so far; alternatives can be added if a module needs them.
+  Core's copy of the status comes from heartbeats and can be behind, so core
+  only advises, and the module, which has the live values, decides.
 - **Module-specific states are status values, not health.** Lifecycle health is
   only `healthy` / `degraded`. A paused channel (`drain`) is still healthy; the
   pause is its own `draining` status value, and `drain` is the module's action,
