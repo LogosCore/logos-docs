@@ -32,7 +32,7 @@ It is the only component that owns and uses decryption keys for minion payloads.
 
 ## 4) Module Coordination
 
-- Coordinate channel modules and minion-factory modules.
+- Coordinate channel modules and factory modules.
 - Define and enforce internal contracts between modules.
 - Provide control-plane APIs for module management.
 

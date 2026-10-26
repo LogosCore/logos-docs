@@ -42,9 +42,9 @@ the envelope contract in [Channel ↔ Core: HTTP Sync](../contracts/channel-core
 - Enforce per-channel authentication and abuse controls.
 - Expose channel health and queue lag metrics.
 
-## 2) Minion Factory Modules
+## 2) Factory Modules
 
-Minion factory modules define minion families and lifecycle behavior.
+Factory modules build minions. They define minion families and lifecycle behavior.
 
 ### Responsibilities
 
@@ -56,9 +56,9 @@ Minion factory modules define minion families and lifecycle behavior.
 
 ### Examples
 
-- Go minion factory
-- .NET minion factory
-- Python minion factory
+- Go factory
+- .NET factory
+- Python factory
 
 ### Optional Translator Hooks
 
@@ -88,7 +88,7 @@ Guidance for factories that implement them:
 ### Notes
 
 - Keep factory-specific command grammar encapsulated.
-- Version command contracts per minion factory.
+- Version command contracts per factory.
 - Track capability flags per minion build (supported commands/features).
 
 ## Cross-Cutting Module Requirements
@@ -121,4 +121,4 @@ The wire-level contracts these modules use are specified in the
 
 For building a module against them, see [Implementing a Module](../implementing-a-module/).
 
-Still open: minion-factory build-coordination contract, and module packaging/lifecycle policy.
+Still open: factory build-coordination contract, and module packaging/lifecycle policy.

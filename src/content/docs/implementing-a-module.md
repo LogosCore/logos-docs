@@ -72,7 +72,7 @@ it. They are layered by module type:
 |---|---|---|
 | `logos-golang-module-core` | every module type | The control plane: session, lifecycle, management, log tail, logging. |
 | `logos-golang-channel-core` (v3) | channels | `channel.Run` (the session as a channel, with the [connection schema](../contracts/minion-connection/)) and the channel data-plane helpers (profiles, transforms, sync client). |
-| minion-factory SDK | minion factories | Planned. |
+| factory SDK | factories | Planned. |
 
 The module-core packages:
 

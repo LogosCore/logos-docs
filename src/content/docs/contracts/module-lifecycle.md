@@ -3,7 +3,7 @@ title: "Module Lifecycle (Registration)"
 ---
 
 This is a **control-plane** contract shared by **all** module types — channels
-and minion factories alike. It defines how a module announces itself to core,
+and factories alike. It defines how a module announces itself to core,
 proves it is alive, and leaves cleanly. It is the bootstrap that every other
 control-plane contract depends on: core cannot issue management RPC to a module
 until that module has registered.

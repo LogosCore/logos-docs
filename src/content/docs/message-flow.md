@@ -55,6 +55,6 @@ An `outbound.minion_message` with:
 
 - Channel does **not** decrypt payload plaintext.
 - Channel does **not** execute core business logic.
-- Channel does **not** own minion-factory semantics.
+- Channel does **not** own factory semantics.
 - How a channel maps transport fields to/from the canonical envelope is an
   implementation detail invisible to core.

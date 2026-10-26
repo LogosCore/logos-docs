@@ -47,7 +47,7 @@ module until that module has registered itself. See
 graph LR
     CH[Channel Module]
     CS[Core Server]
-    IP[Minion Factory]
+    IP[Factory]
 
     CH -- "HTTP sync: id + encrypted_data" --> CS
     CH -- "AMQP RPC: register / heartbeat" --> CS

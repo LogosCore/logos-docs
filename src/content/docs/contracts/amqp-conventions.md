@@ -13,7 +13,7 @@ the platform on a shared broker.
 | Exchange | Type | Purpose |
 |---|---|---|
 | `logos.core.rpc` | `direct` | Module → core RPC requests (lifecycle: register/heartbeat/deregister). |
-| `logos.<module-type>.rpc` | `direct` | Core → module RPC requests, one exchange per module type: `logos.channel.rpc`, `logos.minion-factory.rpc`. Carries [management](../module-management/), log stream control and type-specific calls, such as a factory's builds. |
+| `logos.<module-type>.rpc` | `direct` | Core → module RPC requests, one exchange per module type: `logos.channel.rpc`, `logos.factory.rpc`. Carries [management](../module-management/), log stream control and type-specific calls, such as a factory's builds. |
 | `logos.module.logs` | `direct` | Module → core [live log batches](../module-logs/), routing key = stream id. |
 | `logos.events` | `topic` | Module → core event notifications (fan-in). |
 
@@ -72,7 +72,7 @@ Examples:
 
 - `logos.channel.rpc.http-1` bound to `logos.channel.rpc` with key `http-1`
 - `logos.channel.rpc.telegram-2` bound to `logos.channel.rpc` with key `telegram-2`
-- `logos.minion-factory.rpc.mf-1` bound to `logos.minion-factory.rpc` with key `mf-1`
+- `logos.factory.rpc.bob-1` bound to `logos.factory.rpc` with key `bob-1`
 
 ### Replies
 
@@ -160,7 +160,7 @@ Core binds subscriber queues with wildcards:
 
 | Kind | Pattern | Example |
 |---|---|---|
-| RPC exchange | `logos.<surface>.rpc` (`core` or a module type) | `logos.core.rpc`, `logos.channel.rpc`, `logos.minion-factory.rpc` |
+| RPC exchange | `logos.<surface>.rpc` (`core` or a module type) | `logos.core.rpc`, `logos.channel.rpc`, `logos.factory.rpc` |
 | Core RPC queue | `logos.core.rpc` (routing key `core`) | `logos.core.rpc` |
 | Module RPC request queue | `logos.<module-type>.rpc.<instance>` | `logos.channel.rpc.http-1` |
 | Module RPC routing key | `<instance>` | `http-1` |

@@ -123,7 +123,7 @@ defaults, so a minion needs no knowledge of the schema itself.
 A minion that can speak several channel kinds gets an **ordered list** of
 connection settings and falls back through it. Each minion must support at
 least one of the kinds it is given. Creating minions with these settings is the
-minion factory's job and is not part of this contract yet.
+factory's job and is not part of this contract yet.
 
 ## HTTP channel, version 2
 

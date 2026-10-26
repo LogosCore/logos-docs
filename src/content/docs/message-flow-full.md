@@ -12,7 +12,7 @@ sequenceDiagram
     participant I as Minion
     participant CH as Channel Module
     participant CS as Core Server (Key Owner)
-    participant IP as Minion Factory
+    participant IP as Factory
 
     I->>CH: transport traffic (channel-specific)
     CH->>CS: POST /api/channel/sync (inbound.minion_message)
@@ -33,7 +33,7 @@ sequenceDiagram
 
 - `minion ↔ core Server` is the logical protocol conversation.
 - Channel is a transport relay — it delivers canonical envelopes and remains plaintext-blind.
-- Minion Factory is an internal core-side processing layer.
+- The factory is an internal core-side processing layer.
 - How a channel extracts `id` + `encrypted_data` from its transport, or embeds
   the response back, is the channel's implementation detail. Core only sees the
   canonical envelopes defined in [Channel ↔ Core: HTTP Sync](../contracts/channel-core-sync/).

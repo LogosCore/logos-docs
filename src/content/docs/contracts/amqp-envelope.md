@@ -34,7 +34,7 @@ Every AMQP message — request, reply, or event — carries these fields:
 | `type` | string | yes | Dotted operation/event name (e.g. `mgmt.config.apply`). |
 | `version` | string | yes | Contract version `MAJOR.MINOR`. Consumers reject unknown major versions. |
 | `timestamp` | RFC3339 string | yes | Producer's send time (UTC). |
-| `source` | object | yes | Origin descriptor: `service` (`core` / `channel` / `minion-factory`) and `instance` (deployment instance id). |
+| `source` | object | yes | Origin descriptor: `service` (`core` / `channel` / `factory`) and `instance` (deployment instance id). |
 | `payload` | object | yes | Contract-specific body. May be `{}` for parameterless operations. |
 
 ## RPC reply envelope

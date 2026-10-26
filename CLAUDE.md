@@ -40,7 +40,7 @@ There is no ADR section: design reasoning lives in a **Design notes** section at
 
 ## Key Concepts for Editing Docs
 
-- **Two module types**: Channel Modules (transport) and Minion Factory Modules (build artifacts). Channels are plaintext-blind — they relay encrypted blobs only. Minion factories may optionally implement translator hooks for a custom minion language; these are a factory-owned implementation detail, not a separate module type.
+- **Two module types**: Channel Modules (transport) and Factory Modules (build minions). Channels are plaintext-blind — they relay encrypted blobs only. Factories may optionally implement translator hooks for a custom minion language; these are a factory-owned implementation detail, not a separate module type.
 - **Message contracts** are versioned (`inbound.minion_message`, `outbound.minion_message`). The canonical fields are `id` and `encrypted_data`.
 - **Envelope contract** — core defines only the canonical envelope format. How a channel module extracts `id` + `encrypted_data` from its transport is the channel's implementation detail and out of scope for these docs.
 
