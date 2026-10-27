@@ -217,7 +217,7 @@ sequenceDiagram
     participant CORE as Core
     participant F as Factory instance
     participant S3 as SeaweedFS
-    OP->>CORE: build (factory kind, target, platform, values, connections)
+    OP->>CORE: build (description, factory kind, target, platform, values, connections)
     CORE->>CORE: validate, fill in defaults, new build id,<br/>minion id and keys, presigned URLs → QUEUED
     CORE->>F: factory.build
     F-->>CORE: accepted, with its plan (steps) → BUILDING
@@ -236,6 +236,8 @@ sequenceDiagram
 Before anything is sent, core checks the request against the factory kind's
 latest schema:
 
+- the build has a `description`: what it is for, 1 to 500 characters, the
+  operators' note (core keeps it, see [Build records](#build-records-and-minions));
 - the target exists, and the platform is one of its `platforms`;
 - the values follow the field rules (type, bounds, pattern, required, and **no
   undeclared keys**) for the shared fields plus the target's own;
@@ -477,8 +479,8 @@ step done without a report has no times.
 
 ## Build records and minions
 
-Core keeps a **build record** for every build: who started it and when, the
-factory kind, instance and version, `schema_version`, target, platform, values
+Core keeps a **build record** for every build: who started it, when and what
+for (its description), the factory kind, instance and version, `schema_version`, target, platform, values
 (`file` values as build file ids), the connection settings as copied with the
 operators' descriptions of them, the crypto suite (never key material), the
 factory's plan and step reports, the state, and the result: artifact,
@@ -490,7 +492,7 @@ none, and its minion id and keys are thrown away.
 
 **Every build is a new minion.** Building again from a record opens the build
 form filled in from it, so every earlier build is the template for the next:
-its target, platform, values and connections with their descriptions, values
+its description, target, platform, values and connections with theirs, values
 equal to today's defaults left out so they read as defaults. The new build gets
 a new minion id and new keys: two artifacts never share an identity.
 
@@ -595,10 +597,10 @@ Core's own reasons for a failed build, kept in its record: `timeout`,
   endpoint, and keeps its own copy: changing an endpoint changes nothing
   already built.
 - **Notes stay in core.** Whatever a factory gets may end up inside the
-  artifact, readable by anyone who captures the minion. A connection's
-  description is the operators' note ("EU front for the first stage"), so core
-  keeps it next to the build record and leaves it out of the request, the same
-  way an endpoint's description is not part of its export.
+  artifact, readable by anyone who captures the minion. A build's description
+  and its connections' are the operators' notes ("dry run for the EU front"),
+  so core keeps them in the build record and leaves them out of the request,
+  the same way an endpoint's description is not part of its export.
 - **Every build is a new minion.** Rebuilding the same identity would leave two
   artifacts answering as one minion.
 - **Steps declared up front.** A percentage is a guess each factory makes its
