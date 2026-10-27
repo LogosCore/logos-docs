@@ -120,6 +120,15 @@ defaults, so a minion needs no knowledge of the schema itself.
 }
 ```
 
+The app also takes this format back: **Import** on the Endpoints page opens a
+new endpoint's form filled in from an export, pasted or from a file, to check
+before saving. Its name is made valid and free in the operation (`-2`, `-3`…),
+values equal to the kind's current defaults are dropped so those fields keep
+following the defaults, keys the kind does not declare are left out (and
+named), and an export for another schema `version` is pointed out.
+**Duplicate** does the same from an existing endpoint, naming the copy
+`<name>-dup`.
+
 A minion that can speak several channel kinds gets an **ordered list** of
 connection settings and falls back through it. Each minion must support at
 least one of the kinds it is given. Creating minions with these settings is the
