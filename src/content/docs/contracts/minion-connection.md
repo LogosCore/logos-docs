@@ -130,6 +130,7 @@ factory's job: see [Minion Build](../minion-build/) (draft).
 | Key | Type | Default | Notes |
 |---|---|---|---|
 | `base_url` | url | required | `http(s)://host[:port]`, **no path**: the channel accepts any path, the minion picks its own. |
+| `extra_base_urls` | string_list | — | More addresses of the channel in the same form (e.g. other fronts), at most 16. A minion falls back to them, in order, when the base URL cannot be reached; the other parameters apply to each. |
 | `host_header` | string | — | `Host` to send when it must differ from the base URL's host (CDN, reverse proxy). |
 | `sni` | string | — | TLS server name, when it must differ. |
 | `proxy` | url | — | Outbound proxy for the minion. |
