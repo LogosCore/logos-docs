@@ -195,14 +195,15 @@ tries them. Each one is:
 |---|---|
 | `module_name` | The channel kind, one the target speaks. |
 | `name` | Optional. What the minion calls the connection, a slug like an endpoint name, unique among the build's connections. Without one, it is `<channel>-<position>`, e.g. `http-1`. |
+| `description` | Optional. The operators' note on what the connection is for, at most 500 characters. Core keeps it with the preset and the build record; it is never part of a build request. |
 | `settings` | By the channel's [connection schema](../minion-connection/) field key, validated like an endpoint's values. A field without a value takes the schema's default. |
 | `values` | The factory's [connection parameters](#connection-parameters) for that channel kind. |
 
 The build form fills a connection in from scratch or from one of the operation's
 [endpoints](../minion-connection/#channel-endpoints), picked from a searchable
-list: that copies the endpoint's values, and its name (made unique among the
-connections) unless the operator named the connection, for the operator to
-change as needed. Nothing refers back to the endpoint afterwards.
+list: that copies the endpoint's values, its name (made unique among the
+connections) and its description, unless the operator wrote their own, for the
+operator to change as needed. Nothing refers back to the endpoint afterwards.
 
 ## Build presets
 
@@ -466,9 +467,9 @@ is declared dead.
 
 Core keeps a **build record** for every build: who started it and when, the
 factory kind, instance and version, `schema_version`, target, platform, values
-(`file` values as build file ids), the connection settings as copied, the
-crypto suite (never key material), the state, and the result: artifact,
-capabilities, warnings and log, or the error.
+(`file` values as build file ids), the connection settings as copied with the
+operators' descriptions of them, the crypto suite (never key material), the
+state, and the result: artifact, capabilities, warnings and log, or the error.
 
 A successful build creates the **minion**: identified by `minion_id`, with its
 keys held by core and its build record. A failed or cancelled build creates
@@ -579,6 +580,11 @@ Core's own reasons for a failed build, kept in its record: `timeout`,
   from an endpoint, and keeps its own copy: changing an endpoint or a preset
   changes nothing already built, and a preset does not change under its
   author's feet.
+- **Notes stay in core.** Whatever a factory gets may end up inside the
+  artifact, readable by anyone who captures the minion. A connection's
+  description is the operators' note ("EU front for the first stage"), so core
+  keeps it next to the build record and leaves it out of the request, the same
+  way an endpoint's description is not part of its export.
 - **Every build is a new minion.** Rebuilding the same identity would leave two
   artifacts answering as one minion.
 - **The command set is separate.** Which commands a minion family has, and how
