@@ -199,9 +199,10 @@ tries them. Each one is:
 | `values` | The factory's [connection parameters](#connection-parameters) for that channel kind. |
 
 The build form fills a connection in from scratch or from one of the operation's
-[endpoints](../minion-connection/#channel-endpoints), which copies the
-endpoint's values (and its name, unless the connection has one) for the operator
-to change as needed. Nothing refers back to the endpoint afterwards.
+[endpoints](../minion-connection/#channel-endpoints), picked from a searchable
+list: that copies the endpoint's values, and its name (made unique among the
+connections) unless the operator named the connection, for the operator to
+change as needed. Nothing refers back to the endpoint afterwards.
 
 ## Build presets
 
