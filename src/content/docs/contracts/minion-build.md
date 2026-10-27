@@ -203,7 +203,10 @@ The build form fills a connection in from scratch or from one of the operation's
 [endpoints](../minion-connection/#channel-endpoints), picked from a searchable
 list: that copies the endpoint's values, its name (made unique among the
 connections) and its description, unless the operator wrote their own, for the
-operator to change as needed. Nothing refers back to the endpoint afterwards.
+operator to change as needed. The other way, **Save as endpoint** keeps a
+connection's settings, name and description as a new endpoint of the
+operation, for later builds; the factory's parameters stay with the build.
+Either way it is a copy: nothing refers back afterwards.
 
 ## Build presets
 

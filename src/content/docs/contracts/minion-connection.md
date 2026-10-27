@@ -98,7 +98,8 @@ Endpoint values are operation data and are shown to members as they are,
 Members also see every channel kind with its current schema (kind, version and
 fields only — nothing about instances), which the endpoint form is built from,
 and so is each connection of a [build](../minion-build/#connections) (draft): a
-connection can be filled in from an endpoint, which copies its values.
+connection can be filled in from an endpoint, or saved as a new one, each a
+copy of the values.
 Deleting an operation deletes its endpoints.
 
 ## The export
