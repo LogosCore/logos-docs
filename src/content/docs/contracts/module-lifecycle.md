@@ -121,6 +121,15 @@ Request:
   rules, with a warning in its log; the module still registers. How a module
   keeps its icon (a file embedded at build time, a constant, something
   generated) is up to it.
+- `icon_light` is optional, and only taken with an `icon`: the same picture
+  drawn for light themes, which the app shows there instead. The text colour
+  the icon is painted in is light on dark themes and dark on light ones. Line
+  art reads the same either way, but an icon whose shape is the lit parts of a
+  shaded drawing reads as a negative on light themes; draw that one again with
+  the shadows and lines as the shape. The same rules apply; core drops one that
+  breaks them, or that comes without an `icon`, with a warning in its log, and
+  keeps the rest of the registration. A registration without one clears the
+  stored one.
 - `management` is optional: the module's
   [management manifest](../module-management/#the-manifest). Without it the
   module is registered but not manageable. An invalid manifest fails the whole
@@ -136,8 +145,9 @@ Request:
   can build and which parameters each build takes.
 - Other top-level fields are type-specific declarations, like `connection` for
   channels. The Go SDK adds them with `lifecycle.WithRegisterField`; the
-  fields above are reserved. The SDK sends `Identity.Icon` as `icon` and refuses
-  to start with one that breaks the rules (`protocol.ValidateIcon`).
+  fields above are reserved. The SDK sends `Identity.Icon` as `icon` and
+  `Identity.IconLight` as `icon_light`, and refuses to start with one that
+  breaks the rules (`protocol.ValidateIcon`) or a light icon without an icon.
 
 Reply `payload`:
 
