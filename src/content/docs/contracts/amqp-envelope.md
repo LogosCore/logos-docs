@@ -14,8 +14,8 @@ Every AMQP message — request, reply, or event — carries these fields:
 
 ```json
 {
-  "message_id": "01JNX6R8VQ2H3CN4K9EJ1T2Z7M",
-  "correlation_id": "01JNX6R8VQ2H3CN4K9EJ1T2Z7M",
+  "message_id": "8f14e45f-ceea-4e6a-9c3b-2d1f0a7b6c5e",
+  "correlation_id": "8f14e45f-ceea-4e6a-9c3b-2d1f0a7b6c5e",
   "type": "mgmt.config.apply",
   "version": "1.0",
   "timestamp": "2026-06-20T21:05:12.481Z",
@@ -29,8 +29,8 @@ Every AMQP message — request, reply, or event — carries these fields:
 
 | Field | Type | Required | Meaning |
 |---|---|---|---|
-| `message_id` | ULID string | yes | Unique id for this message. Basis for idempotent processing. |
-| `correlation_id` | ULID string | RPC only | Ties a reply to its request. Set equal to `message_id` on the originating request; copied verbatim onto the reply. Optional for fire-and-forget events. |
+| `message_id` | UUID string | yes | Unique id for this message. Basis for idempotent processing. |
+| `correlation_id` | UUID string | RPC only | Ties a reply to its request. Set equal to `message_id` on the originating request; copied verbatim onto the reply. Optional for fire-and-forget events. |
 | `type` | string | yes | Dotted operation/event name (e.g. `mgmt.config.apply`). |
 | `version` | string | yes | Contract version `MAJOR.MINOR`. Consumers reject unknown major versions. |
 | `timestamp` | RFC3339 string | yes | Producer's send time (UTC). |
@@ -84,8 +84,10 @@ safe to branch on; `message` is human-facing and may change.
 ## Conventions
 
 - **Time** is always UTC RFC3339 with millisecond precision.
-- **Ids** are [ULID](https://github.com/ulid/spec)s — lexicographically
-  sortable, collision-resistant, and timestamp-prefixed.
+- **Ids** are random UUIDs (version 4) in their canonical lowercase form, e.g.
+  `8f14e45f-ceea-4e6a-9c3b-2d1f0a7b6c5e`: the one id format across Logos. A
+  receiver treats an id as an opaque string and reads nothing from it, not
+  even a time or an order.
 - **Unknown fields** are ignored by consumers (forward compatibility); producers
   must not rely on a consumer rejecting extra fields.
 - **`type` and `payload` must agree** — a consumer that accepts a `type` commits

@@ -23,7 +23,7 @@ Channel → core. One per inbound minion interaction.
 
 ```json
 {
-  "message_id": "http-main-1741554312481000000",
+  "message_id": "c4ca4238-a0b9-4382-8dcc-509a6f75849b",
   "type": "inbound.minion_message",
   "version": "1.0",
   "timestamp": "2026-03-09T21:05:12.481Z",
@@ -45,7 +45,7 @@ Channel → core. One per inbound minion interaction.
 
 | Field | Required | Description |
 |---|---|---|
-| `message_id` | yes | Unique per request. Used by core for idempotency dedup. |
+| `message_id` | yes | Unique per request, a UUIDv4. Used by core for idempotency dedup. |
 | `type` | yes | Must be `"inbound.minion_message"`. |
 | `version` | yes | `"1.0"`. |
 | `timestamp` | yes | RFC 3339. |
@@ -77,7 +77,7 @@ Core → channel. Returned in the same HTTP response.
 
 ```json
 {
-  "message_id": "01JNX7D8H8QY3G6P2R4X1K8ABC",
+  "message_id": "3c9d2b7e-5a41-4f08-b6e2-91d7c0a4e8f3",
   "type": "outbound.minion_message",
   "version": "1.0",
   "timestamp": "2026-03-09T21:05:12.690Z",
@@ -94,7 +94,7 @@ Core → channel. Returned in the same HTTP response.
 
 | Field | Required | Description |
 |---|---|---|
-| `message_id` | yes | Core-assigned, unique. |
+| `message_id` | yes | Core-assigned, unique, a UUIDv4. |
 | `type` | yes | `"outbound.minion_message"`. |
 | `version` | yes | `"1.0"`. |
 | `timestamp` | yes | RFC 3339. |

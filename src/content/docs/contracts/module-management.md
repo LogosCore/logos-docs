@@ -356,7 +356,7 @@ Request `payload`:
 
 ```json
 {
-  "invocation_id": "01M5SJR1RFZX19RP85YH1WF4Q4",
+  "invocation_id": "e4da3b7f-bbce-4345-9777-2b0674a318d5",
   "action": "check_core",
   "params": {},
   "actor": { "type": "user", "id": "6ab79922…", "name": "admin" }
@@ -374,7 +374,7 @@ for a retry.
 Reply `payload` on success:
 
 ```json
-{ "invocation_id": "01M5SJR1RFZX19RP85YH1WF4Q4", "result": { "reachable": true, "latency_ms": 3 } }
+{ "invocation_id": "e4da3b7f-bbce-4345-9777-2b0674a318d5", "result": { "reachable": true, "latency_ms": 3 } }
 ```
 
 `result` is any JSON value; core stores and shows it as returned. A failure is

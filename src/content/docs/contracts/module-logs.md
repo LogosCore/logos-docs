@@ -61,7 +61,7 @@ Request `payload`:
 
 ```json
 {
-  "stream_id": "01M5SGQG82W3PJ14KBSZPMMKXJ",
+  "stream_id": "a87ff679-a2f3-471d-9181-a67b7542122c",
   "min_level": "debug",
   "lease_seconds": 30,
   "backlog": 500,
@@ -94,7 +94,7 @@ Request `payload`: `{ "stream_id": "…" }`. Ends the stream with a final batch
 
 ```json
 {
-  "stream_id": "01M5SGQG82W3PJ14KBSZPMMKXJ",
+  "stream_id": "a87ff679-a2f3-471d-9181-a67b7542122c",
   "instance": "http-local",
   "seq": 7,
   "backlog": false,

@@ -103,7 +103,7 @@ AMQP properties:
 | Property | Value |
 |---|---|
 | `reply_to` | `amq.rabbitmq.reply-to` |
-| `correlation_id` | same ULID as the envelope `correlation_id` |
+| `correlation_id` | same id as the envelope `correlation_id` |
 | `content_type` | `application/json` |
 | `type` | the envelope `type` (e.g. `mgmt.config.apply`) |
 | `expiration` | core → module requests: the call timeout in milliseconds |
