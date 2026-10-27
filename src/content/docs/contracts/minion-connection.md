@@ -96,7 +96,9 @@ Endpoint values are operation data and are shown to members as they are,
 | Agent API key | read like a viewer, never write |
 
 Members also see every channel kind with its current schema (kind, version and
-fields only — nothing about instances), which the endpoint form is built from.
+fields only — nothing about instances), which the endpoint form is built from,
+and so is each connection of a [build](../minion-build/#connections) (draft): a
+connection can be filled in from an endpoint, which copies its values.
 Deleting an operation deletes its endpoints.
 
 ## The export

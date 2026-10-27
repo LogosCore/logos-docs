@@ -18,7 +18,7 @@ identity, keys and connection settings, and asks the factory to build.
 ```mermaid
 flowchart LR
     F[Factory instance] -- "module.register: build schema" --> CORE[Core]
-    OP[Operator] -- "target, values, files, endpoints" --> CORE
+    OP[Operator] -- "target, values, files, connections" --> CORE
     CORE -- "factory.build: + minion id, keys, connections" --> F
     F -- "progress, result" --> CORE
     F -- "artifact upload" --> S3[(SeaweedFS)]
@@ -131,13 +131,13 @@ A channel's [connection schema](../minion-connection/) says how to **reach**
 the channel. It says nothing about how a minion family **uses** it: the HTTP
 channel accepts any method and any path, so which method a minion sends, and
 under which path, is the minion's choice. An operator may need to set that per
-endpoint, for example when a CDN forwards only `/cdn/assets/*` to the channel.
+connection, for example when a CDN forwards only `/cdn/assets/*` to the channel.
 
 A factory declares such parameters as the `fields` of a `channels` entry. They
 are field specs like any other, set **per connection**: the build (or preset)
-holds one set of values for each endpoint the minion is given. In the build
-request, each connection is the endpoint's export, unchanged, next to these
-values with defaults filled in (see [`factory.build`](#factorybuild)).
+holds one set of values for each [connection](#connections) the minion is given.
+In the build request, each connection's settings come as an endpoint export,
+next to these values with defaults filled in (see [`factory.build`](#factorybuild)).
 
 A parameter may reuse a key of the channel's schema: the two never mix, since
 the minion reads each from its own place.
@@ -186,6 +186,23 @@ needs to fetch it:
 factory checks the SHA-256 after downloading. Core signs URLs for the storage
 address factories reach, a core setting that defaults to the one core uses.
 
+## Connections
+
+A build gives the minion one or more **connections**, in the order the minion
+tries them. Each one is:
+
+| Property | Meaning |
+|---|---|
+| `module_name` | The channel kind, one the target speaks. |
+| `name` | Optional. What the minion calls the connection, a slug like an endpoint name, unique among the build's connections. Without one, it is `<channel>-<position>`, e.g. `http-1`. |
+| `settings` | By the channel's [connection schema](../minion-connection/) field key, validated like an endpoint's values. A field without a value takes the schema's default. |
+| `values` | The factory's [connection parameters](#connection-parameters) for that channel kind. |
+
+The build form fills a connection in from scratch or from one of the operation's
+[endpoints](../minion-connection/#channel-endpoints), which copies the
+endpoint's values (and its name, unless the connection has one) for the operator
+to change as needed. Nothing refers back to the endpoint afterwards.
+
 ## Build presets
 
 A preset is a ready-to-use set of build settings an operation keeps, the way
@@ -200,19 +217,20 @@ fills in the build form; it builds nothing on its own.
 | `module_name` | The factory kind whose schema it follows. |
 | `target`, `platform` | The target id, and optionally the platform. |
 | `values` | By field key; `file` fields by build file id. |
-| `connections` | Optional ordered list of the operation's endpoints, by reference, each with its [connection parameter](#connection-parameters) values. |
+| `connections` | Optional ordered list of [connections](#connections), each with the connection schema `schema_version` its settings were saved against. |
 | `schema_version` | The build schema `version` the values were saved against. |
 | `revision` | Grows with every change; an update must name the revision it read (otherwise `CONFLICT`). |
 
 A preset is validated like a build, except that the platform, the connections
-and required values may be left for the build form. As with endpoints,
-validation runs when it is saved and again whenever it is read, against the
-kind's latest schema. A preset that no longer fits, or names an endpoint that
-was deleted or cannot be used, shows its problems, and the build form opens
-with them marked.
+and required values and settings may be left for the build form. As with
+endpoints, validation runs when it is saved and again whenever it is read,
+against the factory kind's and the channels' latest schemas. A preset that no
+longer fits shows its problems, a connection whose channel declares another
+schema version is pointed out, and the build form opens with them marked.
 
-A preset **refers** to endpoints, so it follows their changes. A build
-**copies** their values, so a minion never changes after it is built.
+A preset holds its connections' settings itself: one filled from an endpoint
+keeps a copy, so editing the endpoint later changes neither the preset nor
+anything built from it.
 
 ## Building
 
@@ -223,7 +241,7 @@ sequenceDiagram
     participant CORE as Core
     participant F as Factory instance
     participant S3 as SeaweedFS
-    OP->>CORE: build (factory kind, target, platform, values, endpoints)
+    OP->>CORE: build (factory kind, target, platform, values, connections)
     CORE->>CORE: validate, fill in defaults, new build id,<br/>minion id and keys, presigned URLs → QUEUED
     CORE->>F: factory.build
     F-->>CORE: accepted → BUILDING
@@ -245,11 +263,13 @@ latest schema:
 - the target exists, and the platform is one of its `platforms`;
 - the values follow the field rules (type, bounds, pattern, required, and **no
   undeclared keys**) for the shared fields plus the target's own;
-- at least one endpoint is chosen (there is no upper limit), each usable (no
-  problems), of a channel kind the target supports, whose current connection
-  schema `version` is one the factory lists;
-- each connection's values follow the connection parameters the factory
-  declares for that channel kind, by the same rules;
+- at least one connection is given (there is no upper limit), each through a
+  channel kind the target supports, whose current connection schema `version`
+  is one the factory lists, with a `name`, when it has one, that is a slug no
+  other connection is called (see [Connections](#connections));
+- each connection's settings follow that connection schema, and its values the
+  connection parameters the factory declares for that channel kind, by the same
+  rules;
 - when the factory declares `crypto`, core implements one of the suites;
 - a live instance of the kind declares that latest `version`.
 
@@ -331,7 +351,7 @@ Request `payload`:
 | `target`, `platform`, `schema_version` | What to build, against which version of the factory's schema. |
 | `values` | Every field of the target that has a value or a default. A `file` field holds the file's id. |
 | `files` | The files the values name (connection parameter values included), by id, as in [Build files](#build-files). |
-| `connections` | The chosen endpoints, in the order the minion tries them: each one's [export](../minion-connection/#the-export) as `endpoint`, and its [connection parameter](#connection-parameters) `values`, defaults filled in. |
+| `connections` | The [connections](#connections), in the order the minion tries them: each one's settings as an endpoint [export](../minion-connection/#the-export) under `endpoint` (its `name`, channel kind, schema version, and `params` with defaults filled in), and its [connection parameter](#connection-parameters) `values`, defaults filled in. |
 | `crypto` | Present when the factory declares `crypto`: the `suite` core chose, and its key `material` as the payload crypto contract defines it. |
 | `artifact` | Where to upload the artifact: a presigned upload URL valid until the deadline, and the largest size accepted (a core setting, default 256 MiB). |
 | `deadline` | When core stops waiting. |
@@ -551,9 +571,13 @@ Core's own reasons for a failed build, kept in its record: `timeout`,
   so progress and results are calls to `logos.core.rpc` rather than events on
   `logos.events`, as the [routing conventions](../amqp-conventions/#events-publishsubscribe)
   sketched.
-- **Presets refer, builds copy.** The same principle as endpoints: ready-to-use
-  values spare retyping, and the minion keeps its own copy, so changing a preset
-  or an endpoint changes nothing already built.
+- **Connections hold their own settings.** Endpoints spare retyping, but a
+  build often needs a variation of one (another front, a different timeout) or
+  a one-off address, and making an endpoint first meant leaving the build form.
+  So a build's or preset's connection is filled in on the spot, from scratch or
+  from an endpoint, and keeps its own copy: changing an endpoint or a preset
+  changes nothing already built, and a preset does not change under its
+  author's feet.
 - **Every build is a new minion.** Rebuilding the same identity would leave two
   artifacts answering as one minion.
 - **The command set is separate.** Which commands a minion family has, and how
