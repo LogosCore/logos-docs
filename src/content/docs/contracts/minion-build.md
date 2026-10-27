@@ -134,8 +134,8 @@ under which path, is the minion's choice. An operator may need to set that per
 connection, for example when a CDN forwards only `/cdn/assets/*` to the channel.
 
 A factory declares such parameters as the `fields` of a `channels` entry. They
-are field specs like any other, set **per connection**: the build (or preset)
-holds one set of values for each [connection](#connections) the minion is given.
+are field specs like any other, set **per connection**: the build holds one
+set of values for each [connection](#connections) the minion is given.
 In the build request, each connection's settings come as an endpoint export,
 next to these values with defaults filled in (see [`factory.build`](#factorybuild)).
 
@@ -167,8 +167,8 @@ SeaweedFS and never change after upload. `accept` and `max_size` are checked
 when the file is used in a value, not at upload, so one file can serve several
 fields. Uploads are capped by a core setting (default 64 MiB).
 
-A file is kept while a preset or a build record refers to it; an upload nothing
-refers to is removed after a day. Deleting an operation deletes its files.
+A file is kept while a build record refers to it; an upload nothing refers to is
+removed after a day. Deleting an operation deletes its files.
 
 In a build request, a file value stays the file's id, and the request's
 `files` holds each file the values name, under its id, with what the factory
@@ -195,7 +195,7 @@ tries them. Each one is:
 |---|---|
 | `module_name` | The channel kind, one the target speaks. |
 | `name` | Optional. What the minion calls the connection, a slug like an endpoint name, unique among the build's connections. Without one, it is `<channel>-<position>`, e.g. `http-1`. |
-| `description` | Optional. The operators' note on what the connection is for, at most 500 characters. Core keeps it with the preset and the build record; it is never part of a build request. |
+| `description` | Optional. The operators' note on what the connection is for, at most 500 characters. Core keeps it with the build record; it is never part of a build request. |
 | `settings` | By the channel's [connection schema](../minion-connection/) field key, validated like an endpoint's values. A field without a value takes the schema's default. |
 | `values` | The factory's [connection parameters](#connection-parameters) for that channel kind. |
 
@@ -207,35 +207,6 @@ operator to change as needed. The other way, **Save as endpoint** keeps a
 connection's settings, name and description as a new endpoint of the
 operation, for later builds; the factory's parameters stay with the build.
 Either way it is a copy: nothing refers back afterwards.
-
-## Build presets
-
-A preset is a ready-to-use set of build settings an operation keeps, the way
-[endpoints](../minion-connection/#channel-endpoints) are ready-to-use
-connection values: "Windows service for the EU front", "Linux test build". It
-fills in the build form; it builds nothing on its own.
-
-| Property | Meaning |
-|---|---|
-| `operation_id` | The operation that owns it. |
-| `name` | Unique within the operation (`^[a-z0-9][a-z0-9._-]{0,62}$`). |
-| `module_name` | The factory kind whose schema it follows. |
-| `target`, `platform` | The target id, and optionally the platform. |
-| `values` | By field key; `file` fields by build file id. |
-| `connections` | Optional ordered list of [connections](#connections), each with the connection schema `schema_version` its settings were saved against. |
-| `schema_version` | The build schema `version` the values were saved against. |
-| `revision` | Grows with every change; an update must name the revision it read (otherwise `CONFLICT`). |
-
-A preset is validated like a build, except that the platform, the connections
-and required values and settings may be left for the build form. As with
-endpoints, validation runs when it is saved and again whenever it is read,
-against the factory kind's and the channels' latest schemas. A preset that no
-longer fits shows its problems, a connection whose channel declares another
-schema version is pointed out, and the build form opens with them marked.
-
-A preset holds its connections' settings itself: one filled from an endpoint
-keeps a copy, so editing the endpoint later changes neither the preset nor
-anything built from it.
 
 ## Building
 
@@ -479,8 +450,10 @@ keys held by core and its build record. A failed or cancelled build creates
 none, and its minion id and keys are thrown away.
 
 **Every build is a new minion.** Building again from a record opens the build
-form filled in from it, and the new build gets a new minion id and new keys:
-two artifacts never share an identity.
+form filled in from it, so every earlier build is the template for the next:
+its target, platform, values and connections with their descriptions, values
+equal to today's defaults left out so they read as defaults. The new build gets
+a new minion id and new keys: two artifacts never share an identity.
 
 Artifacts contain the minion's keys. They are kept until an operator deletes
 them or the operation is deleted.
@@ -489,8 +462,8 @@ them or the operation is deleted.
 
 | Who | Can |
 |---|---|
-| Viewer of the operation | see presets, builds and build records |
-| Operator or admin of the operation | also manage presets and build files, build, cancel, and download artifacts |
+| Viewer of the operation | see builds and build records |
+| Operator or admin of the operation | also manage build files, build, cancel, and download artifacts |
 | Agent API key | read like a viewer, never build or download |
 
 Members also see every factory kind with its current build schema (kind,
@@ -564,8 +537,8 @@ Core's own reasons for a failed build, kept in its record: `timeout`,
   many run at once. It serves that management itself, with the same keys on
   every factory, rather than leaving each factory to expose its internals.
 - **Core owns identity and keys.** Core generates the minion id and keys; they
-  only pass through the factory into the artifact. They never appear in a form,
-  a preset or a build record.
+  only pass through the factory into the artifact. They never appear in a form
+  or a build record.
 - **Presigned URLs for files and artifacts.** Factories need no storage
   credentials and reach only the objects of the build at hand, and file bytes
   travel through neither core nor the broker. SHA-256 checks on both sides catch
@@ -579,10 +552,9 @@ Core's own reasons for a failed build, kept in its record: `timeout`,
 - **Connections hold their own settings.** Endpoints spare retyping, but a
   build often needs a variation of one (another front, a different timeout) or
   a one-off address, and making an endpoint first meant leaving the build form.
-  So a build's or preset's connection is filled in on the spot, from scratch or
-  from an endpoint, and keeps its own copy: changing an endpoint or a preset
-  changes nothing already built, and a preset does not change under its
-  author's feet.
+  So a build's connection is filled in on the spot, from scratch or from an
+  endpoint, and keeps its own copy: changing an endpoint changes nothing
+  already built.
 - **Notes stay in core.** Whatever a factory gets may end up inside the
   artifact, readable by anyone who captures the minion. A connection's
   description is the operators' note ("EU front for the first stage"), so core
@@ -590,6 +562,11 @@ Core's own reasons for a failed build, kept in its record: `timeout`,
   way an endpoint's description is not part of its export.
 - **Every build is a new minion.** Rebuilding the same identity would leave two
   artifacts answering as one minion.
+- **Earlier builds are the templates.** Named presets of build settings were
+  dropped before release: every build record already holds a complete set of
+  settings that built, and Build again starts from it. A second kind of saved
+  settings needed its own list, its own checks against changing schemas and its
+  own hold on build files, for what a build record already gives.
 - **The command set is separate.** Which commands a minion family has, and how
   tasks map to them, belongs to the factory's command contract. A build only
   reports the capabilities it ended up with.
