@@ -220,10 +220,10 @@ sequenceDiagram
     OP->>CORE: build (factory kind, target, platform, values, connections)
     CORE->>CORE: validate, fill in defaults, new build id,<br/>minion id and keys, presigned URLs → QUEUED
     CORE->>F: factory.build
-    F-->>CORE: accepted → BUILDING
+    F-->>CORE: accepted, with its plan (steps) → BUILDING
     F->>S3: download files
-    loop while building
-        F->>CORE: factory.build.progress
+    loop each step
+        F->>CORE: factory.build.progress (the step it is on)
     end
     F->>S3: upload artifact
     F->>CORE: factory.build.result
@@ -267,7 +267,7 @@ replies `busy` to every new build (see [Managing a factory](#managing-a-factory)
 |---|---|---|
 | `factory.build` | core → factory | Start a build. |
 | `factory.build.cancel` | core → factory | Stop a build. |
-| `factory.build.progress` | factory → core | Report a step of a running build. |
+| `factory.build.progress` | factory → core | Report the step of its plan a running build is on. |
 | `factory.build.result` | factory → core | Report how a build ended. |
 
 Core calls the factory on its `rpc_queue` (`logos.factory.rpc.<instance>`), as
@@ -335,16 +335,32 @@ Request `payload`:
 
 The factory validates the request again, as a module validates configuration,
 since only it knows its build-time constraints. It replies at once, before
-building:
+building, with its **plan** for the build:
 
 ```json
-{ "build_id": "01M6A3Q9X7J0B5KQZC2V1RS8TN", "accepted": true }
+{
+  "build_id": "01M6A3Q9X7J0B5KQZC2V1RS8TN",
+  "accepted": true,
+  "steps": [
+    { "id": "fetch", "label": "Fetch files" },
+    { "id": "compile", "label": "Compile" },
+    { "id": "sign", "label": "Sign" },
+    { "id": "upload", "label": "Upload" }
+  ]
+}
 ```
 
-or with an error: `validation_failed`, `busy`, or `unsupported_version` (the
-request's `schema_version` is not the one this instance declares). A repeated
-request for a build it already accepted is accepted again and never builds
-twice.
+`steps` are what the factory will do for this request, in order: 1 to 32, each
+an `id` (`^[a-z0-9][a-z0-9_-]{0,62}$`, unique in the plan) and a `label` for
+the operator (1 to 64 characters, one line). The plan is the build's, not the
+target's: a step that will not run for these values is left out. Core shows it
+as the build's [pipeline](#the-pipeline). A plan core cannot take (none, or an
+invalid one) does not stop the build; it shows as a single step, "Build".
+
+Or the factory replies with an error: `validation_failed`, `busy`, or
+`unsupported_version` (the request's `schema_version` is not the one this
+instance declares). A repeated request for a build it already accepted is
+accepted again, with the same plan, and never builds twice.
 
 Key material, secret values and files are only for the build. The factory must
 not log them, keep them after the build, or put them in progress messages or
@@ -355,12 +371,15 @@ the build log.
 Request `payload`:
 
 ```json
-{ "build_id": "01M6A3Q9X7J0B5KQZC2V1RS8TN", "step": "compile", "message": "Compiling windows/amd64", "percent": 40 }
+{ "build_id": "01M6A3Q9X7J0B5KQZC2V1RS8TN", "step": "compile", "message": "Compiling windows/amd64" }
 ```
 
-`step` is a short name, `message` is shown to the operator, and `percent`
-(0–100) is optional. Core keeps the last 50 steps of a build and shows them.
-Progress is best effort: a lost message is not sent again.
+`step` is the `id` of the step of the plan the factory is now on; reporting
+it again changes its optional `message` ("compiling 3 of 10"), and one without
+a message clears it. Core keeps when each step was first reported and its
+latest message. A step outside the plan is ignored. Progress is best effort: a
+lost report is not sent again, and core takes the steps before the one
+reported as done, so a lost one only costs a step its times.
 
 Reply `payload`: `{ "build_id": "…", "ack": true }`. A `not_found` error means
 core no longer waits for the build (it was cancelled or ran out of time), and
@@ -437,13 +456,33 @@ the request is when the latter runs out. A factory that restarts during a build
 loses it, and core fails the build at the deadline, or earlier when the instance
 is declared dead.
 
+### The pipeline
+
+The app shows a build as a pipeline of stages: core's **Queued** (until an
+instance takes the build), then the factory's plan, then core's **Check
+artifact** (from the result to the size and SHA-256 check). Core works the
+stages out from the build record whenever it is read:
+
+| State | A stage that |
+|---|---|
+| `PENDING` | the build has not reached yet. |
+| `RUNNING` | the build is in: the step last reported, or the plan's first step once the build is taken and nothing is reported yet. |
+| `SUCCEEDED` | is behind the build: every step before the one reported, and every step once a succeeded result arrived. |
+| `FAILED`, `CANCELLED` | the build ended in: the step it was on when the factory reported a failure, core gave up on it or an operator cancelled it; Check artifact when the artifact did not check out. |
+| `SKIPPED` | the build ended before. |
+
+A stage's times are known when it was reported: it starts at its first report
+and ends when the next reported step starts, or with the factory's result. A
+step done without a report has no times.
+
 ## Build records and minions
 
 Core keeps a **build record** for every build: who started it and when, the
 factory kind, instance and version, `schema_version`, target, platform, values
 (`file` values as build file ids), the connection settings as copied with the
 operators' descriptions of them, the crypto suite (never key material), the
-state, and the result: artifact, capabilities, warnings and log, or the error.
+factory's plan and step reports, the state, and the result: artifact,
+capabilities, warnings and log, or the error.
 
 A successful build creates the **minion**: identified by `minion_id`, with its
 keys held by core and its build record. A failed or cancelled build creates
@@ -562,6 +601,11 @@ Core's own reasons for a failed build, kept in its record: `timeout`,
   way an endpoint's description is not part of its export.
 - **Every build is a new minion.** Rebuilding the same identity would leave two
   artifacts answering as one minion.
+- **Steps declared up front.** A percentage is a guess each factory makes its
+  own way, and says neither what is happening nor where a build failed. A plan
+  shows the whole build before it runs, and the step it fails in. It comes
+  with the acceptance, an answer core always gets, rather than with progress,
+  which may be lost: core then works out each stage from what did arrive.
 - **Earlier builds are the templates.** Named presets of build settings were
   dropped before release: every build record already holds a complete set of
   settings that built, and Build again starts from it. A second kind of saved
