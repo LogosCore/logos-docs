@@ -15,23 +15,27 @@ Channel modules provide transport paths between minions and the core Server plat
 - Treat minion payload as opaque encrypted blob (no decrypt/inspect).
 - Build an `inbound.minion_message` envelope and send it to core's sync endpoint (`POST /api/channel/sync`).
 - Receive `outbound.minion_message` from core and relay `encrypted_data` back to the minion via the transport.
-- Register with core on startup via [Module Lifecycle](../contracts/module-lifecycle/).
+- Register with core on startup via [Module Lifecycle](../contracts/module-lifecycle/),
+  declaring its [minion connection schema](../contracts/minion-connection/): the
+  settings a minion is given to reach it, which operators keep as endpoints and
+  fill in for each connection of a build.
 - Handle transport-specific concerns (sessions, polling cadence, retries, rate limits).
 
 ### What core requires from a channel
 
-A well-formed `inbound.minion_message` envelope — nothing more. How a channel
-receives traffic, what transport protocol it uses, and how it extracts the
-canonical fields is entirely the channel's implementation detail. Core defines
-the envelope contract in [Channel ↔ Core: HTTP Sync](../contracts/channel-core-sync/).
+A well-formed `inbound.minion_message` envelope from an instance that is
+registered and not blocked — nothing more. Core answers an unregistered, dead or
+blocked instance with 403. How a channel receives traffic, what transport
+protocol it uses, and how it extracts the canonical fields is entirely the
+channel's implementation detail. Core defines the envelope contract in
+[Channel ↔ Core: HTTP Sync](../contracts/channel-core-sync/).
 
 ### Examples
 
-- HTTP(S) channel
-- Telegram channel
-- GitHub channel
-- DNS channel
-- WebSocket channel
+- HTTP(S) and WebSocket: `logos-http-channel`, the reference channel. It
+  accepts any method on any path, and WebSocket connections whose binary frames
+  are messages.
+- Telegram, GitHub or DNS channels: possible, none built yet.
 
 ### Notes
 
@@ -48,20 +52,35 @@ Factory modules build minions. They define minion families and lifecycle behavio
 
 ### Responsibilities
 
-- Build/generate minions for a target platform/profile, declaring what can be
-  built and with which parameters in a [build schema](../contracts/minion-build/).
-- Define the command set supported by a specific minion family.
+Built:
+
+- Declare what can be built in a [build schema](../contracts/minion-build/)
+  at registration: targets and their platforms, the build parameters, the
+  channel kinds the minions speak with the factory's own connection parameters
+  for each, and the commands the minions can be built with.
+- Build minions on core's request (`factory.build`): report the build's plan
+  and progress, upload the artifact to the URL core gives, and report the
+  result.
+- Build in the commands the operator picked, and no others.
+
+Planned, with the factory command contract:
+
 - Preprocess operator/core commands into minion-specific wire format.
 - Postprocess raw minion responses into structured events/results.
-- Manage minion metadata/capabilities and compatibility versions.
+- Version the command contract per minion family.
 
 ### Examples
 
-- Go factory
-- .NET factory
-- Python factory
+- BOB (`logos-bob-factory`), the reference factory: it builds dummy minions, a
+  JSON description of what the minion would be built with.
+- Go, .NET or Python factories: possible, none built yet.
 
 ### Optional Translator Hooks
+
+:::note[Not built]
+A design for the factory command contract: no factory implements hooks yet,
+and core sends factories no minion traffic.
+:::
 
 By default, the preprocess/postprocess responsibilities above map directly
 between the normalized Logos model and the minion wire format. A factory that
@@ -97,7 +116,9 @@ Guidance for factories that implement them:
 
 All module types should:
 
-- Register with core on startup and heartbeat for liveness via the [Module Lifecycle](../contracts/module-lifecycle/) contract.
+- Register with core on startup and heartbeat for liveness via the [Module Lifecycle](../contracts/module-lifecycle/) contract. A blocked instance is refused until an operator unblocks it; the SDK keeps asking, at its longest backoff.
+- Declare what operators can manage on them in a [management manifest](../contracts/module-management/), and serve the [live log tail](../contracts/module-logs/).
+- Send an icon at registration, shown with the module in the web app.
 - Communicate through RabbitMQ channels using versioned message schemas.
 - Include correlation IDs for traceability across services.
 - Be independently deployable/replaceable in Docker Compose stacks.
@@ -121,8 +142,10 @@ The wire-level contracts these modules use are specified in the
 5. Management — [Module Management](../contracts/module-management/) and the
    [live log tail](../contracts/module-logs/).
 6. What minions are given to reach a channel — [Minion Connection Schema](../contracts/minion-connection/).
-7. Builds — [Minion Build](../contracts/minion-build/) (draft).
+7. Builds — [Minion Build](../contracts/minion-build/).
 
-For building a module against them, see [Implementing a Module](../implementing-a-module/).
+For building a module against them, see [Implementing a Module](../implementing-a-module/):
+`logos-golang-module-core` for every module, with `logos-golang-channel-core`
+for a channel and `logos-golang-factory-core` for a factory.
 
 Still open: the factory command contract, and module packaging/lifecycle policy.

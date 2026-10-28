@@ -1,15 +1,35 @@
 ---
-title: "Architecture Draft"
+title: "Architecture"
 ---
+
+Logos is a core server and the modules around it. Operators work in core's web
+app or through its APIs, minions reach Logos through channel modules, and
+factory modules build the minions. This page maps the parts and how they talk,
+and separates what is built from what is still a plan.
 
 ## High-Level Components
 
-- **Core Server**: central control plane for authentication, orchestration, policy enforcement, and module lifecycle.
-- **Operator UI / API Client**: operator-facing interface for tasking, monitoring, and administration.
-- **Module Services**: independent services implementing capabilities (for example: task dispatcher, result processor, notification service).
-- **Message Bus (RabbitMQ)**: asynchronous communication backbone between core server and modules via channels/queues.
-- **Persistence Layer**: durable storage for users, minions, tasks, module state, and audit logs.
-- **Telemetry / Logging**: centralized collection of operational and security events.
+- **Core Server** (`logos-core`): the control plane. It holds operations and
+  their members, authentication and roles, the module registry and its
+  lifecycle, module management and the live log tail, channel endpoints, minion
+  builds and the minions they create, and the data-plane endpoint that channels
+  relay minion traffic to.
+- **Operator UI and API clients**: the web app (React) works over core's
+  GraphQL and REST APIs. AI agents reach core through its MCP endpoint
+  (`/api/v1/mcp`).
+- **Modules**: separate processes, each a registered instance of a module type,
+  built on the Go SDKs. See [Module Types](../module-types/).
+  - **Channel modules** carry minion traffic between minions and core. The
+    reference channel is `logos-http-channel`: HTTP and WebSocket, on any path.
+  - **Factory modules** build minions. The reference factory is BOB
+    (`logos-bob-factory`), which builds dummy minions.
+- **Message bus (RabbitMQ)**: the control plane between core and the modules.
+- **MongoDB**: core's persistence.
+- **Redis**: login sessions, caches, and de-duplication of minion messages.
+- **SeaweedFS**: object storage over the S3 API, for wiki files, build files
+  and build artifacts.
+
+[Core Infrastructure](../core-infrastructure/) has the services in detail.
 
 ## Communication Ownership Model
 
@@ -23,44 +43,90 @@ title: "Architecture Draft"
 
 ## Communication Model
 
-- Modules do not call each other directly by default.
-- Core server and modules communicate over RabbitMQ channels.
-- Minion-to-Logos payloads are application-layer encrypted end-to-end.
-- Channel modules do not decrypt minion payloads; they relay `id` + `encrypted_data` in canonical envelopes.
-- Core exposes a dedicated channel sync HTTP endpoint (`POST /api/channel/sync`).
-- Channel → core minion traffic is request/response over HTTP.
-- On inbound request, core returns an encrypted outbound payload in the same HTTP response (tasking may be embedded inside ciphertext).
-- Channel management between core and channel uses RabbitMQ RPC control calls.
-- Only core Logos services hold decryption keys and perform decrypt/verify operations.
-- Messages should be schema-versioned and idempotent where possible.
-- Critical flows should use acknowledgements/retries and dead-letter queues.
+- Modules do not call each other: each talks to core only.
+- **Data plane**: a channel relays each minion message to core over HTTP
+  (`POST /api/channel/sync`) and gets core's answer in the same response. It
+  carries `id` and `encrypted_data` and never decrypts. See
+  [Channel ↔ Core: HTTP Sync](../contracts/channel-core-sync/).
+- **Control plane** (RabbitMQ):
+  - modules register, heartbeat and deregister on core's queue, `logos.core.rpc`;
+  - core calls each instance on its own queue, `logos.<type>.rpc.<instance>`,
+    for management, the live log tail and, on a factory, builds;
+  - factories report build progress and results on core's queue;
+  - log records stream on `logos.module.logs`, while an operator watches;
+  - core publishes lifecycle events on `logos.events`.
 
-## Initial Deployment Shape
+  See the [Contracts Overview](../contracts/overview/).
+- Messages are versioned [envelopes](../contracts/amqp-envelope/), and
+  operations are idempotent by their own keys: a build's minion id, an action's
+  invocation id, a configuration revision.
+- Files take neither route: factories download build files from, and upload
+  artifacts to, presigned object store URLs.
 
-- Docker Compose orchestrates all services for MVP environments.
-- Services include: core server, RabbitMQ, database, and selected modules.
-- Optional reverse proxy can handle TLS termination for operator/API entrypoints.
+## Built and Planned
+
+| Area | Today |
+|---|---|
+| Module registry | Built: registration, heartbeats, dead instances; operators block, unblock and delete instances. |
+| [Module management](../contracts/module-management/) | Built (prototype): configuration, actions, status values, change history. |
+| [Live log tail](../contracts/module-logs/) | Built (prototype): streamed to the operator's browser, never stored. |
+| [Channel endpoints](../contracts/minion-connection/) | Built: an operation's saved connection settings, with export and import. |
+| [Minion builds](../contracts/minion-build/) | Built: build schemas, builds offered to factory instances, progress, artifacts checked, the minion recorded. |
+| Data plane | Built: the sync endpoint with a registration gate and de-duplication. Core answers every message with an empty reply. |
+| Payload crypto | Planned: core holds the minion keys, decrypts inbound and encrypts outbound. No contract yet. |
+| Tasking | Planned: what core sends a minion, and how it maps to the commands a factory builds in (the factory command contract). |
+| Observability | Planned: central audit logging and tracing. Core publishes lifecycle events that nothing consumes yet. |
+
+## Deployment Shape
+
+- Docker Compose runs the stack (`logos-core/docker-compose.yml`): core, the
+  web app, the wiki collaboration server (hocuspocus), nginx, RabbitMQ,
+  MongoDB, Redis and SeaweedFS, with Keycloak for single sign-on under the
+  `sso` profile.
+- Each module is a Compose project of its own. It joins core's network
+  (`logos-core_logos`) and registers with core when it starts.
+- nginx is the operators' entrypoint, terminates TLS, and routes `/api/` to
+  core.
+- A Helm chart (`logos-core/deploy/helm/logos`) deploys core to Kubernetes. It
+  does not deploy RabbitMQ yet, which core needs to start.
 
 ## Trust Boundaries
 
-- Internet/minion network to core server entrypoint.
-- Operator network to core server entrypoint.
-- Core server/modules to RabbitMQ.
-- Core server/modules to database.
+- **Minion → channel**: the internet side. Each channel owns its listener.
+- **Channel → core** (`/api/channel/sync`): no authentication today. Core
+  admits only registered, unblocked instances, by the instance id the channel
+  asserts.
+- **Operator → core**: through nginx. JWT sessions (local login, or single
+  sign-on through OIDC), CSRF protection on every change, and roles.
+- **Core and modules → RabbitMQ**: one broker account, shared today.
+- **Core → MongoDB, Redis, SeaweedFS**: core only. A factory reaches SeaweedFS
+  through presigned URLs, for one build's objects.
 
 ## Baseline Security Controls
 
-- Encrypted transport for all external/control-plane traffic.
-- Application-layer E2E encryption for minion payloads (`minion` ↔ `core Server`).
-- Decryption keys are available only to core Server services.
-- Channel modules operate as blind routers for encrypted blobs.
-- RBAC for all operator actions.
-- Queue access control per service/module in RabbitMQ.
-- Strict audit logging for sensitive workflows and module-triggered actions.
+Built:
+
+- Roles for every operator action: an account's own role, and its role in each
+  operation (viewer, operator or admin).
+- Channels are blind relays: they carry `id` and `encrypted_data` only.
+- The sync registration gate, and de-duplication of replayed messages.
+- Factories hold no storage credentials, only one build's URLs.
+- A record of what operators did to modules: configuration changes and action
+  invocations.
+
+Planned:
+
+- Application-layer encryption of minion payloads end to end
+  (`minion` ↔ `core Server`), with the keys held by core only.
+- Encrypted control-plane transport (AMQP over TLS), and per-module broker
+  accounts with queue permissions.
+- Central audit logging and tracing.
 
 ## Pending Decisions
 
 1. ~~RabbitMQ exchange/queue naming conventions and routing-key strategy.~~  Resolved — see [AMQP Routing Conventions](../contracts/amqp-conventions/).
 2. ~~Message contract format and versioning policy.~~  Resolved — see [AMQP Message Envelope](../contracts/amqp-envelope/).
 3. ~~Database engine and schema partitioning strategy.~~ Resolved — see [Core Infrastructure](../core-infrastructure/) (MongoDB).
-4. Module packaging and lifecycle policy (enable/disable/version compatibility).
+4. Module packaging and lifecycle policy (enable/disable/version compatibility). Partly settled: operators block, unblock and delete instances ([Module Lifecycle](../contracts/module-lifecycle/)), and build and connection schemas carry versions. Packaging is open.
+5. The payload crypto contract: the suites, their key material, where core encrypts and decrypts.
+6. The factory command contract: tasks, how they reach the commands a minion was built with, and their results.
