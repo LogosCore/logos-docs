@@ -18,7 +18,7 @@ identity, keys and connection settings, and asks the factory to build.
 ```mermaid
 flowchart LR
     F[Factory instance] -- "module.register: build schema" --> CORE[Core]
-    OP[Operator] -- "target, values, files, connections" --> CORE
+    OP[Operator] -- "target, commands, values, files, connections" --> CORE
     CORE -- "factory.build: + minion id, keys, connections" --> F
     F -- "progress, result" --> CORE
     F -- "artifact upload" --> S3[(SeaweedFS)]
@@ -89,6 +89,26 @@ Declared in `module.register` under `build`:
       "platforms": ["windows/amd64", "linux/amd64"],
       "channels": [{ "module_name": "http", "versions": [2] }]
     }
+  ],
+  "commands": [
+    {
+      "id": "sleep", "label": "Sleep", "group": "Session", "required": true,
+      "description": "Changes how long the minion waits between check-ins.",
+      "params": [
+        { "key": "interval", "type": "duration", "label": "Interval", "required": true },
+        { "key": "jitter", "type": "int", "label": "Jitter", "unit": "%", "min": 0, "max": 100, "default": 0 }
+      ]
+    },
+    { "id": "exit", "label": "Exit", "group": "Session", "required": true },
+    {
+      "id": "shell", "label": "Run a command", "group": "Execution", "default": true,
+      "params": [{ "key": "command", "type": "string", "label": "Command", "required": true }]
+    },
+    {
+      "id": "download", "label": "Download a file", "group": "Files", "default": true,
+      "params": [{ "key": "path", "type": "string", "label": "Path", "required": true }]
+    },
+    { "id": "screenshot", "label": "Screenshot", "group": "Collection", "targets": ["windows-exe"] }
   ]
 }
 ```
@@ -101,6 +121,7 @@ Declared in `module.register` under `build`:
 | `crypto[]` | Optional. The payload crypto suites the minions implement; core picks one it implements and generates the keys. Suite names and their key material come from the payload crypto contract, which is not written yet; the name above is an example. |
 | `fields[]` | Build parameters shared by every target. Field specs as in a [management manifest](../module-management/#fields), plus the [types below](#field-types-for-builds). |
 | `targets[]` | What the factory can produce, at least one. |
+| `commands[]` | Optional. What the minions can do. Operators pick each build's [commands](#commands) from its target's. |
 
 A target:
 
@@ -123,7 +144,8 @@ A target:
   `version` any instance declared, from its most recent registration.
 
 Limits: 32 targets, 64 fields per target (shared ones included), 16 platforms
-per target, 16 channel kinds, 32 connection parameters per channel kind.
+per target, 16 channel kinds, 32 connection parameters per channel kind, 256
+commands, 32 params per command.
 
 ### Connection parameters
 
@@ -157,6 +179,33 @@ accepted only in build schemas.
 `accept` and `max_size` are new field spec members, for `file` only. In the
 UI, `datetime` is a date and time picker, `enum_list` a set of checkboxes, and
 `file` an upload or a choice from the operation's build files.
+
+### Commands
+
+A minion can do only what was built into it. The factory declares what its
+minions **can** do as `commands`, and the operator picks what **this** minion
+does when they build it: a minion built for one job carries nothing more.
+
+| Field | Meaning |
+|---|---|
+| `id` | Identifier, unique in the schema, `^[a-z][a-z0-9_-]{0,62}$`. Builds name the command by it, and so will tasks. |
+| `label`, `description` | Shown in the UI. |
+| `group` | Optional. The heading the command is listed under in the build form, as a field's `group`. |
+| `targets[]` | Optional. Narrows the command to these targets; empty means every target. |
+| `default` | Picked in a new build until the operator unpicks it, and what a build that names no commands gets. |
+| `required` | In every build of its targets: the minion cannot run without it (`sleep`, `exit`), so the operator cannot leave it out. |
+| `params[]` | What a task of the command takes: field specs as in a management action. `file` is refused, as outside build schemas. |
+
+- A build's commands are the ones picked, the target's required ones among
+  them, in the schema's order. A build that names none gets the target's
+  `default` and `required` ones.
+- The factory builds those in and no others: what the minion can do is its
+  build's `commands`. A factory that cannot build one in fails the build.
+- `params` describe tasks, which minions do not take yet; the build form shows
+  only what each command is.
+- A command removed or renamed needs a new `version`, like a field. Adding
+  one does not, a required one included: core adds it to every build of its
+  targets.
 
 ## Build files
 
@@ -217,7 +266,7 @@ sequenceDiagram
     participant CORE as Core
     participant F as Factory instance
     participant S3 as SeaweedFS
-    OP->>CORE: build (description, factory kind, target, platform, values, connections)
+    OP->>CORE: build (description, factory kind, target, platform, commands, values, connections)
     CORE->>CORE: validate, fill in defaults, new minion id<br/>and keys, presigned URLs → QUEUED
     CORE->>F: factory.build
     F-->>CORE: accepted, with its plan (steps) → BUILDING
@@ -241,6 +290,9 @@ latest schema:
 - the target exists, and the platform is one of its `platforms`;
 - the values follow the field rules (type, bounds, pattern, required, and **no
   undeclared keys**) for the shared fields plus the target's own;
+- each command picked is one of the target's, picked once; core adds the
+  target's required ones, and a build that names none gets the target's
+  default and required ones;
 - at least one connection is given (there is no upper limit), each through a
   channel kind the target supports, whose current connection schema `version`
   is one the factory lists, with a `name`, when it has one, that is a slug no
@@ -295,6 +347,7 @@ Request `payload`:
     "debug": false,
     "icon": "0f9a2c1e-6f1b-4a43-9d4e-2b9b3c1d7e55"
   },
+  "commands": ["sleep", "exit", "shell", "download", "screenshot"],
   "connections": [
     {
       "endpoint": {
@@ -326,6 +379,7 @@ Request `payload`:
 | `minion_id` | UUIDv4, the identity of the build and of the minion it makes: every build operation names the build by it, and the minion sends it as `id` on the [data plane](../channel-core-sync/). A repeated `minion_id` is the same build. |
 | `target`, `platform`, `schema_version` | What to build, against which version of the factory's schema. |
 | `values` | Every field of the target that has a value or a default. A `file` field holds the file's id. |
+| `commands` | The ids of the [commands](#commands) the minion is built with: those picked, the target's required ones among them, in the schema's order. The minion has these and no others. |
 | `files` | The files the values name (connection parameter values included), by id, as in [Build files](#build-files). |
 | `connections` | The [connections](#connections), in the order the minion tries them: each one's settings as an endpoint [export](../minion-connection/#the-export) under `endpoint` (its `name`, channel kind, schema version, and `params` with defaults filled in), and its [connection parameter](#connection-parameters) `values`, defaults filled in. |
 | `crypto` | Present when the factory declares `crypto`: the `suite` core chose, and its key `material` as the payload crypto contract defines it. |
@@ -398,7 +452,6 @@ Request `payload` when the build succeeded:
     "sha256": "28afe4a10a4a7d593623dcd1eee11f519b056d2bfdda4c7b0bd7a57fc3a5fc8b",
     "media_type": "application/vnd.microsoft.portable-executable"
   },
-  "capabilities": ["shell", "upload", "download"],
   "warnings": ["debug build: strings are not obfuscated"],
   "log": "…"
 }
@@ -416,8 +469,8 @@ and when it failed:
 ```
 
 - The artifact is uploaded to `artifact.upload_url` before the result is sent.
-- `capabilities` is what the built minion can do. The names come from the
-  factory's command set, a contract of its own (not written yet).
+- What the minion can do is no part of the result: it is the request's
+  `commands`, which the factory built in, or it failed the build.
 - `warnings` and `log` (the build output, its last 64 KiB) are shown with the
   build; the log matters most when it fails.
 - `error.code` is the factory's own, e.g. `compile_failed`.
@@ -479,18 +532,19 @@ step done without a report has no times.
 
 Core keeps a **build record** for every build: who started it, when and what
 for (its description), the factory kind, instance and version, `schema_version`, target, platform, values
-(`file` values as build file ids), the connection settings as copied with the
-operators' descriptions of them, the crypto suite (never key material), the
-factory's plan and step reports, the state, and the result: artifact,
-capabilities, warnings and log, or the error.
+(`file` values as build file ids), its commands, the connection settings as
+copied with the operators' descriptions of them, the crypto suite (never key
+material), the factory's plan and step reports, the state, and the result:
+artifact, warnings and log, or the error.
 
 A successful build creates the **minion**: identified by `minion_id`, with its
-keys held by core and its build record. A failed or cancelled build creates
+keys held by core and its build record, and its build's commands as what it
+can do. A failed or cancelled build creates
 none, and its minion id and keys are thrown away.
 
 **Every build is a new minion.** Building again from a record opens the build
 form filled in from it, so every earlier build is the template for the next:
-its description, target, platform, values and connections with theirs, values
+its description, target, platform, commands, values and connections with theirs, values
 equal to today's defaults left out so they read as defaults. The new build gets
 a new minion id and new keys: two artifacts never share an identity.
 
@@ -611,8 +665,13 @@ Core's own reasons for a failed build, kept in its record: `timeout`,
   settings that built, and Build again starts from it. A second kind of saved
   settings needed its own list, its own checks against changing schemas and its
   own hold on build files, for what a build record already gives.
-- **The command set is separate.** Which commands a minion family has, and how
-  tasks map to them, belongs to the factory's command contract. A build only
-  reports the capabilities it ended up with.
+- **Commands picked per build.** A minion that can do more than its job needs
+  is more to find and more to lose when it is caught. So the factory declares
+  what its minions can do, and the operator picks what each one does, the way
+  they pick its target and values. What a minion can do is then known before
+  it is built, from the build record, rather than reported by the factory
+  afterwards. How tasks reach a command and what comes back belongs to the
+  tasking contract, not written yet; `params` are declared now so a command
+  is described whole.
 - **`file` only in build schemas.** Only a build hands files to a module. A
   property or an endpoint holding a file would need its own way to deliver it.

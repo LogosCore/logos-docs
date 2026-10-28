@@ -90,7 +90,8 @@ Guidance for factories that implement them:
 
 - Keep factory-specific command grammar encapsulated.
 - Version command contracts per factory.
-- Track capability flags per minion build (supported commands/features).
+- Declare the commands its minions can be built with (the build schema's
+  `commands`); operators pick each build's, and the minion has those.
 
 ## Cross-Cutting Module Requirements
 
