@@ -100,7 +100,7 @@ Properties and action parameters share one field description:
 | `type` | One of the [field types](#field-types). |
 | `label`, `description` | Shown in the UI. Up to 120 and 1000 characters. |
 | `group`, `order`, `unit`, `placeholder` | UI hints only. |
-| `format` | For `string`: what the value is, so the UI can offer a helper. A hint, never validated; unknown formats are ignored. Known: `user_agent` (an HTTP User-Agent; the UI offers a generator by OS, browser and version). |
+| `format` | For `string`: what the value is, so the UI can offer a helper. A hint, never validated; unknown formats are ignored. Known: `user_agent` (an HTTP User-Agent; the UI offers a generator by OS, browser and version), `path` (a URL path, e.g. `/cdn/assets/`; the UI offers a generator of paths made of words, from word lists it ships). |
 | `required` | A value must be present (and, for strings, non-empty). |
 | `default` | The module's own value when core holds none — typically what it read from its env. Must satisfy the field's own constraints. Never set for `secret`. |
 | `min`, `max` | Numbers for `int` / `number` / `bytes`, duration strings for `duration`. |
