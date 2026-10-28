@@ -92,23 +92,23 @@ Declared in `module.register` under `build`:
   ],
   "commands": [
     {
-      "id": "sleep", "label": "Sleep", "group": "Session", "required": true,
+      "id": "sleep", "label": "Sleep", "required": true,
       "description": "Changes how long the minion waits between check-ins.",
       "params": [
         { "key": "interval", "type": "duration", "label": "Interval", "required": true },
         { "key": "jitter", "type": "int", "label": "Jitter", "unit": "%", "min": 0, "max": 100, "default": 0 }
       ]
     },
-    { "id": "exit", "label": "Exit", "group": "Session", "required": true },
+    { "id": "exit", "label": "Exit", "required": true },
     {
-      "id": "shell", "label": "Run a command", "group": "Execution", "default": true,
+      "id": "shell", "label": "Run a command", "default": true,
       "params": [{ "key": "command", "type": "string", "label": "Command", "required": true }]
     },
     {
-      "id": "download", "label": "Download a file", "group": "Files", "default": true,
+      "id": "download", "label": "Download a file", "default": true,
       "params": [{ "key": "path", "type": "string", "label": "Path", "required": true }]
     },
-    { "id": "screenshot", "label": "Screenshot", "group": "Collection", "targets": ["windows-exe"] }
+    { "id": "screenshot", "label": "Screenshot", "targets": ["windows-exe"] }
   ]
 }
 ```
@@ -190,7 +190,6 @@ does when they build it: a minion built for one job carries nothing more.
 |---|---|
 | `id` | Identifier, unique in the schema, `^[a-z][a-z0-9_-]{0,62}$`. Builds name the command by it, and so will tasks. |
 | `label`, `description` | Shown in the UI. |
-| `group` | Optional. A theme of the command (`Session`, `Files`…), shown with it where the factory's commands are described. The build form lists commands in the schema's order, without headings. |
 | `targets[]` | Optional. Narrows the command to these targets; empty means every target. |
 | `default` | Picked in a new build until the operator unpicks it, and what a build that names no commands gets. |
 | `required` | In every build of its targets: the minion cannot run without it (`sleep`, `exit`), so the operator cannot leave it out. |
