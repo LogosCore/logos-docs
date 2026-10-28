@@ -35,9 +35,9 @@ graph LR
 
 | Aspect | Value |
 |---|---|
-| Exchange | `logos.<module-type>.rpc` (direct), e.g. `logos.channel.rpc` |
-| Routing key | the module's `<instance>` |
-| Request queue | the `rpc_queue` the module sent at registration, by convention `logos.<module-type>.rpc.<instance>` |
+| Exchange | the default exchange; the module also binds its queue to `logos.<module-type>.rpc` (direct) with key `<instance>`, which core does not route through |
+| Routing key | the `rpc_queue` the module sent at registration |
+| Request queue | that `rpc_queue`, by convention `logos.<module-type>.rpc.<instance>`; the module handles at most 8 requests at a time |
 | Reply | direct reply-to (`amq.rabbitmq.reply-to`), `correlation_id` echoed |
 | Body | [AMQP envelope](../amqp-envelope/) / RPC reply envelope, version `1.0` |
 
@@ -98,16 +98,16 @@ Properties and action parameters share one field description:
 |---|---|
 | `key` | Identifier, `^[a-z][a-z0-9_]{0,62}$`, unique within its list. |
 | `type` | One of the [field types](#field-types). |
-| `label`, `description` | Shown in the UI. Up to 120 and 1000 characters. |
+| `label`, `description` | Shown in the UI. Up to 120 and 1000 bytes. |
 | `group`, `order`, `unit`, `placeholder` | UI hints only. |
-| `format` | For `string`: what the value is, so the UI can offer a helper. A hint, never validated; unknown formats are ignored. Known: `user_agent` (an HTTP User-Agent; the UI offers a generator by OS, browser and version), `path` (a URL path, e.g. `/cdn/assets/`; the UI offers a generator of paths made of words, from word lists it ships). |
-| `required` | A value must be present (and, for strings, non-empty). |
-| `default` | The module's own value when core holds none — typically what it read from its env. Must satisfy the field's own constraints. Never set for `secret`. |
-| `min`, `max` | Numbers for `int` / `number` / `bytes`, duration strings for `duration`. |
-| `pattern`, `max_length` | For string-like types (each item of a `string_list`, each value of a `string_map`). |
+| `format` | For `string` only: what the value is, so the UI can offer a helper. A lowercase name like a key; the value is never checked against it, and unknown formats are ignored. Known: `user_agent` (an HTTP User-Agent; the UI generates one from an OS, a browser available on it, and its latest version or 1 to 3 behind, or a common one at random), `path` (a URL path, e.g. `/cdn/assets/`; the UI generates paths of 1 to 6 words from word lists it ships, divided by `/`, `-`, `.` or `_`, offering only those that pass the field's `pattern` and `max_length`). |
+| `required` | A value must be present (and, for strings, non-empty; for a `string_list` or `string_map`, no empty item or value; for an `enum_list`, at least one option). |
+| `default` | The module's own value when core holds none — typically what it read from its env. Must satisfy the field's own constraints. Not to be set for `secret`: core does not check it, and never shows one. For an action param, it only pre-fills the UI's form: neither core nor the module fills in an absent param, so a `required` param is always sent. |
+| `min`, `max` | Numbers for `int` / `number` / `bytes`, duration strings for `duration`, RFC 3339 timestamps for `datetime`. |
+| `pattern`, `max_length` | For string-like types (each item of a `string_list`, each value of a `string_map`). `pattern` is a Go (RE2) regular expression, unanchored: anchor it with `^…$` to match the whole value. |
 | `key_pattern` | For `string_map`: what every key must match. |
-| `max_items` | For `string_list` and `string_map`: most items or entries. |
-| `options` | For `enum`: `value`, optional `label` and `description` (shown under the label in the option list). |
+| `max_items` | For `string_list`, `string_map` and `enum_list`: most items or entries. |
+| `options` | For `enum` and `enum_list`: 1 to 64, each a `value`, optional `label` and `description` (shown under the label in the option list). |
 
 A **property** adds `apply`:
 
@@ -115,12 +115,14 @@ A **property** adds `apply`:
 - `restart` — the new value takes effect at the next start. Until then the
   module reports the key in `restart_required`, and the UI says so.
 
-An **action** has a `name`, `risk` (`low` or `high`), an optional `confirm`
+An **action** has a `name` (a key, unique among the actions), `risk` (`low` or
+`high`; the UI asks before running any `high` one), an optional `confirm`
 prompt the UI shows before running it, up to 16 `params`,
 `timeout_seconds` (default 30, at most 60), and optional `available_when`
 [conditions](#action-conditions).
 
-A **status value** (`key`, `type`, `label`, `description`, `unit`) is reported
+A **status value** (`key`, `type`, `label`, `description`, `unit`; any type
+but `secret` and `file`) is reported
 by the module in its heartbeat `metrics` under `key`, and in
 [`mgmt.state.get`](#mgmtstateget), which core calls after every action. Core
 shows the latest value; it never stores history. For `bool`, `enum` and `string` values the
@@ -213,6 +215,11 @@ reported, or not of its type, holds: whoever knows the value decides.
 | `secret` | string | write-only: never returned by core or by the module |
 | `string_list` | array of strings | each item checked like a `string`; `max_items` |
 | `string_map` | object of string keys to string values | keys non-empty and matching `key_pattern`; each value checked like a `string`; `max_items`. Key order is not kept. |
+| `datetime` | string, RFC 3339, e.g. `"2027-01-31T00:00:00Z"` | `min`, `max` as RFC 3339 timestamps |
+| `enum_list` | array of option values | each one of `options[].value`, no repeats; `max_items`; `required` means at least one |
+
+`file` exists too, for [build schemas](../minion-build/#field-types-for-builds)
+only: a management manifest that declares one is refused.
 
 ### Limits
 
@@ -220,7 +227,7 @@ reported, or not of its type, holds: whoever knows the value decides.
 |---|---|
 | Properties / actions / status values / capabilities | 64 / 32 / 64 / 16 |
 | Params per action / options per enum | 16 / 64 |
-| Label / description length | 120 / 1000 |
+| Label / description length (bytes; option labels and condition messages too) | 120 / 1000 |
 | Action timeout | 60 s |
 | Conditions per action / values of an `in` condition / message length | 8 / 64 / 120 |
 
@@ -229,7 +236,9 @@ reported, or not of its type, holds: whoever knows the value decides.
 ### Desired and applied
 
 Core keeps the **desired** values of one instance's properties together with a
-**revision**. Every write increments the revision; it never goes down. The
+**revision**. Every write that changes a value increments the revision (one
+that changes nothing creates no revision, history entry or push); it never goes
+down. The
 module reports the revision it **applied** — at registration, in every
 heartbeat, and in each apply reply. The two together give the sync state the UI
 shows:
@@ -270,11 +279,16 @@ sequenceDiagram
     M->>CORE: module.heartbeat (applied_revision 6)
 ```
 
-A push is retried up to 3 times with back-off when the module cannot be reached
-(10 s per attempt). An error reply from the module is not retried. After a
-failed push, drift repair waits 10 s before trying again, then twice as long
-after each further failure (up to about 10 minutes); a new configuration write
-resets the wait.
+A push is tried up to 3 times when the module cannot be reached (10 s per
+attempt, 1 s and then 2 s apart). An error reply from the module is not
+retried. Drift repair runs only when a heartbeat arrives, at most every 10 s;
+after a failed push the gap is 20 s, doubling with each further failure up to
+640 s (about 10 minutes). A new configuration write resets it. Core's own
+pushes (drift repair) carry the actor `{"type": "system", "id": "core"}`.
+
+Values the module rejects on the register-time apply never reach core: the
+heartbeat carries only `applied_revision`, so the instance shows `IN_SYNC` with
+no rejected keys until a later push reports them.
 
 If a module reports an applied revision **above** the desired one — core's
 store was reset while the module kept running — core raises its revision above
@@ -287,6 +301,9 @@ Writes go through core's API, never to the module directly.
 `updateModuleConfig` takes the instance, a list of `{key, value}` and
 `expectedRevision`:
 
+- The instance must have a manifest; the list needs at least one value, each
+  key once. An instance that is not registered can still be written: its next
+  registration reply carries the values.
 - `value: null` clears the stored value: the property returns to the module's
   `default`.
 - Every key must be a declared property and every value valid for it, or the
@@ -342,7 +359,7 @@ Reply `payload`:
 {
   "applied_revision": 6,
   "rejected": { "max_body_bytes": "must be <= 67108864" },
-  "restart_required": ["logos_sync_base_url"]
+  "restart_required": ["listen_addr"]
 }
 ```
 
@@ -363,11 +380,14 @@ Request `payload`:
 }
 ```
 
-The module validates `params` against the declared ones (unknown params are
+Core checks first: the instance must be registered and the action declared,
+the params valid and none unknown, and a `high`-risk action needs its
+permission (`FORBIDDEN` otherwise). A call core refuses is not recorded. The
+module validates `params` against the declared ones again (unknown params are
 refused) and runs the action within its timeout. A repeated `invocation_id` for
 the same action is **the same invocation**: the module returns the first
 outcome, or waits for it while it is still running, and never runs the action
-twice. An action keeps running if the request that started it is lost (for
+twice. The Go SDK remembers the last 100 finished invocations. An action keeps running if the request that started it is lost (for
 example, the module's broker connection drops); its outcome is still returned
 for a retry.
 
@@ -403,7 +423,8 @@ Request `payload`: `{}`. Reply `payload`:
 }
 ```
 
-`values` are the module's effective values; secrets are redacted as `"***"`.
+`values` are the module's effective values; a set secret is redacted as `"***"`,
+and an unset one is left out.
 
 ---
 
@@ -428,14 +449,28 @@ in stored action params.
 
 ## Error codes
 
+Errors the module returns over RPC:
+
 | Code | Meaning |
 |---|---|
-| `validation_failed` | Malformed payload, unknown property or param, invalid value. |
+| `validation_failed` | A malformed envelope or payload, an unknown operation type, a missing `invocation_id`, an unknown or invalid action param, a bad log request. (`mgmt.config.apply` never fails for a value: it ignores unknown keys and reports invalid values per key in `rejected`.) |
 | `not_found` | Unknown action (or log streaming not supported). |
 | `action_failed` | The action failed, panicked or timed out. |
 | `action_unavailable` | The action's `available_when` does not hold; the message says why. |
 | `unsupported_version` | Unknown envelope major version. |
 | `internal_error` | Unexpected module-side failure. |
+
+Core's API refuses a write with an unknown property or an invalid value before
+anything reaches the module, as `BAD_USER_INPUT`; a revision that moved on as
+`CONFLICT`; a missing permission as `FORBIDDEN`.
+
+## SDK-added sections
+
+An SDK may add a section of its own to a module's management, next to what the
+module declares. factory-core adds a builds section to every factory:
+`max_concurrent_builds`, the `drain` and `resume` actions, build counters and
+`draining`. Those keys are reserved for it: a factory's own manifest cannot use
+them. See [Managing a factory](../minion-build/#managing-a-factory).
 
 ## Design notes
 
