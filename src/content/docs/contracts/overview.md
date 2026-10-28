@@ -26,6 +26,10 @@ exactly one of them.
   ciphertext. It is built on a shared [AMQP envelope](../amqp-envelope/) and
   [routing conventions](../amqp-conventions/).
 
+Files take neither surface: a factory downloads a build's files from, and
+uploads its artifact to, presigned object store URLs that core hands it with
+the build ([Minion Build](../minion-build/#build-files)).
+
 ### The control plane is bidirectional
 
 RPC ownership is **per-operation**, not global. Both core and modules act as RPC
@@ -37,7 +41,9 @@ servers depending on the operation:
 | Management | core → module | **module** (`logos.<type>.rpc.<instance>`) | `mgmt.config.apply`, `mgmt.action.invoke`, `mgmt.state.get` |
 | Log tail control | core → module | **module** (same queue) | `mgmt.logs.start`, `mgmt.logs.stop` |
 | Log batches | module → core | — (pub/sub on `logos.module.logs`) | live log records, while a stream is open |
-| Events | module → core | — (pub/sub) | audit/notifications on `logos.events` |
+| Builds | core → factory | **factory** (its `rpc_queue`) | `factory.build`, `factory.build.cancel` |
+| Build reports | factory → core | **core** (`logos.core.rpc`) | `factory.build.progress`, `factory.build.result` |
+| Lifecycle events | core → any subscriber | — (pub/sub on `logos.events`) | `module.registered`, `.deregistered`, `.declared_dead`, `.blocked`, `.unblocked`, `.deleted` |
 
 Registration bootstraps everything else: core cannot issue a management RPC to a
 module until that module has registered itself. See
@@ -53,24 +59,31 @@ graph LR
     CH -- "AMQP RPC: register / heartbeat" --> CS
     CS -- "AMQP RPC: management, log tail" --> CH
     CH -- "AMQP: log batches" --> CS
-    CH -- "AMQP events" --> CS
-    IP -- "AMQP RPC: register / heartbeat" --> CS
-    IP -- "AMQP: build coordination" --> CS
+    IP -- "AMQP RPC: register / heartbeat, build progress / result" --> CS
+    CS -- "AMQP RPC: factory.build / cancel, management, log tail" --> IP
+    IP -- "AMQP: log batches" --> CS
 ```
 
 ## Shared rules
 
 Every contract in this section, regardless of surface, follows the same baseline:
 
-- **Versioning** — messages carry an explicit `version`. Consumers reject
-  unknown major versions and tolerate additive minor changes.
-- **Correlation** — every message carries a `message_id`; request/response and
-  RPC exchanges also carry a `correlation_id` to tie a reply to its request.
-- **Idempotency** — processing is idempotent where possible; redelivery of the
-  same `message_id` must not double-apply side effects.
+- **Versioning** — messages carry an explicit `version`. RPC servers reject
+  unknown major versions and tolerate additive minor changes. (Core's sync
+  endpoint does not check `version` yet.)
+- **Correlation** — every enveloped message carries a `message_id`; RPC
+  exchanges also carry a `correlation_id` to tie a reply to its request. HTTP
+  sync answers in the same response, by `id`. Log batches travel bare, without
+  the envelope, keyed by their stream.
+- **Idempotency** — processing is idempotent where possible: an operation is
+  keyed by what it acts on (a build's `minion_id`, an action's
+  `invocation_id`, a configuration `revision`, a log `stream_id`), and the data
+  plane drops a `message_id` it has seen.
 - **Crypto boundary** — minion payload crypto belongs to core Logos services only.
   Control-plane contracts never transport `encrypted_data`, and channels stay
-  plaintext-blind on the data plane.
+  plaintext-blind on the data plane. A build request is meant to carry a
+  minion's key material to its factory (`crypto`), with the payload crypto
+  contract, which is not written yet.
 - **Modules describe themselves; core does not interpret them** — what a
   module can be managed on, its status values, action results and log records
   are declared or produced by the module and shown by core as they are. Core
@@ -80,12 +93,12 @@ Every contract in this section, regardless of surface, follows the same baseline
 
 | Contract | Surface | Parties | Status |
 |---|---|---|---|
-| [HTTP Sync](../channel-core-sync/) | Data plane | Channel ↔ Core | Specified |
+| [HTTP Sync](../channel-core-sync/) | Data plane | Channel ↔ Core | Prototype: core answers every message with an empty reply |
 | [Module Lifecycle](../module-lifecycle/) | Control plane | Module (client) → Core (server) | Implemented |
 | [Module Management](../module-management/) | Control plane | Core (client) → Module (server) | Prototype |
 | [Module Logs](../module-logs/) | Control plane | Core ↔ Module | Prototype |
-| [Minion Connection Schema](../minion-connection/) | Control plane | Channel → Core | Prototype |
-| [Minion Build](../minion-build/) | Control plane | Core ↔ Factory | Draft |
+| [Minion Connection Schema](../minion-connection/) | Control plane | Channel → Core | Implemented |
+| [Minion Build](../minion-build/) | Control plane | Core ↔ Factory | Implemented; payload crypto pending |
 
 To build a module against these contracts, see
 [Implementing a Module](../../implementing-a-module/).
