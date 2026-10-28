@@ -2,9 +2,12 @@
 title: "Minion Build"
 ---
 
-:::caution[Draft]
-An agreed design that is **not built yet**: there are no protocol types, SDK,
-core or UI support for it. Details may still change while it is implemented.
+:::note[Payload crypto]
+Everything on this page is built (the protocol types, factory-core, core, the
+web app, and BOB as the reference factory) except payload crypto: the
+`crypto` parts below wait for the payload crypto contract. Core implements no
+suite yet, so a factory that declares one cannot build, and minions carry no
+keys.
 :::
 
 Factories build minions. What a factory can produce, and what each build needs,
@@ -13,13 +16,14 @@ only scripts. So **each factory declares it**, as a **build schema** sent at
 [registration](../module-lifecycle/#moduleregister), the same way a channel
 declares its [connection schema](../minion-connection/). The app builds its
 forms from the schema. Core validates what operators enter, adds the minion's
-identity, keys and connection settings, and asks the factory to build.
+identity and connection settings (and, with payload crypto, its keys), and asks
+the factory to build.
 
 ```mermaid
 flowchart LR
     F[Factory instance] -- "module.register: build schema" --> CORE[Core]
     OP[Operator] -- "target, commands, values, files, connections" --> CORE
-    CORE -- "factory.build: + minion id, keys, connections" --> F
+    CORE -- "factory.build: + minion id, connections" --> F
     F -- "progress, result" --> CORE
     F -- "artifact upload" --> S3[(SeaweedFS)]
 ```
@@ -117,8 +121,8 @@ Declared in `module.register` under `build`:
 |---|---|
 | `schema_version` | Format of this structure: `"1"`. |
 | `version` | Version of the factory's parameter set, from 1. Raised when values saved against the previous set would build something else or fail: a field or target removed, renamed or given another meaning. Adding an optional field or a target does not need it. |
-| `channels[]` | The channel kinds the minions can speak: `module_name`, the connection schema `versions` they read, and optional `fields`, the factory's own [connection parameters](#connection-parameters) for that kind. |
-| `crypto[]` | Optional. The payload crypto suites the minions implement; core picks one it implements and generates the keys. Suite names and their key material come from the payload crypto contract, which is not written yet; the name above is an example. |
+| `channels[]` | At least one: the channel kinds the minions can speak: `module_name`, the connection schema `versions` they read (1 to 16), and optional `fields`, the factory's own [connection parameters](#connection-parameters) for that kind. |
+| `crypto[]` | Optional, at most 16. The payload crypto suites the minions implement; core picks one it implements and generates the keys. Suite names and their key material come from the payload crypto contract, which is not written yet; the name above is an example. Core implements no suite yet: a factory that declares one cannot build. |
 | `fields[]` | Build parameters shared by every target. Field specs as in a [management manifest](../module-management/#fields), plus the [types below](#field-types-for-builds). |
 | `targets[]` | What the factory can produce, at least one. |
 | `commands[]` | Optional. What the minions can do. Operators pick each build's [commands](#commands) from its target's. |
@@ -137,15 +141,26 @@ A target:
 - Core validates the schema at registration (structure, limits, defaults
   against their own specs) and refuses a registration whose schema is invalid
   (`validation_failed`). Only factories may declare `build`; a registration
-  without it clears the stored one.
+  without it clears the stored one. factory-core runs the same check before it
+  starts, and does not start with an invalid schema.
 - Field keys are unique across the shared fields and each target's own fields.
+- Target and command ids are unique; a target's `format` takes the same form
+  as an id. Platforms are `os/arch` in lowercase letters and digits, each half
+  up to 31 characters, unique in their target.
+- Channel kinds are unique, each with its `versions` unique and from 1. A
+  target's `channels` name only kinds and versions the factory lists.
+- Crypto suites are unique slugs (`^[a-z0-9][a-z0-9._-]{0,62}$`).
+- A command's `targets` name only targets of the schema, once each.
+- Labels are up to 120 characters and descriptions up to 1,000, as in a
+  management manifest.
 - Like the connection schema, the build schema belongs to the **factory kind**
   (`module_name`). Core uses the kind's **latest** schema: the highest
   `version` any instance declared, from its most recent registration.
 
-Limits: 32 targets, 64 fields per target (shared ones included), 16 platforms
-per target, 16 channel kinds, 32 connection parameters per channel kind, 256
-commands, 32 params per command.
+Limits: 32 targets, 64 fields per target (shared ones included), 1 to 16
+platforms per target, 1 to 16 channel kinds with 1 to 16 versions each, 32
+connection parameters per channel kind, 16 crypto suites, 256 commands, 32
+params per command.
 
 ### Connection parameters
 
@@ -174,7 +189,7 @@ accepted only in build schemas.
 |---|---|---|
 | `datetime` | string, RFC 3339, e.g. `"2027-01-31T00:00:00Z"` | `min`, `max` as RFC 3339 strings |
 | `enum_list` | array of option values | each one of `options[].value`, no repeats; `max_items`; `required` means at least one |
-| `file` | string: a [build file](#build-files) id | `accept`: extensions (`.ico`) or media types (`image/x-icon`), any file when empty; `max_size`: the largest file, in bytes |
+| `file` | string: a [build file](#build-files) id | `accept`: up to 32 extensions (`.ico`) or media types (`image/x-icon`, or `image/*` for any subtype), any file when empty; `max_size`: the largest file, in bytes. No `default`. |
 
 `accept` and `max_size` are new field spec members, for `file` only. In the
 UI, `datetime` is a date and time picker, `enum_list` a set of checkboxes, and
@@ -196,8 +211,9 @@ does when they build it: a minion built for one job carries nothing more.
 | `params[]` | What a task of the command takes: field specs as in a management action. `file` is refused, as outside build schemas. |
 
 - A build's commands are the ones picked, the target's required ones among
-  them, in the schema's order. A build that names none gets the target's
-  `default` and `required` ones.
+  them, in the schema's order. A build that leaves `commands` out (or sends
+  `null`) gets the target's `default` and `required` ones; one that sends an
+  empty list gets the required ones only.
 - The factory builds those in and no others: what the minion can do is its
   build's `commands`. A factory that cannot build one in fails the build.
 - `params` describe tasks, which minions do not take yet; the build form shows
@@ -230,9 +246,11 @@ needs to fetch it:
 }
 ```
 
-`url` is a presigned download URL that expires at the build's deadline. The
-factory checks the SHA-256 after downloading. Core signs URLs for the storage
-address factories reach, a core setting that defaults to the one core uses.
+`url` is a presigned download URL (an HTTP GET), valid until a minute past the
+build's deadline. The factory checks the size and SHA-256 after downloading.
+Core signs URLs for the storage address factories reach, a core setting
+(`BUILD_STORAGE_ENDPOINT`) that defaults to the one core uses. The app uploads
+build files with `POST /api/v1/build-files`.
 
 ## Connections
 
@@ -266,8 +284,8 @@ sequenceDiagram
     participant F as Factory instance
     participant S3 as SeaweedFS
     OP->>CORE: build (description, factory kind, target, platform, commands, values, connections)
-    CORE->>CORE: validate, fill in defaults, new minion id<br/>and keys, presigned URLs → QUEUED
-    CORE->>F: factory.build
+    CORE->>CORE: validate, fill in defaults, new minion id → QUEUED
+    CORE->>F: factory.build (presigned URLs, deadline)
     F-->>CORE: accepted, with its plan (steps) → BUILDING
     F->>S3: download files
     loop each step
@@ -290,8 +308,8 @@ latest schema:
 - the values follow the field rules (type, bounds, pattern, required, and **no
   undeclared keys**) for the shared fields plus the target's own;
 - each command picked is one of the target's, picked once; core adds the
-  target's required ones, and a build that names none gets the target's
-  default and required ones;
+  target's required ones (see [Commands](#commands) for a build that leaves
+  `commands` out);
 - at least one connection is given (there is no upper limit), each through a
   channel kind the target supports, whose current connection schema `version`
   is one the factory lists, with a `name`, when it has one, that is a slug no
@@ -299,20 +317,40 @@ latest schema:
 - each connection's settings follow that connection schema, and its values the
   connection parameters the factory declares for that channel kind, by the same
   rules;
-- when the factory declares `crypto`, core implements one of the suites;
+- the factory declares no `crypto`: core implements no suite yet, so it
+  builds for no factory whose minions need one;
 - a live instance of the kind declares that latest `version`.
 
-Defaults are then filled in, as in an endpoint export: the factory and the
-build record get concrete values, never a schema to interpret.
+A value of `null`, `""` or `[]` leaves its field unset. Defaults are then
+filled in, as in an endpoint export: the factory and the build record get
+concrete values, never a schema to interpret. Last, core runs the factory's
+own check (`ValidateBuildRequest`, the one factory-core runs) on the request it
+would send, so a build it queues is one the factory takes.
 
 ### Choosing an instance
 
-Core sends the build to a live instance of the kind that declares the latest
-schema version. An instance at capacity replies `busy`, and core tries the next
-one. When all are busy, the build stays `QUEUED`, and core tries again as builds
-finish or instances register. How many builds an instance runs at once is the
-factory's own setting, which operators change live, and a drained instance
-replies `busy` to every new build (see [Managing a factory](#managing-a-factory)).
+Core offers a queued build to the registered instances of its kind that
+declare the build's schema version (the latest when the build was made), one
+after another, starting at a different instance each time so builds spread
+out:
+
+- an instance that replies `busy`, does not answer within 10 seconds, or
+  replies without accepting (`accepted` false, or another `minion_id`) is
+  passed over, and core tries the next one;
+- an instance that replies with any other error (`validation_failed`,
+  `unsupported_version`, …) refused the build, and core fails it (`refused`);
+- when no instance takes it, the build stays `QUEUED`, and core offers it again
+  on its next pass, every 2 seconds;
+- when no registered instance declares the build's schema version any more,
+  and the kind's latest schema is another version, core fails the build
+  (`schema_changed`): build it again against the current schema. Under the
+  same version it waits, since the instances may be restarting.
+
+How many builds an instance runs at once is the factory's own setting, which
+operators change live, and a drained instance replies `busy` to every new build
+(see [Managing a factory](#managing-a-factory)). Several core instances share
+the queue: one claims a queued build while it offers it, so two never offer the
+same build at once.
 
 ### Operations
 
@@ -381,9 +419,9 @@ Request `payload`:
 | `commands` | The ids of the [commands](#commands) the minion is built with: those picked, the target's required ones among them, in the schema's order. The minion has these and no others. |
 | `files` | The files the values name (connection parameter values included), by id, as in [Build files](#build-files). |
 | `connections` | The [connections](#connections), in the order the minion tries them: each one's settings as an endpoint [export](../minion-connection/#the-export) under `endpoint` (its `name`, channel kind, schema version, and `params` with defaults filled in), and its [connection parameter](#connection-parameters) `values`, defaults filled in. |
-| `crypto` | Present when the factory declares `crypto`: the `suite` core chose, and its key `material` as the payload crypto contract defines it. |
-| `artifact` | Where to upload the artifact: a presigned upload URL valid until the deadline, and the largest size accepted (a core setting, default 256 MiB). |
-| `deadline` | When core stops waiting. |
+| `crypto` | Present when the factory declares `crypto`: the `suite` core chose, and its key `material` as the payload crypto contract defines it. Never sent yet: core builds for no factory that declares `crypto`. |
+| `artifact` | Where to upload the artifact: `upload_url`, a presigned URL to `PUT` it to, valid until a minute past the deadline, and `max_size`, the largest artifact the factory may upload (a core setting, default 256 MiB). factory-core refuses to upload a larger one (`artifact_too_large`); core itself does not check it. |
+| `deadline` | When core stops waiting: the build timeout after the offer. |
 | `actor` | Who started the build, for the factory's own logs. |
 
 The factory validates the request again, as a module validates configuration,
@@ -410,10 +448,14 @@ target's: a step that will not run for these values is left out. Core shows it
 as the build's [pipeline](#the-pipeline). A plan core cannot take (none, or an
 invalid one) does not stop the build; it shows as a single step, "Build".
 
-Or the factory replies with an error: `validation_failed`, `busy`, or
-`unsupported_version` (the request's `schema_version` is not the one this
-instance declares). A repeated request for a build it already accepted is
-accepted again, with the same plan, and never builds twice.
+Or the factory replies with an error: `validation_failed` (also for a deadline
+already past), `busy`, or `unsupported_version` (the request's `schema_version`
+is not the one this instance declares). After `busy` core tries another
+instance; any other error fails the build (see
+[Choosing an instance](#choosing-an-instance)).
+A repeated request for a build it already accepted is accepted again, with the
+same plan, and never builds twice; for one that finished, the factory sends its
+result again. factory-core remembers a build for an hour past its deadline.
 
 Key material, secret values and files are only for the build. The factory must
 not log them, keep them after the build, or put them in progress messages or
@@ -434,9 +476,10 @@ latest message. A step outside the plan is ignored. Progress is best effort: a
 lost report is not sent again, and core takes the steps before the one
 reported as done, so a lost one only costs a step its times.
 
-Reply `payload`: `{ "minion_id": "…", "ack": true }`. A `not_found` error means
-core no longer waits for the build (it was cancelled or ran out of time), and
-the factory should stop it.
+`message` is at most 1,000 bytes. Reply `payload`:
+`{ "minion_id": "…", "ack": true }`. A `not_found` error means core no longer
+waits for the build from this instance (it was cancelled, ran out of time, or
+is another instance's), and the factory should stop it.
 
 ### `factory.build.result`
 
@@ -472,10 +515,20 @@ and when it failed:
   `commands`, which the factory built in, or it failed the build.
 - `warnings` and `log` (the build output, its last 64 KiB) are shown with the
   build; the log matters most when it fails.
-- `error.code` is the factory's own, e.g. `compile_failed`.
+- `error.code` is the factory's own, e.g. `compile_failed`: a slug,
+  `^[a-z0-9][a-z0-9_.-]{0,62}$`. factory-core reports some
+  [codes of its own](../../implementing-a-module/#results-and-failures).
+- Limits: up to 32 warnings, each, like `error.message`, at most 1,000 bytes;
+  the log at most 64 KiB; the artifact's `filename` a plain file name (no
+  path) of 1 to 255 bytes; `sha256` 64 lowercase hex digits. Core refuses a
+  result outside them (`validation_failed`).
 
-Core checks the stored artifact's size and SHA-256 against the result before it
-marks the build `SUCCEEDED`; a mismatch fails it with `artifact_mismatch`.
+A failed result finishes the build at once. For a succeeded one, core checks
+the stored artifact's size and SHA-256 against the result, in the background,
+before it marks the build `SUCCEEDED`. An artifact that is missing or differs
+fails the build with `artifact_mismatch`, and a differing one is deleted. When
+the store cannot be read, core keeps trying until an hour past the deadline,
+then fails the build the same way.
 
 Reply `payload`: `{ "minion_id": "…", "recorded": true }`. The factory sends the
 result again until it gets a reply or the deadline passes, and a repeated result
@@ -486,9 +539,11 @@ build: the factory drops the result.
 
 Request `payload`: `{ "minion_id": "…" }`. Reply `payload`:
 `{ "minion_id": "…", "cancelled": true }`, also for a build the factory does not
-know. The factory stops the build, throws away what it produced and sends no
-result. Core marks the build `CANCELLED` whatever the reply, also when the
-instance cannot be reached, and ignores a result that still arrives.
+know, which it remembers: a `factory.build` for it that arrives later is
+accepted and never built. The factory stops the build, throws away what it
+produced and sends no result. Core marks the build `CANCELLED` first, whatever
+the reply, also when the instance cannot be reached, and answers a result that
+still arrives with `not_found`.
 
 ---
 
@@ -499,14 +554,20 @@ instance cannot be reached, and ignores a result that still arrives.
 | `QUEUED` | Core accepted the build and waits for a factory instance to take it. |
 | `BUILDING` | Offered to an instance, and taken by it. Core marks it before the offer: a factory reports as soon as it accepts, which can be before its reply arrives. An instance that does not take it puts it back to `QUEUED`. |
 | `SUCCEEDED` | The result arrived and the artifact checked out. The minion exists from now on. |
-| `FAILED` | The factory reported a failure, the artifact did not check out (`artifact_mismatch`), the build timeout passed (`timeout`), or the instance was declared dead (`factory_lost`). |
-| `CANCELLED` | An operator cancelled it. |
+| `FAILED` | The factory reported a failure, or core gave up on the build for one of [its own reasons](#error-codes). |
+| `CANCELLED` | An operator cancelled it, or its operation was deleted. |
 
 The build timeout is a core setting (default 30 minutes) and applies to the
 time a build spends queued and to the time it spends building; `deadline` in
-the request is when the latter runs out. A factory that restarts during a build
-loses it, and core fails the build at the deadline, or earlier when the instance
-is declared dead.
+the request is when the latter runs out.
+
+A factory instance that stops cleanly cancels its running builds and reports
+them failed (`shutdown`) before it deregisters, waiting up to 10 seconds for
+the reports to go out. Core fails a build still running on an instance that is
+no longer registered (deregistered, declared dead or blocked) with
+`factory_lost`, on its next pass. A factory that crashes and is back under the
+same instance id before core declares it dead has lost its builds without core
+noticing: they fail at their deadline (`timeout`).
 
 ### The pipeline
 
@@ -523,44 +584,54 @@ stages out from the build record whenever it is read:
 | `FAILED`, `CANCELLED` | the build ended in: the step it was on when the factory reported a failure, core gave up on it or an operator cancelled it; Check artifact when the artifact did not check out. |
 | `SKIPPED` | the build ended before. |
 
-A stage's times are known when it was reported: it starts at its first report
-and ends when the next reported step starts, or with the factory's result. A
-step done without a report has no times.
+Queued runs from when the build was made until an instance took it. A step's
+times are known when it was reported: it starts at its first report and ends
+when the next reported step starts, or with the factory's result (or the end of
+the build). A step done without a report has no times, except the plan's first
+step, which starts when the instance took the build while nothing is reported
+yet. Check artifact runs from the result to the end of the check.
 
 ## Build records and minions
 
 Core keeps a **build record** for every build: who started it, when and what
-for (its description), the factory kind, instance and version, `schema_version`, target, platform, values
-(`file` values as build file ids), its commands, the connection settings as
-copied with the operators' descriptions of them, the crypto suite (never key
-material), the factory's plan and step reports, the state, and the result:
-artifact, warnings and log, or the error.
+for (its description), the factory kind, instance and version,
+`schema_version`, target, platform, values (`file` values as build file ids),
+its commands, the connection settings as copied with the operators'
+descriptions of them, the factory's plan and step reports, the state, who
+cancelled it, and the result: artifact, warnings and log, or the error. With
+payload crypto it will keep the suite too, never key material.
 
 A successful build creates the **minion**: identified by `minion_id`, with its
-keys held by core and its build record, and its build's commands as what it
-can do. A failed or cancelled build creates
-none, and its minion id and keys are thrown away.
+factory kind, target, platform, who built it, and its build's commands as what
+it can do. With payload crypto, core will also hold its keys. A failed or
+cancelled build creates none, and its minion id is never used again.
 
 **Every build is a new minion.** Building again from a record opens the build
 form filled in from it, so every earlier build is the template for the next:
 its description, target, platform, commands, values and connections with theirs, values
 equal to today's defaults left out so they read as defaults. The new build gets
-a new minion id and new keys: two artifacts never share an identity.
+a new minion id (and, with payload crypto, new keys): two artifacts never share
+an identity.
 
-Artifacts contain the minion's keys. They are kept until an operator deletes
-them or the operation is deleted.
+An artifact is kept until an operator deletes it (the build record stays) or
+the operation is deleted, which deletes its builds, artifacts, build files and
+minions, and cancels its unfinished builds. Artifacts will hold the minion's
+keys, so only operators download them, always as an attachment.
 
 ## Who can do what
 
 | Who | Can |
 |---|---|
-| Viewer of the operation | see builds and build records |
-| Operator or admin of the operation | also manage build files, build, cancel, and download artifacts |
-| Agent API key | read like a viewer, never build or download |
+| Viewer of the operation | see its builds, build records, minions and build files |
+| Operator or admin of the operation | also upload build files and delete ones no build refers to, build, cancel builds, download artifacts and delete them |
+| Agent API key | nothing: builds are not on the MCP surface, the only one agent keys reach |
 
-Members also see every factory kind with its current build schema (kind,
-version, targets and fields, nothing about instances), which the forms are
-built from.
+App admins can do everything in every operation, and in the Public operation
+every signed-in user counts as an operator.
+
+Every signed-in user also sees the factory kinds: each one's current build
+schema, its icon, and how many registered instances declare that schema (a
+build needs one). The forms are built from it.
 
 ## Managing a factory
 
@@ -573,8 +644,8 @@ nothing). Core sees an ordinary manifest:
 
 | | Key | |
 |---|---|---|
-| Property | `max_concurrent_builds` | `int`, `live`, group "Builds". How many builds the instance runs at once; a `factory.build` beyond it gets `busy`. Starts at the factory's own setting. Lowering it lets running builds finish. |
-| Action | `drain` | Take no new builds (`busy`) until resumed; running builds finish. A repeated `factory.build` for a build already accepted is still accepted. Available while not draining. |
+| Property | `max_concurrent_builds` | `int`, `live`, group "Builds", 1 to 64 (or to the factory's own setting, when higher). How many builds the instance runs at once; a `factory.build` beyond it gets `busy`. Starts at the factory's own setting (1 unless it sets one). Lowering it lets running builds finish. |
+| Action | `drain` | Risk `high`. Take no new builds (`busy`) until resumed; running builds finish. A repeated `factory.build` for a build already accepted is still accepted. Available while not draining. |
 | Action | `resume` | Take builds again. Available while draining. |
 | Status | `builds_running` | Builds running now. |
 | Status | `builds_accepted_total`, `builds_succeeded_total`, `builds_failed_total`, `builds_cancelled_total` | Since the process started. Cancelled: core cancelled the build or no longer waited for it. |
@@ -597,8 +668,49 @@ section.
 | `not_found` | `factory.build.progress`, `factory.build.result` | Core no longer waits for this build. |
 | `internal_error` | all | Unexpected failure. |
 
-Core's own reasons for a failed build, kept in its record: `timeout`,
-`factory_lost`, `artifact_mismatch`.
+Core's own reasons for a failed build, kept in its record next to the
+factory's codes:
+
+| Code | When |
+|---|---|
+| `timeout` | No instance took the build within the build timeout, or its result had not arrived by the deadline. |
+| `factory_lost` | The instance building it is no longer registered: it deregistered, was declared dead, or was blocked. |
+| `refused` | The instance offered the build answered with an error other than `busy`. |
+| `schema_changed` | No registered instance declares the build's schema version any more, and the factory kind's latest schema is another version. |
+| `artifact_mismatch` | The artifact the result reports is not in the store, differs in size or SHA-256, or could not be read to check it until an hour past the deadline. |
+
+## Settings
+
+Core's settings for builds:
+
+| Setting | Default | |
+|---|---|---|
+| `BUILD_TIMEOUT` | `30m` | The [build timeout](#build-states), queued and again building. |
+| `BUILD_FILE_MAX_SIZE` | 64 MiB | The largest [build file](#build-files) upload, at most 1 GiB. |
+| `BUILD_ARTIFACT_MAX_SIZE` | 256 MiB | The artifact's `max_size` in a build request, at most 1 GiB. |
+| `BUILD_BUCKET` | `logos-builds` | The SeaweedFS bucket for build files and artifacts. |
+| `BUILD_STORAGE_ENDPOINT` | core's own S3 endpoint | The storage address presigned URLs are signed for: the one factories reach. |
+
+## In the app and the API
+
+**Builds** lists an operation's builds, newest first and live while they run,
+with search and filters by state and factory. **New build** opens the build
+form, made from the factory's schema: what to build (description, target,
+platform), the commands as two lists, available and selected, with the
+required ones fixed in place, the build parameters in the factory's groups,
+and the connections; a JSON tab edits the same build as JSON. A build opens on
+its **Overview**, with its **JSON** and its **Pipeline** next to it; operators
+cancel it there while it runs, download or delete its artifact, and **Build
+again**. A factory's page under Modules shows what it builds: its targets,
+build parameters and commands.
+
+The API is GraphQL: the queries `factoryKinds`, `buildFiles`, `builds` (paged,
+with the same search and filters), `build` and `minions`, and the mutations
+`createBuild` (problems by place in the error's `extensions.problems`),
+`cancelBuild`, `deleteBuildArtifact` and `deleteBuildFile`. Bytes go over REST:
+`POST /api/v1/build-files` uploads a build file (multipart: `operationId` and
+`file`; 413 when it is too large), and `GET /api/v1/builds/{id}/artifact`
+downloads an artifact.
 
 ## Design notes
 
@@ -628,9 +740,9 @@ Core's own reasons for a failed build, kept in its record: `timeout`,
   factory-core, so only the SDK can count them, refuse new ones or change how
   many run at once. It serves that management itself, with the same keys on
   every factory, rather than leaving each factory to expose its internals.
-- **Core owns identity and keys.** Core generates the minion id and keys. The
-  keys only pass through the factory into the artifact: they never appear in a
-  form or a build record.
+- **Core owns identity and keys.** Core generates the minion id, and will
+  generate its keys with payload crypto. The keys will only pass through the
+  factory into the artifact: never in a form or a build record.
 - **Presigned URLs for files and artifacts.** Factories need no storage
   credentials and reach only the objects of the build at hand, and file bytes
   travel through neither core nor the broker. SHA-256 checks on both sides catch
