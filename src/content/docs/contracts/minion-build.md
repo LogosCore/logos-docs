@@ -190,7 +190,7 @@ does when they build it: a minion built for one job carries nothing more.
 |---|---|
 | `id` | Identifier, unique in the schema, `^[a-z][a-z0-9_-]{0,62}$`. Builds name the command by it, and so will tasks. |
 | `label`, `description` | Shown in the UI. |
-| `group` | Optional. The heading the command is listed under in the build form, as a field's `group`. |
+| `group` | Optional. A theme of the command (`Session`, `Files`…), shown with it where the factory's commands are described. The build form lists commands in the schema's order, without headings. |
 | `targets[]` | Optional. Narrows the command to these targets; empty means every target. |
 | `default` | Picked in a new build until the operator unpicks it, and what a build that names no commands gets. |
 | `required` | In every build of its targets: the minion cannot run without it (`sleep`, `exit`), so the operator cannot leave it out. |
