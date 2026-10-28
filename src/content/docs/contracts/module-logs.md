@@ -88,7 +88,8 @@ support log streaming), `internal_error` (not connected to the broker).
 ### `mgmt.logs.stop`
 
 Request `payload`: `{ "stream_id": "…" }`. Ends the stream with a final batch
-(`end_reason: stopped`). Stopping an unknown or ended stream succeeds.
+(`end_reason: stopped`). Stopping an unknown or ended stream succeeds. Reply
+`payload`: `{ "stream_id": "…" }`.
 
 ## Batches
 
@@ -97,7 +98,6 @@ Request `payload`: `{ "stream_id": "…" }`. Ends the stream with a final batch
   "stream_id": "a87ff679-a2f3-471d-9181-a67b7542122c",
   "instance": "http-local",
   "seq": 7,
-  "backlog": false,
   "records": [
     {
       "time": "2026-10-25T13:07:09.712Z",
@@ -109,10 +109,12 @@ Request `payload`: `{ "stream_id": "…" }`. Ends the stream with a final batch
         "headers": { "accept": "*/*", "user-agent": "curl/8.21.0" }
       }
     }
-  ],
-  "dropped": 0
+  ]
 }
 ```
+
+False, zero and empty fields are left out: a live batch with nothing dropped
+carries neither `backlog` nor `dropped`.
 
 | Field | Meaning |
 |---|---|
@@ -120,11 +122,14 @@ Request `payload`: `{ "stream_id": "…" }`. Ends the stream with a final batch
 | `backlog` | The records predate the start (the module's recent buffer). |
 | `records[]` | `time` (RFC 3339), `level`, `message`, `attrs`. |
 | `dropped` | Records the module discarded since the previous batch (rate limit, slow publishing). |
-| `end`, `end_reason` | Set on the stream's last batch: `stopped` (`mgmt.logs.stop`), `lease_expired` (no renewal in time), `shutdown` (the module is stopping), `replaced` (a newer stream took its slot). |
+| `end`, `end_reason` | Set on the stream's last batch: `stopped` (`mgmt.logs.stop`), `lease_expired` (no renewal in time), `shutdown` (the module is stopping), `replaced` (a newer stream took its slot). A stream that dies with the module's broker session ends with no last batch. |
 
-**`attrs` is the module's own structure**, exactly as its JSON log output has
-it: nested objects stay nested, and values keep their JSON type. Core and the
-UI show it as it is and never interpret key names.
+**`attrs` is the module's own structure**, as its JSON log output has it:
+nested objects stay nested, and values keep their JSON type. They travel as a
+JSON object, so keys arrive sorted rather than in logging order. The Go SDK
+turns an error into its message and a duration into nanoseconds, and cuts a
+structured value whose JSON passes 4 KiB into a string. Core and the UI show it
+as it is and never interpret key names.
 
 ### Limits
 
@@ -133,10 +138,15 @@ UI show it as it is and never interpret key names.
 | Message length | 8 KiB (longer messages are cut, ending in `…`) |
 | One attr value (a string, or the JSON of a structured value) | 4 KiB |
 | Attr values per record | 128 |
-| Records per batch | 500 |
+| Records per batch | 500 (but a stream's last batch, which drains everything still queued for it in one, up to about 1,000) |
 | Records per second per stream | 200 (excess counted in `dropped`) |
 | Concurrent streams per module | 4 (a fifth replaces the oldest, which ends with `replaced`) |
 | Recent buffer (backlog source) | 1000 records |
+
+These are the Go SDK's defaults: the ring size, rate and flush interval can be
+changed (`WithRingSize`, `WithRate`, `WithFlushInterval`), and the attr limits
+are the SDK's slog handler's. Core checks none of them. It keeps at most 64
+events per viewer.
 
 ## Module obligations
 
@@ -149,7 +159,10 @@ A module that declares `logs`:
   or lost the viewer never leaves a stream running;
 - sends a final `shutdown` batch when it stops, if it can;
 - may produce `debug` records for a stream that asks for them even when its own
-  output level is higher — without changing its own output.
+  output level is higher — without changing its own output. The Go SDK always
+  sends `info` and above to its streams, whatever `log_level` says, and `debug`
+  only while a stream asks for it, so the recent buffer holds `debug` records
+  only from such times.
 
 `logos-golang-module-core` does all of this in `pkg/logstream`; see
 [Implementing a Module](../../implementing-a-module/).
@@ -159,11 +172,20 @@ A module that declares `logs`:
 - **One stream per viewer**, with the viewer's own level and backlog. Core
   renews it every 10 s while the viewer stays and stops it when the viewer
   leaves.
-- **Recovery.** If the module restarts or reconnects, the next renewal creates
+- **Recovery.** When core has seen a stream end, or a renewal fails, it creates
   the stream again, asking for a backlog so the viewer sees what was logged in
-  between. If core loses its own broker connection, it binds a new queue and
-  does the same. The viewer sees the state: streaming, disconnected (retrying)
-  or ended.
+  between. Two cases go further:
+  - A module that loses its broker session ends its streams with no last batch.
+    If it is back before a renewal fails, the renewal recreates the stream with
+    no backlog: `seq` starts again at 1, and what was logged in between is not
+    shown.
+  - When core loses its own queue, it binds a new one and starts the stream
+    again with a backlog; the module, whose stream is still alive, only renews
+    its lease and sends no backlog, so the gap shows as lost batches.
+
+  The viewer sees the state: streaming, disconnected (retrying) or ended.
+- **Lost batches.** Core compares `seq` from batch to batch and flags a gap; the
+  UI says some batches were lost in transit.
 - A stream ended with `replaced` stays ended: recreating it would push another
   viewer out, who would do the same, in a loop.
 - **Never blocks on a slow viewer**: it drops records and counts them, but
@@ -171,7 +193,26 @@ A module that declares `logs`:
 - Records who opened and closed a stream, and at which level, in its own log —
   never the content.
 
-Access needs `module:logs:read`; agent API keys are refused.
+**Opening a stream.** An unknown instance gives `NOT_FOUND`; an instance that is
+not registered, or that does not serve `logs`, gives `BAD_USER_INPUT`. When the
+first `mgmt.logs.start` fails, or gets no reply within 5 s, the subscription
+fails and is not retried; the web app tries again when the module registers
+again.
+
+**What a viewer receives** (the `moduleLogs` GraphQL subscription): events with
+`records`, `backlog`, `dropped` (the module's drops and core's), `lost`, and the
+stream's `state` and `reason`. Levels are uppercase (an unknown one is
+`INFO`), and times are UTC RFC 3339.
+
+**In the web app**, the module page's Logs tab keeps the last 5,000 lines
+(10,000 while paused or scrolled up) and filters them in the browser. Changing
+the level opens a new stream and clears the lines; a backlog sent again after a
+restart is not shown twice. It can pause, clear and download, and shows a
+record's raw JSON in a side pane. A browser tab in the background stops its
+stream.
+
+Access needs `module:logs:read`, which only the app's `admin` role holds;
+agent API keys are refused.
 
 ## Design notes
 

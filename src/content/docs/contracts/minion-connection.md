@@ -34,10 +34,10 @@ Declared in `module.register` under `connection`:
   "fields": [
     {
       "key": "base_url", "type": "url", "label": "Base URL", "required": true,
-      "pattern": "^https?://[^/?#\\s]+$", "group": "Address", "order": 1
+      "pattern": "^https?://[^/?#\\s]+$", "max_length": 2048, "group": "Address", "order": 1
     },
-    { "key": "tls_verify", "type": "bool", "default": false, "group": "TLS", "order": 5 },
-    { "key": "request_timeout", "type": "duration", "default": "40s", "min": "31s", "group": "Timing", "order": 9 }
+    { "key": "tls_verify", "type": "bool", "default": false, "group": "TLS", "order": 6 },
+    { "key": "request_timeout", "type": "duration", "default": "40s", "min": "1s", "max": "10m", "group": "Timing", "order": 10 }
   ]
 }
 ```
@@ -46,7 +46,7 @@ Declared in `module.register` under `connection`:
 |---|---|
 | `schema_version` | Format of this structure: `"1"`. |
 | `version` | Version of the channel's parameter set, from 1. Raised when minions built against the previous set would read the new one wrongly: a field removed, renamed or given another meaning. Adding an optional field does not need it. |
-| `fields[]` | At most 32, each a field spec exactly as in a [management manifest](../module-management/#fields): `key`, `type`, label, description, group, order, required, default, bounds, pattern, options. |
+| `fields[]` | 1 to 32, with unique keys, each a field spec exactly as in a [management manifest](../module-management/#fields): `key`, `type`, label, description, group, order, required, default, bounds, pattern, options. `file` is not allowed. |
 
 Core validates the schema at registration (structure, limits, defaults against
 their own specs) and refuses a registration whose schema is invalid. A
@@ -56,7 +56,9 @@ The schema belongs to the **channel kind** (`module_name`): every instance of a
 kind is expected to declare the same one for a given `version`, so it must not
 depend on one instance's settings. Core stores it with each registration and
 uses the kind's **latest** schema: the highest `version` any instance declared,
-from its most recent registration.
+from its most recent registration. Deregistered, dead and blocked instances
+count until an operator deletes them, so after a downgrade the newer schema
+stays current.
 
 The schema describes **what a minion is given**, not how the channel runs. The
 channel's own settings are its [management properties](../module-management/).
@@ -72,19 +74,35 @@ and instances come and go.
 
 | Property | Meaning |
 |---|---|
+| `id` | The endpoint's id (a UUID). |
 | `operation_id` | The operation that owns it. |
 | `name` | Unique within the operation (`^[a-z0-9][a-z0-9._-]{0,62}$`). |
+| `description` | Optional, at most 500 characters: what the endpoint is for. Searched; never part of the export. |
 | `module_name` | The channel kind whose schema the values follow (e.g. `http`). |
 | `values` | By field key. A field without a value uses the schema's default. |
 | `schema_version` | The schema `version` the values were saved against. |
 | `revision` | Grows with every change; an update must name the revision it read (otherwise `CONFLICT`). |
+| created and updated by and at | Who made and last changed it, and when. |
 
 Values are validated with the same rules as management properties: type,
 bounds, pattern, required, and **no undeclared keys**. Validation runs when an
 endpoint is saved and again whenever it is read or exported, against the kind's
 **latest** schema, because a new channel release may declare a different one.
 An endpoint that no longer fits shows its problems and **cannot be used** until
-it is fixed.
+it is fixed. One saved against another schema `version` than the kind's current
+one is flagged ("Saved for vN") but stays usable while its values fit; saving
+it again records the current version.
+
+The API stores the values it is sent, leaving out only `null`, `""` and empty
+lists or maps; the app's form also leaves out values equal to the field's
+default, so those keep following the default.
+
+The list is paged (20 at a time) and sorted by name, case aside. Its search runs
+in core: a substring, case aside, or "quotes" for whole words, over the name,
+description, kind and the values. It can also be narrowed to channel kinds.
+The GraphQL operations: `channelKinds`, `channelEndpoints`, `channelEndpoint`,
+`channelEndpointExport`, `freeChannelEndpointName`, and
+`createChannelEndpoint`, `updateChannelEndpoint`, `deleteChannelEndpoint`.
 
 Endpoint values are operation data and are shown to members as they are,
 `secret` fields included.
@@ -93,11 +111,14 @@ Endpoint values are operation data and are shown to members as they are,
 |---|---|
 | Viewer of the operation | list endpoints and get their resolved settings |
 | Operator or admin of the operation | also create, change and delete them |
-| Agent API key | read like a viewer, never write |
+| App admin | the same in every operation, member or not |
+| Agent API key | nothing today: agent keys reach core only through MCP, which has no endpoint tools |
 
-Members also see every channel kind with its current schema (kind, version and
-fields only — nothing about instances), which the endpoint form is built from,
-and so is each connection of a [build](../minion-build/#connections) (draft): a
+In the Public operation every signed-in user counts as an operator.
+
+Members also see every channel kind with its current schema (kind, version,
+fields and its icon; nothing about instances), which the endpoint form is built
+from, and so is each connection of a [build](../minion-build/#connections): a
 connection can be filled in from an endpoint, or saved as a new one, each a
 copy of the values.
 Deleting an operation deletes its endpoints.
@@ -105,7 +126,16 @@ Deleting an operation deletes its endpoints.
 ## The export
 
 The endpoint as a minion's connection settings: its values over the schema's
-defaults, so a minion needs no knowledge of the schema itself.
+defaults, so a minion needs no knowledge of the schema itself. A field with
+neither a value nor a default is left out, and `channel.schema_version` is the
+kind's current version. An endpoint with problems cannot be exported: the API
+answers `BAD_USER_INPUT` with the problems, and the app disables Copy and
+Download as JSON (a download is named `<name>.endpoint.json`).
+
+A build's connections reach the factory in this format too: each one as the
+`endpoint` of a `factory.build` connection, named after the connection
+(`<channel>-<n>` when it has no name), next to the factory's own `values` for
+it ([Minion Build](../minion-build/#factorybuild)).
 
 ```json
 {
@@ -125,40 +155,49 @@ defaults, so a minion needs no knowledge of the schema itself.
 
 The app also takes this format back: **Import** on the Endpoints page opens a
 new endpoint's form filled in from an export, pasted or from a file, to check
-before saving. Its name is made valid and free in the operation (`-2`, `-3`…),
-values equal to the kind's current defaults are dropped so those fields keep
-following the defaults, keys the kind does not declare are left out (and
-named), and an export for another schema `version` is pointed out.
-**Duplicate** does the same from an existing endpoint, naming the copy
-`<name>-dup`.
+before saving. Its name is made valid and free in the operation (`-2`, `-3`…;
+an export without a name becomes `imported`), values equal to the kind's
+current defaults are dropped so those fields keep following the defaults, keys
+the kind does not declare are left out (and named), and an export for another
+schema `version` is pointed out. An export has no description, so an imported
+endpoint starts without one.
+
+**Duplicate** opens a new endpoint's form with an existing endpoint's stored
+values and description, named the first free of `<name>-dup`, `<name>-dup-2`,
+and so on.
+
+The endpoint form has **Form** and **JSON** tabs. The JSON tab edits the export's
+shape plus the `description`, lists every field with its default, takes `null`
+to reset a field, and locks `format` and `channel`.
 
 A minion that can speak several channel kinds gets an **ordered list** of
-connection settings and falls back through it. Each minion must support at
-least one of the kinds it is given. Creating minions with these settings is the
-factory's job: see [Minion Build](../minion-build/) (draft).
+connection settings and falls back through it. Every connection must be through
+a channel kind and connection schema version the build's target supports, or
+the build is refused; a build needs at least one. Creating minions with these
+settings is the factory's job: see [Minion Build](../minion-build/).
 
 ## HTTP channel, version 2
 
 | Key | Type | Default | Notes |
 |---|---|---|---|
-| `base_url` | url | required | `http(s)://host[:port]`, **no path**: the channel accepts any path, the minion picks its own. |
+| `base_url` | url | required | `http(s)://host[:port]`, **no path**: the channel accepts any path, the minion picks its own. At most 2048 characters. |
 | `extra_base_urls` | string_list | — | More addresses of the channel in the same form (e.g. other fronts), at most 16. A minion falls back to them, in order, when the base URL cannot be reached; the other parameters apply to each. |
-| `host_header` | string | — | `Host` to send when it must differ from the base URL's host (CDN, reverse proxy). |
-| `sni` | string | — | TLS server name, when it must differ. |
+| `host_header` | string | — | `Host` to send when it must differ from the base URL's host (CDN, reverse proxy). At most 255 characters. |
+| `sni` | string | — | TLS server name, when it must differ. At most 255 characters. |
 | `proxy` | url | — | Outbound proxy for the minion. |
 | `tls_verify` | bool | `false` | Check the certificate against trusted roots. |
 | `tls_pin_sha256` | string | — | SHA-256 of the server certificate (64 hex); authenticates the server with verification off. |
-| `user_agent` | string (`format: user_agent`) | — | Empty: the minion's built-in one. The UI offers a generator for realistic browser User-Agents. |
-| `headers` | string_map | — | Extra headers on every request and WebSocket handshake, name → value (names are header tokens, values have no line breaks; at most 32). |
-| `request_timeout` | duration | `40s` | Keep it above the channel's `CORE_SYNC_TIMEOUT` (30s by default): a minion giving up sooner than the channel waits for core drops replies still on their way. |
-| `checkin_interval` | duration | `60s` | How often to check in with nothing to send. |
-| `checkin_jitter` | int (%) | `20` | Random spread around the interval. |
-| `ws_reconnect_backoff` | duration | `60s` | Longest wait between WebSocket reconnects (from 1s, doubling). |
+| `user_agent` | string (`format: user_agent`) | — | Empty: the minion's built-in one. The UI offers a generator for realistic browser User-Agents. At most 512 characters. |
+| `headers` | string_map | — | Extra headers on every request and WebSocket handshake, name → value (names are header tokens, values have no line breaks and at most 4096 characters; at most 32). |
+| `request_timeout` | duration | `40s` | 1s to 10m. Keep it above the channel's `CORE_SYNC_TIMEOUT` (30s by default): a minion giving up sooner than the channel waits for core drops replies still on their way. |
+| `checkin_interval` | duration | `60s` | 1s to 168h. How often to check in with nothing to send. |
+| `checkin_jitter` | int (%) | `20` | 0 to 100. Random spread around the interval. |
+| `ws_reconnect_backoff` | duration | `60s` | 1s to 1h. Longest wait between WebSocket reconnects (from 1s, doubling). |
 
 There is no transport, method or path parameter: the channel accepts plain
 requests and WebSockets, any method, any path, and the minion is free to use and
 switch between them. A factory that lets operators choose them declares its own
-[connection parameters](../minion-build/#connection-parameters) (draft).
+[connection parameters](../minion-build/#connection-parameters).
 
 ## Design notes
 
