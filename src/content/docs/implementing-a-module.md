@@ -200,7 +200,9 @@ depends on what a module *is* belongs in the module:
 | Capabilities | `logs` |
 | Connection schema | `base_url`, TLS, headers and timing parameters for minions (see [Minion Connection Schema](../contracts/minion-connection/#http-channel-version-2)), declared through `channel.Config.Connection` |
 
-Besides plain requests it accepts **WebSockets** on any path: each binary
+Minions speak to it in a packed binary format, described in its README's
+[Wire format](https://github.com/LogosCore/logos-http-channel#wire-format)
+section. Besides plain requests it accepts **WebSockets** on any path: each binary
 frame is one message in the same packed format, relayed to core as a sync
 like a request (core does not tell the two apart), with a few messages in flight
 per connection and the same minion UUID answered in order. Its manifest adds
