@@ -7,8 +7,8 @@ what happens to its traffic today, and where the design takes it.
 
 ## A Minion Is Built
 
-An operator builds a minion in an operation; a factory instance builds it. The
-The `build_id` names the minion on the data plane (`Logos-Build-Id`) from then on.
+An operator builds a minion in an operation; a factory instance builds it. Its
+`build_id` names the minion on the data plane (`Logos-Build-Id`) from then on.
 
 ```mermaid
 sequenceDiagram
