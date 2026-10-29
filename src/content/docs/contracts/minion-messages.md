@@ -32,24 +32,24 @@ For the suite `aes-256-cbc-hmac-sha256`, with the minion's `enc_key` and
 `mac_key` from its [build](../minion-build/#factorybuild):
 
 ```
- 0      1      2                 18                       n−32        n
- ┌──────┬──────┬─────────────────┬────────────────────────┬───────────┐
- │ ver  │ dir  │ IV (16)         │ ciphertext (16·k)      │ tag (32)  │
- └──────┴──────┴─────────────────┴────────────────────────┴───────────┘
+ 0                 16     17     18                       n−32        n
+ ┌─────────────────┬──────┬──────┬────────────────────────┬───────────┐
+ │ IV (16)         │ ver  │ dir  │ ciphertext (16·k)      │ tag (32)  │
+ └─────────────────┴──────┴──────┴────────────────────────┴───────────┘
 ```
 
 | Field | Meaning |
 |---|---|
+| `IV` | 16 random bytes from a CSPRNG, fresh for every frame. |
 | `ver` | `0x01`, this layout. |
 | `dir` | `0x01` minion → core, `0x02` core → minion. |
-| `IV` | 16 random bytes from a CSPRNG, fresh for every frame. |
 | `ciphertext` | AES-256-CBC of the message with `enc_key` and `IV`, PKCS#7 padded. |
-| `tag` | HMAC-SHA256 with `mac_key` over `ver ‖ dir ‖ minion id ‖ IV ‖ ciphertext`, all 32 bytes. The minion id is its 16 raw UUID bytes; it is authenticated but not sent in the frame. |
+| `tag` | HMAC-SHA256 with `mac_key` over `minion id ‖ IV ‖ ver ‖ dir ‖ ciphertext`, all 32 bytes. The minion id is its 16 raw UUID bytes; it is authenticated but not sent in the frame. |
 
 A receiver checks, in this order, and drops the frame at the first failure:
 
-1. `ver` is `0x01` and `dir` is the other side's;
-2. the length is at least 66 bytes and the ciphertext a multiple of 16;
+1. the length is at least 66 bytes and the ciphertext a multiple of 16;
+2. `ver` is `0x01` and `dir` is the other side's;
 3. the tag, compared in constant time;
 4. only then decrypts, and checks the padding.
 
