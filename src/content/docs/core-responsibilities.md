@@ -73,8 +73,10 @@ See [Channel ↔ Core: HTTP Sync](../contracts/channel-core-sync/).
 - Encrypt/sign outbound payloads.
 - Keep channels plaintext-blind (channels never decrypt payloads).
 
-The payload crypto contract is not written yet. Core refuses to build for a
-factory that declares crypto suites until it is.
+Core generates each minion's keys for its factory's suite and implements only
+`aes-256-cbc-hmac-sha256` for now: a factory declaring another suite cannot
+register. Encrypting and decrypting minion traffic waits for the payload crypto
+contract.
 
 ## 7) Task and Session Orchestration
 

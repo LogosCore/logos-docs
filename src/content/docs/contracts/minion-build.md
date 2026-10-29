@@ -4,10 +4,9 @@ title: "Minion Build"
 
 :::note[Payload crypto]
 Everything on this page is built (the protocol types, factory-core, core, the
-web app, and BOB as the reference factory) except payload crypto: the
-`crypto` parts below wait for the payload crypto contract. Core implements no
-suite yet, so a factory that declares one cannot build, and minions carry no
-keys.
+web app, and BOB as the reference factory). Of payload crypto, core generates a
+minion's keys for its factory's suite and sends them in the build; encrypting
+and decrypting minion traffic waits for the payload crypto contract.
 :::
 
 Factories build minions. What a factory can produce, and what each build needs,
@@ -16,7 +15,7 @@ only scripts. So **each factory declares it**, as a **build schema** sent at
 [registration](../module-lifecycle/#moduleregister), the same way a channel
 declares its [connection schema](../minion-connection/). The app builds its
 forms from the schema. Core validates what operators enter, adds the minion's
-identity and connection settings (and, with payload crypto, its keys), and asks
+identity, connection settings and payload crypto keys, and asks
 the factory to build.
 
 ```mermaid
@@ -57,7 +56,7 @@ Declared in `module.register` under `build`:
     },
     { "module_name": "dns", "versions": [1] }
   ],
-  "crypto": ["x25519-xchacha20poly1305"],
+  "crypto": "aes-256-cbc-hmac-sha256",
   "fields": [
     { "key": "kill_date", "type": "datetime", "label": "Kill date", "group": "Limits", "order": 1 },
     {
@@ -122,7 +121,7 @@ Declared in `module.register` under `build`:
 | `schema_version` | Format of this structure: `"1"`. |
 | `version` | Version of the factory's parameter set, from 1. Raised when values saved against the previous set would build something else or fail: a field or target removed, renamed or given another meaning. Adding an optional field or a target does not need it. |
 | `channels[]` | At least one: the channel kinds the minions can speak: `module_name`, the connection schema `versions` they read (1 to 16), and optional `fields`, the factory's own [connection parameters](#connection-parameters) for that kind. |
-| `crypto[]` | Optional, at most 16. The payload crypto suites the minions implement; core picks one it implements and generates the keys. Suite names and their key material come from the payload crypto contract, which is not written yet; the name above is an example. Core implements no suite yet: a factory that declares one cannot build. |
+| `crypto` | Optional. The one payload crypto suite the minions implement; core generates each minion's keys for it. Core implements only `aes-256-cbc-hmac-sha256` (AES-256-CBC, then HMAC-SHA256 over the ciphertext) for now and refuses a registration with any other suite (`validation_failed`). |
 | `fields[]` | Build parameters shared by every target. Field specs as in a [management manifest](../module-management/#fields), plus the [types below](#field-types-for-builds). |
 | `targets[]` | What the factory can produce, at least one. |
 | `commands[]` | Optional. What the minions can do. Operators pick each build's [commands](#commands) from its target's. |
@@ -149,7 +148,7 @@ A target:
   up to 31 characters, unique in their target.
 - Channel kinds are unique, each with its `versions` unique and from 1. A
   target's `channels` name only kinds and versions the factory lists.
-- Crypto suites are unique slugs (`^[a-z0-9][a-z0-9._-]{0,62}$`).
+- The crypto suite is a slug (`^[a-z0-9][a-z0-9._-]{0,62}$`) that core implements.
 - A command's `targets` name only targets of the schema, once each.
 - Labels are up to 120 characters and descriptions up to 1,000, as in a
   management manifest.
@@ -159,7 +158,7 @@ A target:
 
 Limits: 32 targets, 64 fields per target (shared ones included), 1 to 16
 platforms per target, 1 to 16 channel kinds with 1 to 16 versions each, 32
-connection parameters per channel kind, 16 crypto suites, 256 commands, 32
+connection parameters per channel kind, 256 commands, 32
 params per command.
 
 ### Connection parameters
@@ -317,8 +316,6 @@ latest schema:
 - each connection's settings follow that connection schema, and its values the
   connection parameters the factory declares for that channel kind, by the same
   rules;
-- the factory declares no `crypto`: core implements no suite yet, so it
-  builds for no factory whose minions need one;
 - a live instance of the kind declares that latest `version`.
 
 A value of `null`, `""` or `[]` leaves its field unset. Defaults are then
@@ -404,7 +401,7 @@ Request `payload`:
       "url": "http://logos-seaweedfs-s3:8333/…?X-Amz-Signature=…"
     }
   },
-  "crypto": { "suite": "x25519-xchacha20poly1305", "material": { "…": "…" } },
+  "crypto": { "suite": "aes-256-cbc-hmac-sha256", "material": { "enc_key": "<base64, 32 bytes>", "mac_key": "<base64, 32 bytes>" } },
   "artifact": { "upload_url": "http://logos-seaweedfs-s3:8333/…?X-Amz-Signature=…", "max_size": 268435456 },
   "deadline": "2026-10-26T14:30:00Z",
   "actor": { "type": "user", "id": "f140266c-…", "name": "admin" }
@@ -419,7 +416,7 @@ Request `payload`:
 | `commands` | The ids of the [commands](#commands) the minion is built with: those picked, the target's required ones among them, in the schema's order. The minion has these and no others. |
 | `files` | The files the values name (connection parameter values included), by id, as in [Build files](#build-files). |
 | `connections` | The [connections](#connections), in the order the minion tries them: each one's settings as an endpoint [export](../minion-connection/#the-export) under `endpoint` (its `name`, channel kind, schema version, and `params` with defaults filled in), and its [connection parameter](#connection-parameters) `values`, defaults filled in. |
-| `crypto` | Present when the factory declares `crypto`: the `suite` core chose, and its key `material` as the payload crypto contract defines it. Never sent yet: core builds for no factory that declares `crypto`. |
+| `crypto` | Present when the factory declares `crypto`: its `suite` and the minion's key `material`, fresh for every build. For `aes-256-cbc-hmac-sha256`: `enc_key`, the AES-256 key, and `mac_key`, the HMAC-SHA256 key, 32 random bytes each in base64. The factory puts them in the artifact and keeps them nowhere else. |
 | `artifact` | Where to upload the artifact: `upload_url`, a presigned URL to `PUT` it to, valid until a minute past the deadline, and `max_size`, the largest artifact the factory may upload (a core setting, default 256 MiB). factory-core refuses to upload a larger one (`artifact_too_large`). A presigned upload cannot be capped, so core holds the factory to it by its result: see [`factory.build.result`](#factorybuildresult). |
 | `deadline` | When core stops waiting: the build timeout after the offer. |
 | `actor` | Who started the build, for the factory's own logs. |
@@ -602,19 +599,20 @@ for (its description), the factory kind, instance and version,
 `schema_version`, target, platform, values (`file` values as build file ids),
 its commands, the connection settings as copied with the operators'
 descriptions of them, the factory's plan and step reports, the state, who
-cancelled it, and the result: artifact, warnings and log, or the error. With
-payload crypto it will keep the suite too, never key material.
+cancelled it, and the result: artifact, warnings and log, or the error. It
+also keeps the minion's payload crypto suite and keys, never shown and sent
+only to the factory building it.
 
 A successful build creates the **minion**: identified by `minion_id`, with its
 factory kind, target, platform, who built it, and its build's commands as what
-it can do. With payload crypto, core will also hold its keys. A failed or
+it can do, and core holds its keys. A failed or
 cancelled build creates none, and its minion id is never used again.
 
 **Every build is a new minion.** Building again from a record opens the build
 form filled in from it, so every earlier build is the template for the next:
 its description, target, platform, commands, values and connections with theirs, values
 equal to today's defaults left out so they read as defaults. The new build gets
-a new minion id (and, with payload crypto, new keys): two artifacts never share
+a new minion id and new keys: two artifacts never share
 an identity.
 
 An artifact is kept until an operator deletes it (the build record stays) or

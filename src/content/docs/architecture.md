@@ -73,7 +73,7 @@ and separates what is built from what is still a plan.
 | [Channel endpoints](../contracts/minion-connection/) | Built: an operation's saved connection settings, with export and import. |
 | [Minion builds](../contracts/minion-build/) | Built: build schemas, builds offered to factory instances, progress, artifacts checked, the minion recorded. |
 | Data plane | Built: the sync endpoint with a registration gate and de-duplication. Core answers every message with an empty reply. |
-| Payload crypto | Planned: core holds the minion keys, decrypts inbound and encrypts outbound. No contract yet. |
+| Payload crypto | Partly built: core implements `aes-256-cbc-hmac-sha256`, generates and holds each minion's keys. Decrypting inbound and encrypting outbound are planned; no contract yet. |
 | Tasking | Planned: what core sends a minion, and how it maps to the commands a factory builds in (the factory command contract). |
 | Observability | Planned: central audit logging and tracing. Core publishes lifecycle events that nothing consumes yet. |
 
@@ -128,5 +128,5 @@ Planned:
 2. ~~Message contract format and versioning policy.~~  Resolved — see [AMQP Message Envelope](../contracts/amqp-envelope/).
 3. ~~Database engine and schema partitioning strategy.~~ Resolved — see [Core Infrastructure](../core-infrastructure/) (MongoDB).
 4. Module packaging and lifecycle policy (enable/disable/version compatibility). Partly settled: operators block, unblock and delete instances ([Module Lifecycle](../contracts/module-lifecycle/)), and build and connection schemas carry versions. Packaging is open.
-5. The payload crypto contract: the suites, their key material, where core encrypts and decrypts.
+5. The payload crypto contract: the message format of each suite, where core encrypts and decrypts.
 6. The factory command contract: tasks, how they reach the commands a minion was built with, and their results.

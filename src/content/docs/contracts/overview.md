@@ -81,9 +81,8 @@ Every contract in this section, regardless of surface, follows the same baseline
   plane drops a `message_id` it has seen.
 - **Crypto boundary** — minion payload crypto belongs to core Logos services only.
   Control-plane contracts never transport `encrypted_data`, and channels stay
-  plaintext-blind on the data plane. A build request is meant to carry a
-  minion's key material to its factory (`crypto`), with the payload crypto
-  contract, which is not written yet.
+  plaintext-blind on the data plane. A build request carries a minion's key
+  material to its factory (`crypto`), which writes it into the artifact.
 - **Modules describe themselves; core does not interpret them** — what a
   module can be managed on, its status values, action results and log records
   are declared or produced by the module and shown by core as they are. Core
