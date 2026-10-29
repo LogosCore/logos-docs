@@ -124,7 +124,7 @@ What the connection is depends on the dialer:
 | Dialer | The connection | Who starts exchanges |
 |---|---|---|
 | HTTP, to a page on a web server (a PHP script, say) | one call: a request and its response, no state kept | core only: the minion just answers |
-| SSH, or TCP to a listening minion | stays open while it is useful | either side: the minion checks in as through a channel, and core sends when it has something |
+| SSH, or TCP to a listening minion | stays open while it is useful, or one call per command (SSH) | either side: the minion checks in as through a channel, and core sends when it has something |
 
 ### How it would work
 
@@ -157,6 +157,53 @@ of exchanges core started: a captured core message sent to it again would run
 its tasks again. A minion implementation may guard against that its own way,
 for instance by remembering recent message ids.
 
+### Modes: `call` and `connect`
+
+A dialer declares at registration which **modes** it supports:
+
+| Mode | What it is | Example |
+|---|---|---|
+| `call` | one call per exchange: the dialer connects, delivers, takes the answer, disconnects | HTTP to a PHP page |
+| `connect` | a lasting connection that an operator opens for a session and closes after the work | a TCP connection to a listening minion |
+| both | either, as below | SSH: a single command, or an open connection |
+
+(The names avoid "session", which already means the minion's crypto session.)
+
+**The minion has a say too.** A PHP page answers single calls whatever the
+dialer could do. So a factory declares per target which modes its minions
+support, the way targets declare their platforms and channels, and the modes
+a session can use are those **both** the dialer and the build's minion
+support.
+
+**What an operator sees:**
+
+- **`call` only**: every command is a call. There is nothing to open or close.
+- **`connect` only**: the session has its own menu to **open a connection**.
+  Commands work only while one is open; the operator closes it after the work.
+- **Both**: commands work without a connection, each as a call, and the
+  operator can still open one. While a connection is open, commands go over
+  it; while none is, each command is a call. The operator never picks per
+  command.
+
+**A connection's lifecycle:**
+
+- It belongs to the **session**, not to the operator who opened it: others
+  with access to the operation see that it is open and can use it.
+- Besides the operator, an idle timeout, the network or the minion dropping
+  it, or the dialer stopping or draining close it. The UI shows its state;
+  core never assumes a connection outlives its dialer.
+- With `connect` only, commands are disabled while no connection is open.
+  Tasks created anyway (by the API, or queued just before a connection
+  dropped) wait, and go out when the next connection opens.
+- The minion checks in only while a connection is open. Between connections
+  core shows it as unreachable on purpose, not as lost.
+
+**The registration field.** Like `connection` for channels and `build` for
+factories, a dialer adds a top-level field to its registration, e.g.
+`dial: {modes: ["call", "connect"], target: …}`, where `target` describes the
+addresses it reaches (a URL; host and port) the way a channel's connection
+schema describes its settings.
+
 ### To decide when it is designed
 
 - **The premade session**: how core creates it, under which id, and how the
@@ -164,9 +211,10 @@ for instance by remembering recent message ids.
 - **The control-plane operation**: what core sends (the sealed message, the
   target, a deadline) and what the dialer answers (the minion's sealed
   message, or why the call failed).
-- **Target addresses**: a dialer declares what its targets look like (a URL,
-  host and port), the way a channel declares its connection schema;
-  operators enter them per minion.
+- **Target addresses**: the `target` part of the registration field, and
+  where operators enter them per minion.
+- **Modes in the build schema**: how a factory's targets declare the modes
+  their minions support.
 - **Long tasks** on one-call connections: the minion answers within the call;
   a task that runs longer leaves its results for a later call.
 - **When core calls**: on a new task, on a schedule, on demand, and what it
