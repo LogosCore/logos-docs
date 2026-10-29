@@ -99,6 +99,7 @@ Every contract in this section, regardless of surface, follows the same baseline
 | [Module Logs](../module-logs/) | Control plane | Core ↔ Module | Prototype |
 | [Minion Connection Schema](../minion-connection/) | Control plane | Channel → Core | Implemented |
 | [Minion Build](../minion-build/) | Control plane | Core ↔ Factory | Implemented; payload crypto pending |
+| [Minion Messages](../minion-messages/) | Data plane, inside the ciphertext | Minion ↔ Core | Draft |
 
 To build a module against these contracts, see
 [Implementing a Module](../../implementing-a-module/).
