@@ -298,7 +298,7 @@ Example sizes, CBOR plaintext → sealed → packed by the HTTP channel:
 |---|---|---|---|
 | empty check-in | 24 B | 39 B | 99 B |
 | `hello` | 176 B | 248 B | 259 B |
-| reply with two tasks | 165 B | 245 B | 243 B |
+| reply with two tasks | 165 B | 243 B | 243 B |
 | ack + one result with 17 bytes of output | 148 B | 237 B | 227 B |
 
 ## Sync call
