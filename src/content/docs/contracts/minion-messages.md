@@ -4,9 +4,11 @@ title: "Minion Messages"
 
 :::caution[Draft]
 This page records the design of what travels inside a minion's ciphertext:
-how it is sealed, and the CBOR messages within. It is agreed for review, not
-built. Today core holds each minion's keys but neither opens nor seals
-anything, and answers every sync with 204.
+how it is sealed, and the CBOR messages within. Built so far: the sealed
+frame, the CBOR formats, and [staging](#staging) up to `stage_response`
+(protocol: `SealFrame` / `OpenFrame`, the message types; core: the sync
+call's 200 and 422; BOB's minion stages when run). Hello, sessions and tasks
+are not built yet.
 :::
 
 A minion and core talk in **messages**. The [sync call](../channel-core-sync/)
