@@ -92,7 +92,7 @@ Every contract in this section, regardless of surface, follows the same baseline
 
 | Contract | Surface | Parties | Status |
 |---|---|---|---|
-| [HTTP Sync](../channel-core-sync/) | Data plane | Channel ↔ Core | Prototype: core answers every message with an empty reply |
+| [HTTP Sync](../channel-core-sync/) | Data plane | Channel ↔ Core | Prototype: core answers every message with an empty reply. Raw-body redesign agreed (Draft) |
 | [Module Lifecycle](../module-lifecycle/) | Control plane | Module (client) → Core (server) | Implemented |
 | [Module Management](../module-management/) | Control plane | Core (client) → Module (server) | Prototype |
 | [Module Logs](../module-logs/) | Control plane | Core ↔ Module | Prototype |
