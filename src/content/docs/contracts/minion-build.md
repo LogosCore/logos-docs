@@ -618,7 +618,14 @@ an identity.
 
 An artifact is kept until an operator deletes it (the build record stays) or
 the operation is deleted, which deletes its builds, artifacts, build files and
-minions, and cancels its unfinished builds. Artifacts will hold the minion's
+minions, and cancels its unfinished builds.
+
+An operator can also **delete a build**, whatever its state. An unfinished
+build is cancelled first, on its factory too. The build record, its artifact
+and the minion it made are removed for good; the operation's build files stay,
+and become deletable once no build refers to them. A minion of a deleted build
+that is already out can no longer open a session: core no longer has its
+keys. Artifacts will hold the minion's
 keys, so only operators download them, always as an attachment.
 
 ## Who can do what
@@ -626,7 +633,7 @@ keys, so only operators download them, always as an attachment.
 | Who | Can |
 |---|---|
 | Viewer of the operation | see its builds, build records, minions and build files |
-| Operator or admin of the operation | also upload build files and delete ones no build refers to, build, cancel builds, download artifacts and delete them |
+| Operator or admin of the operation | also upload build files and delete ones no build refers to, build, cancel builds, download artifacts and delete them, delete builds |
 | Agent API key | nothing: builds are not on the MCP surface, the only one agent keys reach |
 
 App admins can do everything in every operation, and in the Public operation
@@ -704,14 +711,14 @@ platform), the commands as two lists, available and selected, with the
 required ones fixed in place, the build parameters in the factory's groups,
 and the connections; a JSON tab edits the same build as JSON. A build opens on
 its **Overview**, with its **JSON** and its **Pipeline** next to it; operators
-cancel it there while it runs, download or delete its artifact, and **Build
-again**. A factory's page under Modules shows what it builds: its targets,
+cancel it there while it runs, download or delete its artifact, **Build
+again**, and delete the build (also from the row's menu in the list). A factory's page under Modules shows what it builds: its targets,
 build parameters and commands.
 
 The API is GraphQL: the queries `factoryKinds`, `buildFiles`, `builds` (paged,
 with the same search and filters), `build` and `minions`, and the mutations
 `createBuild` (problems by place in the error's `extensions.problems`),
-`cancelBuild`, `deleteBuildArtifact` and `deleteBuildFile`. Bytes go over REST:
+`cancelBuild`, `deleteBuild`, `deleteBuildArtifact` and `deleteBuildFile`. Bytes go over REST:
 `POST /api/v1/build-files` uploads a build file (multipart: `operationId` and
 `file`; 413 when it is too large), and `GET /api/v1/builds/{id}/artifact`
 downloads an artifact.
