@@ -66,7 +66,6 @@ The plaintext is one CBOR map, in [CDDL](https://www.rfc-editor.org/rfc/rfc8610)
 message = {
   v: 1,                 ; this format
   id: msg-id,           ; random, unique per message
-  ts: uint,             ; the sender's time, unix seconds
   ? re: msg-id,         ; core's replies: the request this answers
   ? items: [* item],    ; absent or empty: nothing to say
 }
@@ -156,7 +155,6 @@ err = {
   t: "err",
   code: tstr,           ; see Errors
   ? msg: tstr,
-  ? now: uint,          ; core's time, with clock_skew
   ? item: uint,         ; which item of the message it is about
 }
 ```
@@ -212,7 +210,7 @@ sequenceDiagram
 
     M->>CH: sealed {items: [hello]}
     CH->>C: sync
-    C->>C: open, check ts and id, record the host
+    C->>C: open, check the id, record the host
     C-->>CH: 200 sealed {re, items: [task shell, task sleep]}
     CH-->>M: reply
     M->>M: run the tasks
@@ -254,15 +252,10 @@ receiver checks.
 
 ## Freshness and replay
 
-- **Core** accepts a minion's message when `ts` is within **15 minutes** of
-  its own clock and it has not seen the `id` in the last 30 minutes (Redis,
-  like the sync call's dedup). A replayed message is dropped (204). A message
-  outside the window gets a sealed `err` `clock_skew` with core's `now`,
-  and its items are not processed.
-- **The minion** keeps an offset to core's clock from the `ts` of every
-  reply, and stamps its messages with its own clock plus that offset. A
-  minion with a wrong clock thus loses one message to `clock_skew`, then
-  agrees with core.
+Messages carry no time. Core stamps every message with its own receive time.
+
+- **Core** drops a message whose `id` it has seen in the last 24 hours
+  (Redis, like the sync call's dedup) and answers 204.
 - **A reply is fresh** when its `re` is the `id` of a request the minion is
   still waiting on. An old reply, replayed, matches nothing and is dropped.
 - **The direction byte** stops a frame from being turned around: both sides
@@ -272,7 +265,6 @@ receiver checks.
 
 | `code` | Sent by | Means |
 |---|---|---|
-| `clock_skew` | core | `ts` outside the window; `now` is core's time. Nothing was processed. |
 | `bad_message` | both | the plaintext is not a valid message. |
 | `unknown_item` | both | an item type the receiver does not know (`item` says which). |
 | `unknown_task` | minion | a `cancel` or chunk for a task it does not have. |
@@ -288,17 +280,17 @@ A frame that fails to open gets no `err`: the receiver cannot tell who sent it.
 | Chunk data | at most 512 KiB |
 | Items per message | 256 |
 | Nesting | 16 levels |
-| Core's clock window | ±15 minutes; replay memory 30 minutes |
+| Core's replay memory | message ids, 24 hours |
 | Task ids a minion remembers | the last 24 hours |
 
 Example sizes, CBOR plaintext → sealed → packed by the HTTP channel:
 
 | Message | CBOR | JSON, for comparison | On the wire |
 |---|---|---|---|
-| empty check-in | 32 B | 55 B | 115 B |
-| `hello` | 184 B | 264 B | 259 B |
-| reply with two tasks | 193 B | 291 B | 275 B |
-| ack + one result with 17 bytes of output | 156 B | 253 B | 227 B |
+| empty check-in | 24 B | 39 B | 99 B |
+| `hello` | 176 B | 248 B | 259 B |
+| reply with two tasks | 185 B | 275 B | 259 B |
+| ack + one result with 17 bytes of output | 148 B | 237 B | 227 B |
 
 ## Sync call
 
@@ -345,9 +337,10 @@ or tag). A channel answers its client as for any failure (the HTTP channel's
 - **Why the minion id is in the tag.** Keys are per minion already, but
   binding the id means a frame is valid only under the id it was sent with,
   whatever a channel does to the header.
-- **Why freshness by request and reply.** The sync call is request and
-  response, so a minion needs no clock to know a reply is fresh: it matches
-  `re`. Only core needs `ts`, and it hands the minion its clock in every reply.
+- **Why no time in messages.** Core's own clock is the only one it trusts,
+  so it stamps messages as they arrive. The sync call is request and
+  response, so a minion needs no clock either to know a reply is fresh: it
+  matches `re`.
 - **Why idempotent items and resends.** A reply can be lost after core
   processed the request. Rather than exactly-once delivery, every item can be
   sent again safely, and both sides keep resending until the other side
