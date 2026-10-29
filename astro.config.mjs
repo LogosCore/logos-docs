@@ -5,9 +5,9 @@ import mermaid from "astro-mermaid";
 import tailwindcss from "@tailwindcss/vite";
 import { codeThemes } from "./src/styles/code-theme.mjs";
 
-// Deployed to GitHub Pages at https://logos.github.io/logos-docs/
+// Deployed to GitHub Pages at https://logoscore.github.io/logos-docs/
 export default defineConfig({
-  site: "https://logos.github.io",
+  site: "https://logoscore.github.io",
   base: "/logos-docs/",
   // There is no home page: the site root opens the first sidebar page.
   redirects: {

@@ -48,4 +48,4 @@ npm run preview  # preview the production build locally
 
 After the first successful workflow run, the site URL will be:
 
-`https://logos.github.io/logos-docs/`
+`https://logoscore.github.io/logos-docs/`
