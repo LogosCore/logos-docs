@@ -35,7 +35,7 @@ channel's implementation detail. Core defines the envelope contract in
 - HTTP(S) and WebSocket: `logos-http-channel`, the reference channel. It
   accepts any method on any path, and WebSocket connections whose binary frames
   are messages.
-- Telegram, GitHub or DNS channels: possible, none built yet.
+- DNS or GitHub channels: possible, none built yet.
 
 ### Notes
 

@@ -97,7 +97,7 @@ Request:
 ```
 
 - `module_name` is the module's **hardcoded identity** — its project/kind
-  (`http`, `dns`, `telegram`, `git`, ...), baked into the implementation and
+  (`http`, `dns`, `git`, ...), baked into the implementation and
   shared by every running instance of that module. It is not operator-selectable.
 - `instance` is the **unique id of one deployed instance**, self-assigned by the
   module (e.g. from its env/config). Core does not mint it. An operator may run

@@ -201,7 +201,7 @@ switch between them. A factory that lets operators choose them declares its own
 
 ## Design notes
 
-- **The channel owns its parameters.** Core cannot know what a DNS or Telegram
+- **The channel owns its parameters.** Core cannot know what a DNS or GitHub
   channel needs; a channel can. Reusing the management field specs means one
   validator and one form renderer for both.
 - **Ready-to-use values, not configuration.** Endpoints spare operators

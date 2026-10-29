@@ -42,7 +42,7 @@ sequenceDiagram
 2. **Register** with your identity, the inbox name as `rpc_queue`, and your
    [manifest](../contracts/module-management/#the-manifest) if you are
    manageable. `instance` must be unique per running process; `module_name` is
-   your fixed kind (`http`, `telegram`, …). A channel also declares its
+   your fixed kind (`http`, `dns`, …). A channel also declares its
    [connection schema](../contracts/minion-connection/) under `connection`, a
    factory its [build schema](../contracts/minion-build/#the-build-schema)
    under `build`.
