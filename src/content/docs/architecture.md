@@ -77,7 +77,7 @@ and separates what is built from what is still a plan.
 | Payload crypto | Partly built: core implements `aes-256-cbc-hmac-sha256`, generates and holds each minion's keys. Decrypting inbound and encrypting outbound are planned; no contract yet. |
 | Tasking | Planned: what core sends a minion, and how it maps to the commands a factory builds in (the factory command contract). |
 | Observability | Planned: central audit logging and tracing. Core publishes lifecycle events that nothing consumes yet. |
-| Dialers | An idea for later: a module type that calls minions that only answer (a page on a web server, say), when core asks it to ([Module Types](../module-types/#3-dialer-modules-planned)). Not designed. |
+| Dialers | An idea for later: a module type that opens the connection to a minion (one HTTP call to a page on a web server, or a lasting SSH or TCP connection), when core asks it to ([Module Types](../module-types/#3-dialer-modules-planned)). Not designed. |
 
 ## Deployment Shape
 
