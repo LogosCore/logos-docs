@@ -60,14 +60,21 @@ treats a reply it cannot open as no reply.
 
 ## Message
 
-The plaintext is one CBOR map, in [CDDL](https://www.rfc-editor.org/rfc/rfc8610):
+The plaintext is one CBOR map, in [CDDL](https://www.rfc-editor.org/rfc/rfc8610).
+There are two formats, one per direction: the minion sends **requests** and
+core answers with **replies**. The frame's `dir` says which one to parse.
 
 ```cddl
-message = {
+request = {             ; minion → core
   v: 1,                 ; this format
-  id: msg-id,           ; random, unique per message
-  ? re: msg-id,         ; core's replies: the request this answers
-  ? items: [* item],    ; absent or empty: nothing to say
+  id: msg-id,           ; random, unique per request
+  ? items: [* request-item],  ; absent or empty: nothing to say
+}
+
+reply = {               ; core → minion
+  v: 1,
+  re: msg-id,           ; the request this answers
+  ? items: [* reply-item],
 }
 
 msg-id  = bstr .size 16
@@ -75,25 +82,27 @@ task-id = bstr .size 16
 xfer-id = bstr .size 16
 ```
 
-The sender picks `id` at random (16 bytes from a CSPRNG). A message carries
-any number of **items**, up to 256, so one check-in can bring several results
-and one reply several tasks.
+The minion picks a request's `id` at random (16 bytes from a CSPRNG). Core
+answers only requests, so every reply has `re` and needs no `id` of its own.
+A message carries any number of **items**, up to 256, so one check-in can
+bring several results and one reply several tasks.
 
 ### Items
 
-| `t` | Direction | Carries |
+| `t` | In | Carries |
 |---|---|---|
-| `hello` | minion → core | the host and process: sent at start, and when core asks |
-| `result` | minion → core | one part of a task's output |
-| `task` | core → minion | a command to run, with its arguments |
-| `cancel` | core → minion | stop a running task |
+| `hello` | request | the host and process: sent at start, and when core asks |
+| `result` | request | one part of a task's output |
+| `task` | reply | a command to run, with its arguments |
+| `cancel` | reply | stop a running task |
+| `rehello` | reply | send a `hello` |
 | `chunk` | both | one piece of a file transfer |
 | `ack` | both | tasks received; transfer progress |
-| `rehello` | core → minion | send a `hello` |
 | `err` | both | a problem with an earlier message or item |
 
 ```cddl
-item = hello / result / task / cancel / chunk / ack / rehello / err
+request-item = hello / result / chunk / ack / err
+reply-item   = task / cancel / rehello / chunk / ack / err
 
 hello = {
   t: "hello",
@@ -265,7 +274,7 @@ Messages carry no time. Core stamps every message with its own receive time.
 
 | `code` | Sent by | Means |
 |---|---|---|
-| `bad_message` | both | the plaintext is not a valid message. |
+| `bad_message` | both | the plaintext is not a valid request or reply. |
 | `unknown_item` | both | an item type the receiver does not know (`item` says which). |
 | `unknown_task` | minion | a `cancel` or chunk for a task it does not have. |
 | `too_large` | both | a message or chunk over the limits below. |
@@ -289,7 +298,7 @@ Example sizes, CBOR plaintext → sealed → packed by the HTTP channel:
 |---|---|---|---|
 | empty check-in | 24 B | 39 B | 99 B |
 | `hello` | 176 B | 248 B | 259 B |
-| reply with two tasks | 185 B | 275 B | 259 B |
+| reply with two tasks | 165 B | 245 B | 243 B |
 | ack + one result with 17 bytes of output | 148 B | 237 B | 227 B |
 
 ## Sync call
@@ -337,6 +346,12 @@ or tag). A channel answers its client as for any failure (the HTTP channel's
 - **Why the minion id is in the tag.** Keys are per minion already, but
   binding the id means a frame is valid only under the id it was sent with,
   whatever a channel does to the header.
+- **Why two formats.** The directions differ in more than they share: only
+  the minion starts, only replies answer, and only three item types go both
+  ways. A schema per direction makes a request with `re` or a `task`, or a
+  reply without `re`, simply invalid, so a frame turned around fails to parse
+  even before `dir` is checked. A minion writes only requests and reads only
+  replies, so its codec covers half the items.
 - **Why no time in messages.** Core's own clock is the only one it trusts,
   so it stamps messages as they arrive. The sync call is request and
   response, so a minion needs no clock either to know a reply is fresh: it
