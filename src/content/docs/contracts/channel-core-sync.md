@@ -111,7 +111,7 @@ Core → channel. Returned in the same HTTP response.
 | `version` | yes | `"1.0"`. |
 | `timestamp` | yes | RFC 3339. |
 | `id` | yes | Same `id` from the inbound message. |
-| `encrypted_data` | yes | Opaque encrypted response payload. May be empty/no-op when nothing is pending. |
+| `encrypted_data` | yes | Opaque encrypted response payload; empty when core has nothing for the minion. |
 | `meta` | no | `status: "ok"`, and the request's `trace_id` when it had one. |
 
 ### Channel-side validation
@@ -120,19 +120,16 @@ Core → channel. Returned in the same HTTP response.
 on every reply, requires:
 
 1. `type == "outbound.minion_message"`.
-2. `message_id`, `version`, `id` and `encrypted_data` are non-empty.
+2. `message_id`, `version` and `id` are non-empty. `encrypted_data` may be
+   empty: core has nothing for the minion.
 3. `timestamp` parses as RFC 3339.
 
 A channel should also check that `id` matches the inbound request's `id`; no
 channel does yet.
 
-:::caution[Today]
-Core holds no minion keys and has no tasking yet, so it answers every valid
-request with `encrypted_data: ""`. That reply fails `ValidateOutbound`:
-channel-core's sync client and runtime refuse it. `logos-http-channel`, which
-has its own sync client and checks nothing, relays it. Which side changes, the
-check or the reply, is still to be settled.
-:::
+Core holds no minion keys and has no tasking yet, so today it answers every
+valid request with `encrypted_data: ""`. Channels relay that reply like any
+other: `logos-http-channel` answers the minion with the packed id alone.
 
 ---
 
@@ -150,6 +147,6 @@ check or the reply, is still to be settled.
 - One `inbound.minion_message` per HTTP request, one `outbound.minion_message` per response.
 - Core decrypts inbound and encrypts outbound (planned, with the payload crypto
   contract). Channel never decrypts.
-- When no work is pending for an `id`, core returns an empty/no-op
+- When nothing is pending for an `id`, core returns an empty
   `encrypted_data`. Today that is every reply.
 - Channel relays `encrypted_data` to the minion unchanged.

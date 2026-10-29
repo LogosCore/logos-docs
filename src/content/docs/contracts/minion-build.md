@@ -420,7 +420,7 @@ Request `payload`:
 | `files` | The files the values name (connection parameter values included), by id, as in [Build files](#build-files). |
 | `connections` | The [connections](#connections), in the order the minion tries them: each one's settings as an endpoint [export](../minion-connection/#the-export) under `endpoint` (its `name`, channel kind, schema version, and `params` with defaults filled in), and its [connection parameter](#connection-parameters) `values`, defaults filled in. |
 | `crypto` | Present when the factory declares `crypto`: the `suite` core chose, and its key `material` as the payload crypto contract defines it. Never sent yet: core builds for no factory that declares `crypto`. |
-| `artifact` | Where to upload the artifact: `upload_url`, a presigned URL to `PUT` it to, valid until a minute past the deadline, and `max_size`, the largest artifact the factory may upload (a core setting, default 256 MiB). factory-core refuses to upload a larger one (`artifact_too_large`); core itself does not check it. |
+| `artifact` | Where to upload the artifact: `upload_url`, a presigned URL to `PUT` it to, valid until a minute past the deadline, and `max_size`, the largest artifact the factory may upload (a core setting, default 256 MiB). factory-core refuses to upload a larger one (`artifact_too_large`). A presigned upload cannot be capped, so core holds the factory to it by its result: see [`factory.build.result`](#factorybuildresult). |
 | `deadline` | When core stops waiting: the build timeout after the offer. |
 | `actor` | Who started the build, for the factory's own logs. |
 
@@ -523,9 +523,12 @@ and when it failed:
   path) of 1 to 255 bytes; `sha256` 64 lowercase hex digits. Core refuses a
   result outside them (`validation_failed`).
 
-A failed result finishes the build at once. For a succeeded one, core checks
-the stored artifact's size and SHA-256 against the result, in the background,
-before it marks the build `SUCCEEDED`. An artifact that is missing or differs
+A failed result finishes the build at once, and so does a succeeded one whose
+artifact is larger than the `max_size` the instance was given
+(`artifact_too_large`): core deletes the upload unread. For any other
+succeeded result, core checks the stored artifact's size and SHA-256 against
+the result, in the background, before it marks the build `SUCCEEDED`, reading
+no more of it than the size reported. An artifact that is missing or differs
 fails the build with `artifact_mismatch`, and a differing one is deleted. When
 the store cannot be read, core keeps trying until an hour past the deadline,
 then fails the build the same way.
@@ -559,7 +562,8 @@ still arrives with `not_found`.
 
 The build timeout is a core setting (default 30 minutes) and applies to the
 time a build spends queued and to the time it spends building; `deadline` in
-the request is when the latter runs out.
+the request is when the latter runs out. An offer an instance turns down
+leaves the build's time in the queue as it was.
 
 A factory instance that stops cleanly cancels its running builds and reports
 them failed (`shutdown`) before it deregisters, waiting up to 10 seconds for
@@ -677,6 +681,7 @@ factory's codes:
 | `factory_lost` | The instance building it is no longer registered: it deregistered, was declared dead, or was blocked. |
 | `refused` | The instance offered the build answered with an error other than `busy`. |
 | `schema_changed` | No registered instance declares the build's schema version any more, and the factory kind's latest schema is another version. |
+| `artifact_too_large` | The result reports an artifact larger than the `max_size` the instance was given. The upload is deleted. |
 | `artifact_mismatch` | The artifact the result reports is not in the store, differs in size or SHA-256, or could not be read to check it until an hour past the deadline. |
 
 ## Settings
@@ -687,7 +692,7 @@ Core's settings for builds:
 |---|---|---|
 | `BUILD_TIMEOUT` | `30m` | The [build timeout](#build-states), queued and again building. |
 | `BUILD_FILE_MAX_SIZE` | 64 MiB | The largest [build file](#build-files) upload, at most 1 GiB. |
-| `BUILD_ARTIFACT_MAX_SIZE` | 256 MiB | The artifact's `max_size` in a build request, at most 1 GiB. |
+| `BUILD_ARTIFACT_MAX_SIZE` | 256 MiB | The artifact's `max_size` in a build request, at most 1 GiB. A build keeps the one it was offered with. |
 | `BUILD_BUCKET` | `logos-builds` | The SeaweedFS bucket for build files and artifacts. |
 | `BUILD_STORAGE_ENDPOINT` | core's own S3 endpoint | The storage address presigned URLs are signed for: the one factories reach. |
 
@@ -746,7 +751,9 @@ downloads an artifact.
 - **Presigned URLs for files and artifacts.** Factories need no storage
   credentials and reach only the objects of the build at hand, and file bytes
   travel through neither core nor the broker. SHA-256 checks on both sides catch
-  a damaged transfer.
+  a damaged transfer. A presigned upload cannot be capped, so core holds a
+  factory to `max_size` by the size its result reports, and never reads more
+  of an artifact than that.
 - **Asynchronous, with progress and results as calls to core.** A build takes
   minutes, while management actions are synchronous and capped at 60 s. A result
   must be acknowledged, and a factory must learn when core gave up on a build,
