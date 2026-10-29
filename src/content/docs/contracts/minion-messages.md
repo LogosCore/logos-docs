@@ -5,10 +5,14 @@ title: "Minion Messages"
 :::caution[Draft]
 This page records the design of what travels inside a minion's ciphertext:
 how it is sealed, and the CBOR messages within. Built so far: the sealed
-frame, the CBOR formats, and [staging](#staging) up to `stage_response`
-(protocol: `SealFrame` / `OpenFrame`, the message types; core: the sync
-call's 200 and 422; BOB's minion stages when run). Hello, sessions and tasks
-are not built yet.
+frame, the CBOR formats, [staging](#staging), and the hello and the session
+(protocol: `SealFrame` / `OpenFrame`, the message types with `stage`,
+`stage_response`, `hello` and `hello_response`; core: the sync call's 200 and
+422, sessions opened under a temporary id or straight under the build id,
+check-ins and `rehello` under a session id, the operation's live Sessions
+page; BOB's minion stages, says hello and checks in once when run). Under a
+session core answers any other item with `unknown_item`: tasks, results,
+chunks and acks are not built yet.
 :::
 
 A minion and core talk in **messages**. The [sync call](../channel-core-sync/)
