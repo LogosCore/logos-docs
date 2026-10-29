@@ -44,7 +44,7 @@ For the suite `aes-256-cbc-hmac-sha256`, with the minion's `enc_key` and
 | `ver` | `0x01`, this layout. |
 | `ciphertext` | AES-256-CBC of the message with `enc_key` and `IV`, PKCS#7 padded. |
 | `dir` | `0x01` minion → core, `0x02` core → minion. |
-| `tag` | HMAC-SHA256 with `mac_key` over `build id ‖ IV ‖ ver ‖ ciphertext ‖ dir`, all 32 bytes. The build id is its 16 raw UUID bytes; it is authenticated but not sent in the frame. |
+| `tag` | HMAC-SHA256 with `mac_key` over `id ‖ IV ‖ ver ‖ ciphertext ‖ dir`, all 32 bytes. `id` is the 16 raw UUID bytes of the id the message is sent under: the build id while staging, the temporary id after (see [Staging](#staging)). It is authenticated but not sent in the frame. |
 
 A receiver checks, in this order, and drops the frame at the first failure:
 
@@ -94,7 +94,7 @@ bring several results and one reply several tasks.
 | `stage` | request | the minion's public key and a correlation id: its first message, see [Staging](#staging) |
 | `hello` | request | the host and process: sent at start, and when core asks |
 | `result` | request | one part of a task's output |
-| `stage_response` | reply | core's answer to `stage`: a temporary id, core's own public key encrypted to the minion's, and the correlation id |
+| `stage_response` | reply | core's answer to `stage`: a temporary id, new keys encrypted to the minion's public key, and the correlation id |
 | `task` | reply | a command to run, with its arguments |
 | `cancel` | reply | stop a running task |
 | `rehello` | reply | send a `hello` |
@@ -114,9 +114,9 @@ stage = {
 
 stage_response = {
   t: "stage_response",
-  tid: bstr .size 16,   ; temporary id, random, made by core
-  key: bstr,            ; core's own RSA public key (DER SubjectPublicKeyInfo),
-                        ;   encrypted with the minion's public key from stage
+  tid: bstr .size 16,   ; temporary id: a UUIDv4, raw bytes
+  keys: bstr,           ; new key material for the build's suite, encrypted
+                        ;   with RSA-OAEP (SHA-256) under the key from stage
   corr: bstr .size 16,  ; the correlation id from stage
 }
 
@@ -240,16 +240,34 @@ so only a minion of that build can stage.
 
 Core answers with a reply whose item is `stage_response`:
 
-4. Core generates its own **RSA key pair** for this minion.
-5. It picks a random 16-byte **temporary id**.
-6. It answers with the temporary id, its public key **encrypted with the
-   minion's public key**, and the minion's correlation id.
+4. Core generates **new key material for the build's crypto suite**. For
+   `aes-256-cbc-hmac-sha256` (BOB's suite) that is a new `enc_key` and a new
+   `mac_key`, 32 random bytes each.
+5. It picks a **temporary id**, a UUIDv4 like a build id, and stores the new
+   key material in a **temporary collection** under it, with the build it
+   belongs to.
+6. It answers with the temporary id, the new key material **encrypted with
+   the minion's public key**, and the minion's correlation id.
 
 The minion checks that the correlation id is the one it sent, and decrypts
-core's public key with its private key.
+the key material with its private key.
 
-What the temporary id and the two key pairs are used for after staging is
-still open: see [Open questions](#open-questions).
+**From the next message on**, the minion uses the temporary id where it used
+the build id, and seals with the new keys:
+
+- the transport carries the temporary id where it carried the build id (for
+  the HTTP channel, the 16 bytes in its [packed format](https://github.com/LogosCore/logos-http-channel#wire-format)),
+  and the channel passes it to core in `Logos-Build-Id`. Being a UUIDv4 like
+  a build id, it takes the same path through every channel and channel-core
+  unchanged;
+- core finds the keys by the id: under a temporary id in the temporary
+  collection, under a build id in the build;
+- the frame's tag covers the id the message is sent under.
+
+The new key material is the suite's own format, encrypted with RSA-OAEP
+(SHA-256) under the minion's public key. For `aes-256-cbc-hmac-sha256` it is
+the CBOR map `{enc_key, mac_key}`, about 80 bytes, which fits in one RSA-OAEP
+operation at any usual key size.
 
 ## How an exchange goes
 
@@ -264,11 +282,11 @@ sequenceDiagram
     M->>CH: build id + sealed {items: [stage: public key, corr]}
     CH->>C: sync
     C->>C: open, record the minion's public key
-    C->>C: generate an RSA key pair and a temporary id
-    C-->>CH: 200 sealed {re, items: [stage_response: tid, core's key encrypted, corr]}
+    C->>C: new keys for the build's suite, a temporary id: store both
+    C-->>CH: 200 sealed {re, items: [stage_response: tid, keys encrypted, corr]}
     CH-->>M: reply
-    M->>M: check corr, decrypt core's public key
-    M->>CH: sealed {items: [hello]}
+    M->>M: check corr, decrypt the new keys
+    M->>CH: temporary id + sealed with the new keys {items: [hello]}
     CH->>C: sync
     C->>C: open, check the id, record the host
     C-->>CH: 200 sealed {re, items: [task shell, task sleep]}
@@ -355,8 +373,9 @@ Example sizes, CBOR plaintext → sealed → packed by the HTTP channel:
 ## Sync call
 
 One change to the [sync call](../channel-core-sync/): core answers **422**
-when the ciphertext does not open (no keys for that build id, or a bad frame
-or tag). A channel answers its client as for any failure (the HTTP channel's
+when the ciphertext does not open (no keys for that id, or a bad frame or
+tag). `Logos-Build-Id` carries the build id while a minion stages and its
+temporary id after; core looks the keys up by either. A channel answers its client as for any failure (the HTTP channel's
 404), and logs it as the client's fault, not a core error.
 
 ## To build
@@ -371,19 +390,16 @@ or tag). A channel answers its client as for any failure (the HTTP channel's
 
 ## Open questions
 
-- **Staging: encrypting core's public key.** One RSA-OAEP (SHA-256)
-  operation encrypts at most the key size minus 66 bytes: 190 bytes with
-  RSA-2048, 318 with RSA-3072. Core's public key in DER is about 294 or 422
-  bytes, so it does not fit in one. It needs hybrid encryption (RSA-OAEP
-  wraps a fresh AES key, the AES key encrypts core's public key) or several
-  RSA blocks.
-- **Staging: after it.** What the temporary id and the two key pairs are
-  for from then on: whether the temporary id replaces the build id in later
-  sync calls, and which keys seal later messages.
+- **Staging: the temporary collection.** How long a temporary id lives,
+  what happens to its keys when the minion stops checking in, and whether it
+  ever becomes permanent.
+- **Staging: the build's keys after it.** Whether core still accepts anything
+  but `stage` sealed with a build's own keys once one of its minions staged,
+  and whether a build can stage more than once (one artifact run on several
+  hosts).
 - **Staging: key size and padding.** RSA-2048 or 3072; OAEP with SHA-256.
 - **Staging: when again.** Once per process start, or also when core asks
   (for instance after core loses the minion's session).
-
 - **Files as task arguments.** Params exclude `file` today. A task that puts a
   file on the host (an `upload` command) would name a transfer that core
   starts in the same reply.
@@ -407,9 +423,15 @@ or tag). A channel answers its client as for any failure (the HTTP channel's
   anything is decrypted, so a forged or altered frame never reaches the AES
   padding check, which is the classic way CBC leaks. A 32-byte tag costs 16
   bytes more than a truncated one and leaves nothing to argue about.
-- **Why the build id is in the tag.** Keys are per minion already, but
-  binding the id means a frame is valid only under the id it was sent with,
-  whatever a channel does to the header.
+- **Why the id is in the tag.** Keys are per build or per temporary id
+  already, but binding the id means a frame is valid only under the id it was
+  sent with, whatever a channel does to the header.
+- **Why the temporary id is a UUIDv4.** It takes the build id's place in the
+  transport and in `Logos-Build-Id`, so channels and channel-core carry it
+  without knowing staging exists.
+- **Why staging hands out new keys.** The keys baked into an artifact open
+  only its staging. Each staged minion then talks under keys that never
+  left core except encrypted to that process's own RSA key.
 - **Why two formats.** The directions differ in more than they share: only
   the minion starts, only replies answer, and only three item types go both
   ways. A schema per direction makes a request with `re` or a `task`, or a
