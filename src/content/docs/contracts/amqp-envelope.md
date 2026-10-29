@@ -30,7 +30,7 @@ Every RPC request and reply, and every event, carries these fields:
 
 | Field | Type | Required | Meaning |
 |---|---|---|---|
-| `message_id` | UUID string | yes | Unique id for this message. Control-plane operations are idempotent by their own keys (a build's `minion_id`, an action's `invocation_id`, a configuration `revision`, a log `stream_id`), not by it. |
+| `message_id` | UUID string | yes | Unique id for this message. Control-plane operations are idempotent by their own keys (a build's `build_id`, an action's `invocation_id`, a configuration `revision`, a log `stream_id`), not by it. |
 | `correlation_id` | UUID string | RPC only | Ties a reply to its request. Set equal to `message_id` on the originating request; copied verbatim onto the reply. Optional for fire-and-forget events. |
 | `type` | string | yes | Dotted operation/event name (e.g. `mgmt.config.apply`). |
 | `version` | string | yes | Contract version `MAJOR.MINOR`. RPC servers reject unknown major versions. |

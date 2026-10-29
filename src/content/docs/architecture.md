@@ -46,7 +46,7 @@ and separates what is built from what is still a plan.
 - Modules do not call each other: each talks to core only.
 - **Data plane**: a channel relays each minion message to core over HTTP
   (`POST /api/channel/sync`) and gets core's answer in the same response. It
-  carries the minion id and the ciphertext, as the raw body, and never
+  carries the build id and the ciphertext, as the raw body, and never
   decrypts. See
   [Channel ↔ Core: HTTP Sync](../contracts/channel-core-sync/).
 - **Control plane** (RabbitMQ):
@@ -59,7 +59,7 @@ and separates what is built from what is still a plan.
 
   See the [Contracts Overview](../contracts/overview/).
 - Messages are versioned [envelopes](../contracts/amqp-envelope/), and
-  operations are idempotent by their own keys: a build's minion id, an action's
+  operations are idempotent by their own keys: a build id, an action's
   invocation id, a configuration revision.
 - Files take neither route: factories download build files from, and upload
   artifacts to, presigned object store URLs.
@@ -109,7 +109,7 @@ Built:
 
 - Roles for every operator action: an account's own role, and its role in each
   operation (viewer, operator or admin).
-- Channels are blind relays: they carry the minion id and its ciphertext only.
+- Channels are blind relays: they carry the build id and its ciphertext only.
 - The sync registration gate, and de-duplication of replayed messages.
 - Factories hold no storage credentials, only one build's URLs.
 - A record of what operators did to modules: configuration changes and action

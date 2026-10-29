@@ -8,7 +8,7 @@ traffic reaches core and how core's response gets back.
 ## Envelope-Centric View
 
 The core Server defines one contract surface for all channel modules: one HTTP
-call per minion message, the ciphertext as the raw body and the minion id in a
+call per minion message, the ciphertext as the raw body and the build id in a
 header. How a channel module receives
 traffic from a minion, what transport it uses, and how it extracts or embeds
 fields is **the channel's concern and out of scope for core**.
@@ -27,7 +27,7 @@ sequenceDiagram
     participant CS as Core Server
 
     I->>CH: transport-specific traffic
-    CH->>CH: extract the minion id + ciphertext (channel's logic)
+    CH->>CH: extract the build id + ciphertext (channel's logic)
     CH->>CS: POST /api/channel/sync (ciphertext body, Logos-* headers)
     CS-->>CH: 200 (ciphertext) or 204 (nothing), or 400 / 403 / 413 / 415 / 503
     CH->>CH: embed the reply into the transport response (channel's logic)
@@ -40,7 +40,7 @@ A well-formed request with:
 
 - The body: the minion's ciphertext, never inspected by the channel. Not
   empty, and within core's size limit (413 otherwise).
-- `Logos-Minion-Id` — the minion's id: its build's `minion_id`.
+- `Logos-Build-Id` — the id of the build that made the minion.
 - `Logos-Channel-Instance` — the channel instance sending it, which must be
   registered and not blocked (403 otherwise; 503 when core cannot read its
   registry). The id is the channel's word: there is no authentication yet.
@@ -53,7 +53,7 @@ full contract.
 
 ## What Core Returns
 
-A reply with the same `Logos-Minion-Id`, and:
+A reply with the same `Logos-Build-Id`, and:
 
 - **200** with ciphertext for the minion as the body, or
 - **204** when nothing is pending. Today it is always 204: core has no tasking

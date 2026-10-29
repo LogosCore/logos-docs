@@ -11,7 +11,7 @@ Channel modules provide transport paths between minions and the core Server plat
 ### Responsibilities
 
 - Accept inbound minion traffic from a specific transport/platform.
-- Extract the minion id and its ciphertext from the transport (channel-defined logic).
+- Extract the build id and its ciphertext from the transport (channel-defined logic).
 - Treat minion payload as opaque encrypted blob (no decrypt/inspect).
 - Send them to core's sync endpoint (`POST /api/channel/sync`): the ciphertext as the raw body, the ids in headers.
 - Relay core's reply (ciphertext, or nothing) back to the minion via the transport.

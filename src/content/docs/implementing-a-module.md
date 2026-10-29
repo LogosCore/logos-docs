@@ -340,7 +340,7 @@ out := factorytest.Run(t, buildSchema, &bob{}, store, protocol.BuildRequest{
 // out.Artifact: the bytes uploaded.
 ```
 
-It fills in what core adds when the request leaves it out (a minion id, the
+It fills in what core adds when the request leaves it out (a build id, the
 upload URL and `max_size`, a deadline a minute away), and fails the test when
 the request does not fit the schema. `factorytest.Build` returns only the
 result and the artifact.

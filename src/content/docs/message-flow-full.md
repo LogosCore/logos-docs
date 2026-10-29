@@ -8,7 +8,7 @@ what happens to its traffic today, and where the design takes it.
 ## A Minion Is Built
 
 An operator builds a minion in an operation; a factory instance builds it. The
-build's `minion_id` is the minion's id on the data plane (`Logos-Minion-Id`) from then on.
+The `build_id` names the minion on the data plane (`Logos-Build-Id`) from then on.
 
 ```mermaid
 sequenceDiagram
@@ -19,7 +19,7 @@ sequenceDiagram
     participant S3 as SeaweedFS
 
     OP->>CS: build (factory, target, platform, values, commands, connections)
-    CS->>CS: validate against the factory's build schema, new minion id → QUEUED
+    CS->>CS: validate against the factory's build schema, new build id → QUEUED
     CS->>IP: factory.build (AMQP, the instance's rpc_queue)
     IP-->>CS: accepted, with the build's plan → BUILDING
     IP->>S3: download build files (presigned URLs)
@@ -73,7 +73,7 @@ sequenceDiagram
 
     I->>CH: transport traffic (channel-specific)
     CH->>CS: POST /api/channel/sync (ciphertext body, Logos-* headers)
-    CS->>CS: Resolve context/key from the minion id
+    CS->>CS: Resolve context/key from the build id
     CS->>CS: Decrypt + verify payload
     CS->>IP: Parse factory response into normalized Logos event
     IP-->>CS: Normalized Logos event
@@ -94,6 +94,6 @@ sequenceDiagram
   over AMQP, and to the object store through presigned URLs. In the target they
   also translate between the minion's language and Logos events, on plaintext
   core gives them.
-- How a channel extracts the minion id and the ciphertext from its transport,
+- How a channel extracts the build id and the ciphertext from its transport,
   or embeds the response back, is the channel's implementation detail. Core
   only sees the sync call defined in [Channel ↔ Core: HTTP Sync](../contracts/channel-core-sync/).

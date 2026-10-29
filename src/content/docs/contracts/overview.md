@@ -17,7 +17,7 @@ exactly one of them.
 | **Control plane** | RabbitMQ (AMQP) | Module management, coordination, events | RPC + pub/sub |
 
 - The **data plane** moves minion payloads. It is deliberately minimal and
-  plaintext-blind: channels deliver the minion id and its ciphertext, the
+  plaintext-blind: channels deliver the build id and its ciphertext, the
   ciphertext as the raw body of the sync call, and never decrypt. Core cares
   only about that call — how a channel extracts them from its transport is the
   channel's business.
@@ -56,7 +56,7 @@ graph LR
     CS[Core Server]
     IP[Factory]
 
-    CH -- "HTTP sync: minion id + ciphertext" --> CS
+    CH -- "HTTP sync: build id + ciphertext" --> CS
     CH -- "AMQP RPC: register / heartbeat" --> CS
     CS -- "AMQP RPC: management, log tail" --> CH
     CH -- "AMQP: log batches" --> CS
@@ -77,7 +77,7 @@ Every contract in this section, regardless of surface, follows the same baseline
   sync answers in the same response, by `id`. Log batches travel bare, without
   the envelope, keyed by their stream.
 - **Idempotency** — processing is idempotent where possible: an operation is
-  keyed by what it acts on (a build's `minion_id`, an action's
+  keyed by what it acts on (a build's `build_id`, an action's
   `invocation_id`, a configuration `revision`, a log `stream_id`), and the data
   plane drops a `message_id` it has seen.
 - **Crypto boundary** — minion payload crypto belongs to core Logos services only.

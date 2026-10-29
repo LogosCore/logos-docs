@@ -22,7 +22,7 @@ the factory to build.
 flowchart LR
     F[Factory instance] -- "module.register: build schema" --> CORE[Core]
     OP[Operator] -- "target, commands, values, files, connections" --> CORE
-    CORE -- "factory.build: + minion id, connections" --> F
+    CORE -- "factory.build: + build id, connections" --> F
     F -- "progress, result" --> CORE
     F -- "artifact upload" --> S3[(SeaweedFS)]
 ```
@@ -283,7 +283,7 @@ sequenceDiagram
     participant F as Factory instance
     participant S3 as SeaweedFS
     OP->>CORE: build (description, factory kind, target, platform, commands, values, connections)
-    CORE->>CORE: validate, fill in defaults, new minion id → QUEUED
+    CORE->>CORE: validate, fill in defaults, new build id → QUEUED
     CORE->>F: factory.build (presigned URLs, deadline)
     F-->>CORE: accepted, with its plan (steps) → BUILDING
     F->>S3: download files
@@ -332,7 +332,7 @@ after another, starting at a different instance each time so builds spread
 out:
 
 - an instance that replies `busy`, does not answer within 10 seconds, or
-  replies without accepting (`accepted` false, or another `minion_id`) is
+  replies without accepting (`accepted` false, or another `build_id`) is
   passed over, and core tries the next one;
 - an instance that replies with any other error (`validation_failed`,
   `unsupported_version`, …) refused the build, and core fails it (`refused`);
@@ -371,7 +371,7 @@ Request `payload`:
 
 ```json
 {
-  "minion_id": "5b0c4f6e-8a1d-4c2b-9e7f-3d2a1b0c9e8f",
+  "build_id": "5b0c4f6e-8a1d-4c2b-9e7f-3d2a1b0c9e8f",
   "target": "windows-exe",
   "platform": "windows/amd64",
   "schema_version": 1,
@@ -410,7 +410,7 @@ Request `payload`:
 
 | Field | Meaning |
 |---|---|
-| `minion_id` | UUIDv4, the identity of the build and of the minion it makes: every build operation names the build by it, and the minion sends it on the [data plane](../channel-core-sync/), where the channel passes it to core as `Logos-Minion-Id`. A repeated `minion_id` is the same build. |
+| `build_id` | UUIDv4, the identity of the build and of the minion it makes: every build operation names the build by it, and the minion sends it on the [data plane](../channel-core-sync/), where the channel passes it to core as `Logos-Build-Id`. A repeated `build_id` is the same build. |
 | `target`, `platform`, `schema_version` | What to build, against which version of the factory's schema. |
 | `values` | Every field of the target that has a value or a default. A `file` field holds the file's id. |
 | `commands` | The ids of the [commands](#commands) the minion is built with: those picked, the target's required ones among them, in the schema's order. The minion has these and no others. |
@@ -427,7 +427,7 @@ building, with its **plan** for the build:
 
 ```json
 {
-  "minion_id": "5b0c4f6e-8a1d-4c2b-9e7f-3d2a1b0c9e8f",
+  "build_id": "5b0c4f6e-8a1d-4c2b-9e7f-3d2a1b0c9e8f",
   "accepted": true,
   "steps": [
     { "id": "fetch", "label": "Fetch files" },
@@ -463,7 +463,7 @@ the build log.
 Request `payload`:
 
 ```json
-{ "minion_id": "5b0c4f6e-8a1d-4c2b-9e7f-3d2a1b0c9e8f", "step": "compile", "message": "Compiling windows/amd64" }
+{ "build_id": "5b0c4f6e-8a1d-4c2b-9e7f-3d2a1b0c9e8f", "step": "compile", "message": "Compiling windows/amd64" }
 ```
 
 `step` is the `id` of the step of the plan the factory is now on; reporting
@@ -474,7 +474,7 @@ lost report is not sent again, and core takes the steps before the one
 reported as done, so a lost one only costs a step its times.
 
 `message` is at most 1,000 bytes. Reply `payload`:
-`{ "minion_id": "…", "ack": true }`. A `not_found` error means core no longer
+`{ "build_id": "…", "ack": true }`. A `not_found` error means core no longer
 waits for the build from this instance (it was cancelled, ran out of time, or
 is another instance's), and the factory should stop it.
 
@@ -484,7 +484,7 @@ Request `payload` when the build succeeded:
 
 ```json
 {
-  "minion_id": "5b0c4f6e-8a1d-4c2b-9e7f-3d2a1b0c9e8f",
+  "build_id": "5b0c4f6e-8a1d-4c2b-9e7f-3d2a1b0c9e8f",
   "status": "succeeded",
   "artifact": {
     "filename": "WinTelemetry.exe", "size": 2412544,
@@ -500,7 +500,7 @@ and when it failed:
 
 ```json
 {
-  "minion_id": "5b0c4f6e-8a1d-4c2b-9e7f-3d2a1b0c9e8f",
+  "build_id": "5b0c4f6e-8a1d-4c2b-9e7f-3d2a1b0c9e8f",
   "status": "failed",
   "error": { "code": "compile_failed", "message": "go build exited with status 1" },
   "log": "…"
@@ -530,15 +530,15 @@ fails the build with `artifact_mismatch`, and a differing one is deleted. When
 the store cannot be read, core keeps trying until an hour past the deadline,
 then fails the build the same way.
 
-Reply `payload`: `{ "minion_id": "…", "recorded": true }`. The factory sends the
+Reply `payload`: `{ "build_id": "…", "recorded": true }`. The factory sends the
 result again until it gets a reply or the deadline passes, and a repeated result
 is answered the same way. A `not_found` error means core no longer waits for the
 build: the factory drops the result.
 
 ### `factory.build.cancel`
 
-Request `payload`: `{ "minion_id": "…" }`. Reply `payload`:
-`{ "minion_id": "…", "cancelled": true }`, also for a build the factory does not
+Request `payload`: `{ "build_id": "…" }`. Reply `payload`:
+`{ "build_id": "…", "cancelled": true }`, also for a build the factory does not
 know, which it remembers: a `factory.build` for it that arrives later is
 accepted and never built. The factory stops the build, throws away what it
 produced and sends no result. Core marks the build `CANCELLED` first, whatever
@@ -604,16 +604,16 @@ also keeps the minion's payload crypto suite and keys: sent to the factory
 building it, and shown to operators under `crypto` in the build's JSON. A new
 build pasted from that JSON ignores them and gets keys of its own.
 
-A successful build creates the **minion**: identified by `minion_id`, with its
+A successful build creates the **minion**: identified by `build_id`, with its
 factory kind, target, platform, who built it, and its build's commands as what
 it can do, and core holds its keys. A failed or
-cancelled build creates none, and its minion id is never used again.
+cancelled build creates none, and its build id is never used again.
 
 **Every build is a new minion.** Building again from a record opens the build
 form filled in from it, so every earlier build is the template for the next:
 its description, target, platform, commands, values and connections with theirs, values
 equal to today's defaults left out so they read as defaults. The new build gets
-a new minion id and new keys: two artifacts never share
+a new build id and new keys: two artifacts never share
 an identity.
 
 An artifact is kept until an operator deletes it (the build record stays) or
@@ -744,7 +744,7 @@ downloads an artifact.
   factory-core, so only the SDK can count them, refuse new ones or change how
   many run at once. It serves that management itself, with the same keys on
   every factory, rather than leaving each factory to expose its internals.
-- **Core owns identity and keys.** Core generates the minion id, and will
+- **Core owns identity and keys.** Core generates the build id, and will
   generate its keys with payload crypto. The keys will only pass through the
   factory into the artifact: never in a form or a build record.
 - **Presigned URLs for files and artifacts.** Factories need no storage

@@ -18,7 +18,7 @@ and the **message** (one CBOR item).
 | Layer | Defined by | Seen by |
 |---|---|---|
 | Transport (e.g. the HTTP channel's [packed format](https://github.com/LogosCore/logos-http-channel#wire-format)) | each channel | the channel |
-| Sync call: the ciphertext as the body, the minion id in a header | [HTTP Sync](../channel-core-sync/) | channel and core |
+| Sync call: the ciphertext as the body, the build id in a header | [HTTP Sync](../channel-core-sync/) | channel and core |
 | **Sealed frame**: version, direction, IV, ciphertext, tag | this page | core and the minion |
 | **Message**: one CBOR map | this page | core and the minion |
 
@@ -44,7 +44,7 @@ For the suite `aes-256-cbc-hmac-sha256`, with the minion's `enc_key` and
 | `ver` | `0x01`, this layout. |
 | `ciphertext` | AES-256-CBC of the message with `enc_key` and `IV`, PKCS#7 padded. |
 | `dir` | `0x01` minion → core, `0x02` core → minion. |
-| `tag` | HMAC-SHA256 with `mac_key` over `minion id ‖ IV ‖ ver ‖ ciphertext ‖ dir`, all 32 bytes. The minion id is its 16 raw UUID bytes; it is authenticated but not sent in the frame. |
+| `tag` | HMAC-SHA256 with `mac_key` over `build id ‖ IV ‖ ver ‖ ciphertext ‖ dir`, all 32 bytes. The build id is its 16 raw UUID bytes; it is authenticated but not sent in the frame. |
 
 A receiver checks, in this order, and drops the frame at the first failure:
 
@@ -304,7 +304,7 @@ Example sizes, CBOR plaintext → sealed → packed by the HTTP channel:
 ## Sync call
 
 One change to the [sync call](../channel-core-sync/): core answers **422**
-when the ciphertext does not open (no keys for that minion id, or a bad frame
+when the ciphertext does not open (no keys for that build id, or a bad frame
 or tag). A channel answers its client as for any failure (the HTTP channel's
 404), and logs it as the client's fault, not a core error.
 
@@ -343,7 +343,7 @@ or tag). A channel answers its client as for any failure (the HTTP channel's
   anything is decrypted, so a forged or altered frame never reaches the AES
   padding check, which is the classic way CBC leaks. A 32-byte tag costs 16
   bytes more than a truncated one and leaves nothing to argue about.
-- **Why the minion id is in the tag.** Keys are per minion already, but
+- **Why the build id is in the tag.** Keys are per minion already, but
   binding the id means a frame is valid only under the id it was sent with,
   whatever a channel does to the header.
 - **Why two formats.** The directions differ in more than they share: only
