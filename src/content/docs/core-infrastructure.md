@@ -162,7 +162,7 @@ Nothing is collected centrally yet:
 - Module logs are relayed live to an operator who watches them, and never
   stored ([Module Logs](../contracts/module-logs/)).
 - Core publishes lifecycle events on `logos.events` that nothing consumes.
-- The sync reply echoes the request's `meta.trace_id`.
+- The sync reply returns the request's W3C `traceparent` header.
 
 Distributed tracing of the data plane was designed (the OpenTelemetry SDK in
 the channel and core, an OpenTelemetry Collector gateway, Grafana Tempo storing
