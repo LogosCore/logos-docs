@@ -92,7 +92,7 @@ it back as `re`. Who starts depends on the module in between:
 | Through | Starts the exchange | Its message has | The answer has |
 |---|---|---|---|
 | a channel (today) | the minion | `id` | `re` (core's message) |
-| a [dialer](../../module-types/#3-dialer-modules-planned) (planned) | core | `id` | `re` (the minion's message) |
+| a [dialer](../../module-types/#3-dialer-modules-planned) (planned) | core; on a lasting connection (SSH, TCP) either side | `id` | `re` (the other side's message) |
 
 Items keep their direction whoever starts: tasks always go core → minion,
 results always minion → core. Below, **request** and **reply** mean the
@@ -531,7 +531,8 @@ tag). `Logos-Build-Id` carries the build id, a temporary id or a session id
 - **Exchanges through a dialer.** What a premade session looks like (a
   session core creates ahead of time, under the build's own keys, so a minion
   that only answers needs no staging), and how `get_tasks` and `hello` work
-  when core starts the exchange. See [Module Types](../../module-types/#3-dialer-modules-planned).
+  when core starts the exchange. On a lasting connection both sides start
+  exchanges; `id` and `re` keep them apart. See [Module Types](../../module-types/#3-dialer-modules-planned).
 - **Files as task arguments.** Params exclude `file` today. A task that puts a
   file on the host (an `upload` command) would name a transfer that core
   starts in the same reply.
