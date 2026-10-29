@@ -76,7 +76,8 @@ and instances come and go.
 |---|---|
 | `id` | The endpoint's id (a UUID). |
 | `operation_id` | The operation that owns it. |
-| `name` | Unique within the operation (`^[a-z0-9][a-z0-9._-]{0,62}$`). |
+| `name` | What operators call it: any text on one line, at most 120 characters. Need not be unique. |
+| `slug` | The endpoint's identifier, unique within the operation (`^[a-z0-9][a-z0-9._-]{0,62}$`): what an export, a build's connection and a download's file name carry. Made from the name when not given (lowercased, other characters as `-`: "Edge EU (CDN)" is `edge-eu-cdn`), the next free one when that is taken; kept when the name changes. |
 | `description` | Optional, at most 500 characters: what the endpoint is for. Searched; never part of the export. |
 | `module_name` | The channel kind whose schema the values follow (e.g. `http`). |
 | `values` | By field key. A field without a value uses the schema's default. |
@@ -99,9 +100,9 @@ default, so those keep following the default.
 
 The list is paged (20 at a time) and sorted by name, case aside. Its search runs
 in core: a substring, case aside, or "quotes" for whole words, over the name,
-description, kind and the values. It can also be narrowed to channel kinds.
+slug, description, kind and the values. It can also be narrowed to channel kinds.
 The GraphQL operations: `channelKinds`, `channelEndpoints`, `channelEndpoint`,
-`channelEndpointExport`, `freeChannelEndpointName`, and
+`channelEndpointExport`, `freeChannelEndpointSlug`, and
 `createChannelEndpoint`, `updateChannelEndpoint`, `deleteChannelEndpoint`.
 
 Endpoint values are operation data and are shown to members as they are,
@@ -130,7 +131,9 @@ defaults, so a minion needs no knowledge of the schema itself. A field with
 neither a value nor a default is left out, and `channel.schema_version` is the
 kind's current version. An endpoint with problems cannot be exported: the API
 answers `BAD_USER_INPUT` with the problems, and the app disables Copy and
-Download as JSON (a download is named `<name>.endpoint.json`).
+Download as JSON (a download is named `<slug>.endpoint.json`). The export's
+`name` is the endpoint's slug: what factories and minions call the
+connection; the operators' name for it stays in core, like the description.
 
 A build's connections reach the factory in this format too: each one as the
 `endpoint` of a `factory.build` connection, named after the connection
@@ -155,20 +158,22 @@ it ([Minion Build](../minion-build/#factorybuild)).
 
 The app also takes this format back: **Import** on the Endpoints page opens a
 new endpoint's form filled in from an export, pasted or from a file, to check
-before saving. Its name is made valid and free in the operation (`-2`, `-3`…;
-an export without a name becomes `imported`), values equal to the kind's
+before saving. The export's `name` becomes the endpoint's name (an export
+without one gives `imported`), and its slug is made when it is saved; values
+equal to the kind's
 current defaults are dropped so those fields keep following the defaults, keys
 the kind does not declare are left out (and named), and an export for another
 schema `version` is pointed out. An export has no description, so an imported
 endpoint starts without one.
 
 **Duplicate** opens a new endpoint's form with an existing endpoint's stored
-values and description, named the first free of `<name>-dup`, `<name>-dup-2`,
-and so on.
+values and description, named `<name> (copy)`; it gets a slug of its own when
+saved.
 
 The endpoint form has **Form** and **JSON** tabs. The JSON tab edits the export's
-shape plus the `description`, lists every field with its default, takes `null`
-to reset a field, and locks `format` and `channel`.
+shape plus the `slug` and the `description` (its `name` is the endpoint's name
+there, any text), lists every field with its default, takes `null` to reset a
+field, and locks `format` and `channel`.
 
 A minion that can speak several channel kinds gets an **ordered list** of
 connection settings and falls back through it. Every connection must be through
