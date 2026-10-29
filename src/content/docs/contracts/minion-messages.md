@@ -160,10 +160,12 @@ result = {
   task: task-id,
   seq: uint,            ; 0, 1, 2, …: the parts of one task's output
   ? done: bool,         ; the last part; ok is then required
-  ? ok: bool,
+  ? ok: bool,           ; the minion did what the task asked
   ? out: bstr,          ; output as raw bytes, in the host's own encoding
   ? err: tstr,          ; what went wrong, with ok: false
   ? data: { * tstr => any },  ; structured output, the command's own
+  ? exit: int,          ; exit code of the process the task ran: only on
+                        ;   the done part, only for commands that ran one
 }
 
 cancel = { t: "cancel", task: task-id }
@@ -195,6 +197,28 @@ err = {
   ? item: uint,         ; which item of the message it is about
 }
 ```
+
+A `result` carries what a person reads in `out` and what a program reads in
+`data`, and may carry both (`shell`: what it printed, and the exit code):
+
+- **`out`** is the output as raw bytes, as the command produced it: no
+  conversion, so a host's code page (866 on a Russian Windows, 850 or 1252 on
+  others) and binary output pass unchanged. Core and the UI decode it by
+  guesswork, and offer it as a download where it does not decode. stdout and
+  stderr may be mixed in it. The parts of a streamed task join in `seq` order
+  into one output.
+- **`data`** is structured output in a shape the command defines, such as
+  `ls` entries or `ps` processes. Core does not check it: a factory handler
+  may preprocess it later. Each part's `data` **adds rows** to the earlier
+  parts': a key holding an array gets the new elements appended, any other key
+  takes the latest value.
+- **`ok`** says whether the minion did what the task asked. **`exit`** says
+  what the process it ran reported, so a program that exits with 1 is still
+  `ok: true`, and a command the minion could not start is `ok: false` with no
+  `exit`. Only commands that start a process have one (`shell`, a `run`);
+  commands the minion carries out itself (`ls`, `sleep`, `download`) do not.
+  A process killed by a signal has no exit code: the minion leaves `exit` out
+  and says so in `err`.
 
 In a `hello`, `pid`, `os` and `arch` are required: a minion always knows
 them. The rest are optional, since a minion cannot always learn its host or
