@@ -410,7 +410,7 @@ Request `payload`:
 
 | Field | Meaning |
 |---|---|
-| `minion_id` | UUIDv4, the identity of the build and of the minion it makes: every build operation names the build by it, and the minion sends it as `id` on the [data plane](../channel-core-sync/). A repeated `minion_id` is the same build. |
+| `minion_id` | UUIDv4, the identity of the build and of the minion it makes: every build operation names the build by it, and the minion sends it on the [data plane](../channel-core-sync/), where the channel passes it to core as `Logos-Minion-Id`. A repeated `minion_id` is the same build. |
 | `target`, `platform`, `schema_version` | What to build, against which version of the factory's schema. |
 | `values` | Every field of the target that has a value or a default. A `file` field holds the file's id. |
 | `commands` | The ids of the [commands](#commands) the minion is built with: those picked, the target's required ones among them, in the schema's order. The minion has these and no others. |

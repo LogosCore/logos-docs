@@ -46,7 +46,8 @@ and separates what is built from what is still a plan.
 - Modules do not call each other: each talks to core only.
 - **Data plane**: a channel relays each minion message to core over HTTP
   (`POST /api/channel/sync`) and gets core's answer in the same response. It
-  carries `id` and `encrypted_data` and never decrypts. See
+  carries the minion id and the ciphertext, as the raw body, and never
+  decrypts. See
   [Channel ↔ Core: HTTP Sync](../contracts/channel-core-sync/).
 - **Control plane** (RabbitMQ):
   - modules register, heartbeat and deregister on core's queue, `logos.core.rpc`;
@@ -72,7 +73,7 @@ and separates what is built from what is still a plan.
 | [Live log tail](../contracts/module-logs/) | Built (prototype): streamed to the operator's browser, never stored. |
 | [Channel endpoints](../contracts/minion-connection/) | Built: an operation's saved connection settings, with export and import. |
 | [Minion builds](../contracts/minion-build/) | Built: build schemas, builds offered to factory instances, progress, artifacts checked, the minion recorded. |
-| Data plane | Built: the sync endpoint with a registration gate and de-duplication. Core answers every message with an empty reply. |
+| Data plane | Built: the sync endpoint (the ciphertext as the raw body) with a registration gate, a size limit and de-duplication. Core answers every message with 204, nothing for the minion. |
 | Payload crypto | Partly built: core implements `aes-256-cbc-hmac-sha256`, generates and holds each minion's keys. Decrypting inbound and encrypting outbound are planned; no contract yet. |
 | Tasking | Planned: what core sends a minion, and how it maps to the commands a factory builds in (the factory command contract). |
 | Observability | Planned: central audit logging and tracing. Core publishes lifecycle events that nothing consumes yet. |
@@ -108,7 +109,7 @@ Built:
 
 - Roles for every operator action: an account's own role, and its role in each
   operation (viewer, operator or admin).
-- Channels are blind relays: they carry `id` and `encrypted_data` only.
+- Channels are blind relays: they carry the minion id and its ciphertext only.
 - The sync registration gate, and de-duplication of replayed messages.
 - Factories hold no storage credentials, only one build's URLs.
 - A record of what operators did to modules: configuration changes and action

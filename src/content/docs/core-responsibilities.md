@@ -46,13 +46,15 @@ See [Minion Connection Schema](../contracts/minion-connection/) and
 
 ## 4) The Data Plane Endpoint
 
-- Accept canonical channel requests (`inbound.minion_message`) on
-  `POST /api/channel/sync`, and check their fields.
+- Accept channel requests on `POST /api/channel/sync` (the minion's
+  ciphertext as the raw body, its ids in headers), and check their headers and
+  size before reading the body.
 - Admit only registered, unblocked channel instances (403 otherwise, 503 when
   the registry cannot be read).
-- Answer a message seen before (by `message_id`, within 24 hours) with a no-op.
-- Return a canonical outbound envelope (`outbound.minion_message`). Today it is
-  always empty: there is nothing to send minions yet.
+- Answer a message seen before (by `Logos-Message-Id`, within 24 hours) with a
+  no-op.
+- Answer with ciphertext for the minion (200) or nothing (204). Today it is
+  always 204: there is nothing to send minions yet.
 
 See [Channel ↔ Core: HTTP Sync](../contracts/channel-core-sync/).
 

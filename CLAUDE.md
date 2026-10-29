@@ -41,8 +41,8 @@ There is no ADR section: design reasoning lives in a **Design notes** section at
 ## Key Concepts for Editing Docs
 
 - **Two module types**: Channel Modules (transport) and Factory Modules (build minions). Channels are plaintext-blind — they relay encrypted blobs only. Factories may optionally implement translator hooks for a custom minion language (planned, not built); these are a factory-owned implementation detail, not a separate module type.
-- **Message contracts** are versioned (`inbound.minion_message`, `outbound.minion_message`). The canonical fields are `id` and `encrypted_data`.
-- **Envelope contract** — core defines only the canonical envelope format. How a channel module extracts `id` + `encrypted_data` from its transport is the channel's implementation detail and out of scope for these docs.
+- **The sync call** (data plane) carries a minion's ciphertext as the raw HTTP body, with `Logos-Message-Id`, `Logos-Minion-Id` and `Logos-Channel-Instance` headers; core answers 200 with ciphertext or 204 with nothing. There is no JSON envelope any more (`inbound/outbound.minion_message`, `encrypted_data` are gone).
+- **Channel extraction** — core defines only the sync call. How a channel module extracts the minion id and its ciphertext from its transport is the channel's implementation detail and out of scope for these docs.
 
 ## Markdown Authoring
 

@@ -11,10 +11,10 @@ Channel modules provide transport paths between minions and the core Server plat
 ### Responsibilities
 
 - Accept inbound minion traffic from a specific transport/platform.
-- Extract `id` and `encrypted_data` from the transport (channel-defined logic).
+- Extract the minion id and its ciphertext from the transport (channel-defined logic).
 - Treat minion payload as opaque encrypted blob (no decrypt/inspect).
-- Build an `inbound.minion_message` envelope and send it to core's sync endpoint (`POST /api/channel/sync`).
-- Receive `outbound.minion_message` from core and relay `encrypted_data` back to the minion via the transport.
+- Send them to core's sync endpoint (`POST /api/channel/sync`): the ciphertext as the raw body, the ids in headers.
+- Relay core's reply (ciphertext, or nothing) back to the minion via the transport.
 - Register with core on startup via [Module Lifecycle](../contracts/module-lifecycle/),
   declaring its [minion connection schema](../contracts/minion-connection/): the
   settings a minion is given to reach it, which operators keep as endpoints and
@@ -23,7 +23,7 @@ Channel modules provide transport paths between minions and the core Server plat
 
 ### What core requires from a channel
 
-A well-formed `inbound.minion_message` envelope from an instance that is
+A well-formed sync request from an instance that is
 registered and not blocked — nothing more. Core answers an unregistered, dead or
 blocked instance with 403. How a channel receives traffic, what transport
 protocol it uses, and how it extracts the canonical fields is entirely the

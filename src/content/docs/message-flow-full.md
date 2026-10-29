@@ -8,7 +8,7 @@ what happens to its traffic today, and where the design takes it.
 ## A Minion Is Built
 
 An operator builds a minion in an operation; a factory instance builds it. The
-build's `minion_id` is the minion's `id` on the data plane from then on.
+build's `minion_id` is the minion's id on the data plane (`Logos-Minion-Id`) from then on.
 
 ```mermaid
 sequenceDiagram
@@ -45,16 +45,17 @@ sequenceDiagram
     participant CS as Core Server
 
     I->>CH: transport traffic (channel-specific)
-    CH->>CS: POST /api/channel/sync (inbound.minion_message)
-    CS->>CS: check the envelope's fields
+    CH->>CS: POST /api/channel/sync (ciphertext body, Logos-* headers)
+    CS->>CS: check the headers
     CS->>CS: registration gate: the channel instance registered, not blocked
-    CS->>CS: de-duplicate by message_id
-    CS-->>CH: HTTP 200 outbound.minion_message (encrypted_data empty)
+    CS->>CS: check the size, read the body
+    CS->>CS: de-duplicate by Logos-Message-Id
+    CS-->>CH: HTTP 204 (nothing for the minion)
     CH-->>I: transport response (channel-specific)
 ```
 
 Core does not look at the payload yet: it holds no minion keys, and there is
-no tasking to send. Every valid message gets an empty reply. See
+no tasking to send. Every valid message gets a 204. See
 [Channel ↔ Core: HTTP Sync](../contracts/channel-core-sync/).
 
 ## The Target
@@ -71,8 +72,8 @@ sequenceDiagram
     participant IP as Factory
 
     I->>CH: transport traffic (channel-specific)
-    CH->>CS: POST /api/channel/sync (inbound.minion_message)
-    CS->>CS: Resolve context/key from id
+    CH->>CS: POST /api/channel/sync (ciphertext body, Logos-* headers)
+    CS->>CS: Resolve context/key from the minion id
     CS->>CS: Decrypt + verify payload
     CS->>IP: Parse factory response into normalized Logos event
     IP-->>CS: Normalized Logos event
@@ -80,19 +81,19 @@ sequenceDiagram
 
     CS->>IP: Build outbound payload for id (if any)
     IP-->>CS: Factory plaintext payload
-    CS->>CS: Encrypt outbound payload (or no-op envelope)
-    CS-->>CH: HTTP 200 outbound.minion_message (encrypted_data)
+    CS->>CS: Encrypt outbound payload (if any)
+    CS-->>CH: HTTP 200 (ciphertext) or 204 (nothing)
     CH-->>I: transport response (channel-specific)
 ```
 
 ## Notes
 
 - `minion ↔ core Server` is the logical protocol conversation.
-- Channel is a transport relay — it delivers canonical envelopes and remains plaintext-blind.
+- Channel is a transport relay — it delivers the ciphertext as it is and remains plaintext-blind.
 - Factories are separate processes. Today they talk to core only about builds,
   over AMQP, and to the object store through presigned URLs. In the target they
   also translate between the minion's language and Logos events, on plaintext
   core gives them.
-- How a channel extracts `id` + `encrypted_data` from its transport, or embeds
-  the response back, is the channel's implementation detail. Core only sees the
-  canonical envelopes defined in [Channel ↔ Core: HTTP Sync](../contracts/channel-core-sync/).
+- How a channel extracts the minion id and the ciphertext from its transport,
+  or embeds the response back, is the channel's implementation detail. Core
+  only sees the sync call defined in [Channel ↔ Core: HTTP Sync](../contracts/channel-core-sync/).
