@@ -128,18 +128,17 @@ hello_response = {
 
 hello = {
   t: "hello",
-  boot: bstr .size 8,   ; random per process start: tells restarts apart
-  host: tstr,
-  user: tstr,           ; as the OS names it, e.g. "CORP\\svc_backup"
   pid: uint,
   os: tstr,             ; GOOS-style: "windows", "linux", "darwin"
   arch: tstr,           ; GOARCH-style: "amd64", "arm64", "386"
+  ? host: tstr,         ; the hostname
+  ? user: tstr,         ; exactly as the OS reports it, e.g. "CORP\\svc_backup"
+  ? domain: tstr,       ; the host's Windows domain or workgroup
   ? proc: tstr,         ; the process image
-  ? elevated: bool,
-  ? domain: tstr,
+  ? integrity: "low" / "medium" / "high" / "system" / "root" / "user",
   ? addrs: [* tstr],    ; local IP addresses
   ? version: tstr,      ; the minion implementation's own version
-  * tstr => any,        ; anything else the factory's minions report
+  ? x: { * tstr => any },  ; the factory's own extras
 }
 
 task = {
@@ -189,6 +188,17 @@ err = {
   ? item: uint,         ; which item of the message it is about
 }
 ```
+
+In a `hello`, `pid`, `os` and `arch` are required: a minion always knows
+them. The rest are optional, since a minion cannot always learn its host or
+user (in a sandbox, say). `os` and `arch` use the vocabulary of build
+platforms, so core shows them next to the build's platform and flags a
+mismatch (a 32-bit build on a 64-bit OS, or any build of an `any/any`
+target). `integrity` is Windows' integrity level (`low`, `medium`, `high`,
+`system`) or, elsewhere, `root` or `user`. A factory's own fields go under
+`x`, so a key core adds later never collides with one of them; the factory
+may declare them in its build schema so the UI can label them. Core replaces
+all of it when a `rehello` brings new values.
 
 A receiver ignores keys it does not know, so either side can add optional
 keys without a new `v`. An item type it does not know gets an `err` with
@@ -417,7 +427,7 @@ Example sizes, CBOR plaintext → sealed → packed by the HTTP channel:
 | Message | CBOR | JSON, for comparison | On the wire |
 |---|---|---|---|
 | empty check-in | 24 B | 39 B | 99 B |
-| `hello` | 176 B | 248 B | 259 B |
+| `hello` | 181 B | 246 B | 259 B |
 | reply with two tasks | 165 B | 243 B | 243 B |
 | ack + one result with 17 bytes of output | 148 B | 237 B | 227 B |
 
