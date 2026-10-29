@@ -202,7 +202,7 @@ depends on what a module *is* belongs in the module:
 
 Besides plain requests it accepts **WebSockets** on any path: each binary
 frame is one message in the same packed format, relayed to core as a sync
-like a request (`source.transport: "websocket"`), with a few messages in flight
+like a request (core does not tell the two apart), with a few messages in flight
 per connection and the same minion UUID answered in order. Its manifest adds
 connection limits, ping and idle settings, connection counters and a
 `close_connections` action; drain also closes open connections.
