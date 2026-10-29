@@ -51,3 +51,4 @@ There is no ADR section: design reasoning lives in a **Design notes** section at
 - **Internal links**: link to other docs with relative directory URLs, e.g. `[Architecture](../architecture/)` or with an anchor `(../architecture/#pending-decisions)`. Do not use `.md` extensions.
 - **Mermaid**: fenced code blocks with the `mermaid` language are rendered at build time to inline SVG by the `astro-mermaid` integration (no client-side flash).
 - **Tables, TOC, syntax highlighting**: provided out of the box by Starlight.
+- **Monochrome**: the site uses Tailwind's neutral scale, like core's UI, and no other colour. `src/styles/global.css` maps Starlight's tokens (accent, grays, the aside/badge/card hues, print) and the Mermaid diagrams to it; `src/styles/code-theme.mjs` is the grayscale code theme. Asides of different kinds differ by icon (a caution or danger also gets a stronger edge), not hue.

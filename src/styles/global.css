@@ -59,6 +59,80 @@
   --sl-color-accent: var(--color-neutral-900);
 }
 
+/* Asides, badges, cards and notices: Starlight gives notes, tips, cautions,
+   dangers and successes hues of their own (blue, purple, orange, red, green).
+   Here each is a muted surface (core's --muted), a gray edge and strong text;
+   an aside's icon tells the kinds apart. [data-theme] outranks Starlight's
+   print stylesheet, which is unlayered. */
+:root[data-theme] {
+  --mono-surface: var(--sl-color-gray-6);
+  --sl-color-blue-low: var(--mono-surface);
+  --sl-color-blue: var(--sl-color-gray-3);
+  --sl-color-blue-high: var(--sl-color-white);
+  --sl-color-purple-low: var(--mono-surface);
+  --sl-color-purple: var(--sl-color-gray-3);
+  --sl-color-purple-high: var(--sl-color-white);
+  --sl-color-orange-low: var(--mono-surface);
+  --sl-color-orange: var(--sl-color-gray-3);
+  --sl-color-orange-high: var(--sl-color-white);
+  --sl-color-red-low: var(--mono-surface);
+  --sl-color-red: var(--sl-color-gray-3);
+  --sl-color-red-high: var(--sl-color-white);
+  --sl-color-green-low: var(--mono-surface);
+  --sl-color-green: var(--sl-color-gray-3);
+  --sl-color-green-high: var(--sl-color-white);
+}
+:root[data-theme='light'] {
+  --mono-surface: var(--sl-color-gray-7);
+}
+
+/* A caution or a danger keeps the strongest edge. */
+.starlight-aside--caution,
+.starlight-aside--danger {
+  --sl-color-asides-border: var(--sl-color-white);
+}
+
+/* The overlay behind search and the mobile menu (Starlight's is blue-gray):
+   neutral-900 and neutral-600, as literals because ::backdrop does not
+   inherit from :root in every browser. */
+:root,
+::backdrop {
+  --sl-color-backdrop-overlay: oklch(0.205 0 0 / 0.66);
+}
+:root[data-theme='light'],
+[data-theme='light'] ::backdrop {
+  --sl-color-backdrop-overlay: oklch(0.439 0 0 / 0.66);
+}
+
+/* Focus: a neutral ring where Starlight leaves the browser's own (blue in most
+   browsers), like core's. In the lowest layer, so a component that styles its
+   focus keeps it. */
+@layer base {
+  :focus-visible {
+    outline: 2px solid var(--sl-color-gray-3);
+  }
+}
+
+/* Printing forces light mode with Starlight's own palette (indigo accent,
+   blue-tinted grays); its print stylesheet is unlayered, so it outranks the
+   neutral mapping above. Restate the light mapping for print. */
+@media print {
+  :root[data-theme] {
+    --sl-color-white: var(--color-neutral-900);
+    --sl-color-gray-1: var(--color-neutral-800);
+    --sl-color-gray-2: var(--color-neutral-700);
+    --sl-color-gray-3: var(--color-neutral-500);
+    --sl-color-gray-4: var(--color-neutral-400);
+    --sl-color-gray-5: var(--color-neutral-300);
+    --sl-color-gray-6: var(--color-neutral-200);
+    --sl-color-gray-7: var(--color-neutral-100);
+    --sl-color-black: var(--color-white);
+    --sl-color-accent-low: var(--color-neutral-200);
+    --sl-color-accent: var(--color-neutral-900);
+    --sl-color-accent-high: var(--color-neutral-900);
+  }
+}
+
 /* --- Monochrome Mermaid diagrams -------------------------------------------
    Mermaid renders client-side with inline, id-scoped styles, so these rules
    need !important. They use Starlight's tokens (mapped to the neutral scale

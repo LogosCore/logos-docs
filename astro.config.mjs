@@ -3,6 +3,7 @@ import { defineConfig } from "astro/config";
 import starlight from "@astrojs/starlight";
 import mermaid from "astro-mermaid";
 import tailwindcss from "@tailwindcss/vite";
+import { codeThemes } from "./src/styles/code-theme.mjs";
 
 // Deployed to GitHub Pages at https://logos.github.io/logos-docs/
 export default defineConfig({
@@ -44,6 +45,21 @@ export default defineConfig({
         root: { label: "English", lang: "en" },
       },
       customCss: ["./src/styles/global.css"],
+      // Code blocks in grayscale (src/styles/code-theme.mjs). Their frames keep
+      // Starlight's UI colours, which global.css maps to neutral.
+      expressiveCode: {
+        themes: codeThemes,
+        useStarlightUiThemeColors: true,
+        styleOverrides: {
+          // Line markers (mark, ins, del) without a hue.
+          textMarkers: { defaultChroma: "0" },
+          // "Copied!": inverted, like core's primary buttons, not green.
+          frames: {
+            tooltipSuccessBackground: "var(--sl-color-white)",
+            tooltipSuccessForeground: "var(--sl-color-black)",
+          },
+        },
+      },
       components: {
         // Full-width content + floating "On this page" overlay instead of a TOC column.
         TwoColumnContent: "./src/overrides/TwoColumnContent.astro",
