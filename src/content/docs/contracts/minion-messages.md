@@ -91,6 +91,7 @@ bring several results and one reply several tasks.
 
 | `t` | In | Carries |
 |---|---|---|
+| `stage` | request | the minion's public key and a correlation id: its first message, see [Staging](#staging) |
 | `hello` | request | the host and process: sent at start, and when core asks |
 | `result` | request | one part of a task's output |
 | `task` | reply | a command to run, with its arguments |
@@ -101,8 +102,14 @@ bring several results and one reply several tasks.
 | `err` | both | a problem with an earlier message or item |
 
 ```cddl
-request-item = hello / result / chunk / ack / err
+request-item = stage / hello / result / chunk / ack / err
 reply-item   = task / cancel / rehello / chunk / ack / err
+
+stage = {
+  t: "stage",
+  key: bstr,            ; the minion's RSA public key, DER SubjectPublicKeyInfo
+  corr: bstr .size 16,  ; correlation id, random
+}
 
 hello = {
   t: "hello",
@@ -208,6 +215,23 @@ A reader also enforces limits before it trusts a length: nesting at most 16
 deep, at most 256 items in a message, no string or byte string longer than
 the bytes left.
 
+## Staging
+
+A minion's **first message** is its build id and a staging message:
+
+1. At start, the minion generates its own **RSA key pair**. The private key
+   never leaves the process.
+2. It picks a random 16-byte **correlation id** (CSPRNG).
+3. It sends a request whose only item is `stage`: the public key and the
+   correlation id. The build id travels with it as on every sync call, in
+   `Logos-Build-Id`.
+
+The request is sealed like any other, with the keys the build was made with,
+so only a minion of that build can stage.
+
+What core answers to `stage`, and what the minion's key pair is used for
+after it, are still open: see [Open questions](#open-questions).
+
 ## How an exchange goes
 
 ```mermaid
@@ -217,6 +241,12 @@ sequenceDiagram
     participant CH as Channel
     participant C as Core
 
+    M->>M: generate an RSA key pair and a correlation id
+    M->>CH: build id + sealed {items: [stage: public key, corr]}
+    CH->>C: sync
+    C->>C: open, record the minion's public key
+    C-->>CH: 200 sealed {re, …} (to define)
+    CH-->>M: reply
     M->>CH: sealed {items: [hello]}
     CH->>C: sync
     C->>C: open, check the id, record the host
@@ -319,6 +349,17 @@ or tag). A channel answers its client as for any failure (the HTTP channel's
   flow end to end, as BOB does for builds.
 
 ## Open questions
+
+- **Staging: core's answer.** What core sends back to `stage`, and what the
+  minion's RSA key pair is for from then on. One option: core answers with
+  fresh session keys encrypted to the minion's public key (RSA-OAEP), and
+  later messages are sealed with those instead of the build's keys, so a
+  build's baked-in keys open only staging messages.
+- **Staging: the correlation id.** What it ties together: core's answer to
+  `stage` echoing it, or later messages naming the session by it.
+- **Staging: key size and padding.** RSA-2048 or 3072; OAEP with SHA-256.
+- **Staging: when again.** Once per process start, or also when core asks
+  (for instance after core loses the minion's session).
 
 - **Files as task arguments.** Params exclude `file` today. A task that puts a
   file on the host (an `upload` command) would name a transfer that core
