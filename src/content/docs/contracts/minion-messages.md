@@ -429,9 +429,10 @@ temporary id after; core looks the keys up by either. A channel answers its clie
 - **Why the temporary id is a UUIDv4.** It takes the build id's place in the
   transport and in `Logos-Build-Id`, so channels and channel-core carry it
   without knowing staging exists.
-- **Why staging hands out new keys.** The keys baked into an artifact open
-  only its staging. Each staged minion then talks under keys that never
-  left core except encrypted to that process's own RSA key.
+- **Why staging hands out new keys.** Each staged minion talks under keys
+  that never left core except encrypted to that process's own RSA key, so the
+  keys baked into an artifact need to open no more than its staging (see the
+  open question on the build's keys after staging).
 - **Why two formats.** The directions differ in more than they share: only
   the minion starts, only replies answer, and only three item types go both
   ways. A schema per direction makes a request with `re` or a `task`, or a
