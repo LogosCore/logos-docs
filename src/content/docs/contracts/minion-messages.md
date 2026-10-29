@@ -94,6 +94,7 @@ bring several results and one reply several tasks.
 | `stage` | request | the minion's public key and a correlation id: its first message, see [Staging](#staging) |
 | `hello` | request | the host and process: sent at start, and when core asks |
 | `result` | request | one part of a task's output |
+| `stage_response` | reply | core's answer to `stage`: a temporary id, core's own public key encrypted to the minion's, and the correlation id |
 | `task` | reply | a command to run, with its arguments |
 | `cancel` | reply | stop a running task |
 | `rehello` | reply | send a `hello` |
@@ -103,12 +104,20 @@ bring several results and one reply several tasks.
 
 ```cddl
 request-item = stage / hello / result / chunk / ack / err
-reply-item   = task / cancel / rehello / chunk / ack / err
+reply-item   = stage_response / task / cancel / rehello / chunk / ack / err
 
 stage = {
   t: "stage",
   key: bstr,            ; the minion's RSA public key, DER SubjectPublicKeyInfo
   corr: bstr .size 16,  ; correlation id, random
+}
+
+stage_response = {
+  t: "stage_response",
+  tid: bstr .size 16,   ; temporary id, random, made by core
+  key: bstr,            ; core's own RSA public key (DER SubjectPublicKeyInfo),
+                        ;   encrypted with the minion's public key from stage
+  corr: bstr .size 16,  ; the correlation id from stage
 }
 
 hello = {
@@ -229,8 +238,18 @@ A minion's **first message** is its build id and a staging message:
 The request is sealed like any other, with the keys the build was made with,
 so only a minion of that build can stage.
 
-What core answers to `stage`, and what the minion's key pair is used for
-after it, are still open: see [Open questions](#open-questions).
+Core answers with a reply whose item is `stage_response`:
+
+4. Core generates its own **RSA key pair** for this minion.
+5. It picks a random 16-byte **temporary id**.
+6. It answers with the temporary id, its public key **encrypted with the
+   minion's public key**, and the minion's correlation id.
+
+The minion checks that the correlation id is the one it sent, and decrypts
+core's public key with its private key.
+
+What the temporary id and the two key pairs are used for after staging is
+still open: see [Open questions](#open-questions).
 
 ## How an exchange goes
 
@@ -245,8 +264,10 @@ sequenceDiagram
     M->>CH: build id + sealed {items: [stage: public key, corr]}
     CH->>C: sync
     C->>C: open, record the minion's public key
-    C-->>CH: 200 sealed {re, …} (to define)
+    C->>C: generate an RSA key pair and a temporary id
+    C-->>CH: 200 sealed {re, items: [stage_response: tid, core's key encrypted, corr]}
     CH-->>M: reply
+    M->>M: check corr, decrypt core's public key
     M->>CH: sealed {items: [hello]}
     CH->>C: sync
     C->>C: open, check the id, record the host
@@ -350,13 +371,15 @@ or tag). A channel answers its client as for any failure (the HTTP channel's
 
 ## Open questions
 
-- **Staging: core's answer.** What core sends back to `stage`, and what the
-  minion's RSA key pair is for from then on. One option: core answers with
-  fresh session keys encrypted to the minion's public key (RSA-OAEP), and
-  later messages are sealed with those instead of the build's keys, so a
-  build's baked-in keys open only staging messages.
-- **Staging: the correlation id.** What it ties together: core's answer to
-  `stage` echoing it, or later messages naming the session by it.
+- **Staging: encrypting core's public key.** One RSA-OAEP (SHA-256)
+  operation encrypts at most the key size minus 66 bytes: 190 bytes with
+  RSA-2048, 318 with RSA-3072. Core's public key in DER is about 294 or 422
+  bytes, so it does not fit in one. It needs hybrid encryption (RSA-OAEP
+  wraps a fresh AES key, the AES key encrypts core's public key) or several
+  RSA blocks.
+- **Staging: after it.** What the temporary id and the two key pairs are
+  for from then on: whether the temporary id replaces the build id in later
+  sync calls, and which keys seal later messages.
 - **Staging: key size and padding.** RSA-2048 or 3072; OAEP with SHA-256.
 - **Staging: when again.** Once per process start, or also when core asks
   (for instance after core loses the minion's session).
