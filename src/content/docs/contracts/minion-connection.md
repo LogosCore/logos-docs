@@ -77,7 +77,7 @@ and instances come and go.
 | `id` | The endpoint's id (a UUID). |
 | `operation_id` | The operation that owns it. |
 | `name` | What operators call it: any text on one line, at most 120 characters. Need not be unique. |
-| `slug` | The endpoint's identifier, unique within the operation (`^[a-z0-9][a-z0-9._-]{0,62}$`): what an export, a build's connection and a download's file name carry. Made from the name when not given (lowercased, other characters as `-`: "Edge EU (CDN)" is `edge-eu-cdn`), the next free one when that is taken; kept when the name changes. |
+| `slug` | The endpoint's identifier, unique within the operation (`^[a-z0-9][a-z0-9._-]{0,62}$`): what an export, a build's connection and a download's file name carry. Core makes it from the name (lowercased, other characters as `-`: "Edge EU (CDN)" is `edge-eu-cdn`), the next free one when that is taken, and makes it again when the name changes. The app never shows it; the API may set one. |
 | `description` | Optional, at most 500 characters: what the endpoint is for. Searched; never part of the export. |
 | `module_name` | The channel kind whose schema the values follow (e.g. `http`). |
 | `values` | By field key. A field without a value uses the schema's default. |
@@ -171,9 +171,9 @@ values and description, named `<name> (copy)`; it gets a slug of its own when
 saved.
 
 The endpoint form has **Form** and **JSON** tabs. The JSON tab edits the export's
-shape plus the `slug` and the `description` (its `name` is the endpoint's name
-there, any text), lists every field with its default, takes `null` to reset a
-field, and locks `format` and `channel`.
+shape plus the `description` (its `name` is the endpoint's name there, any
+text), lists every field with its default, takes `null` to reset a field, and
+locks `format` and `channel`.
 
 A minion that can speak several channel kinds gets an **ordered list** of
 connection settings and falls back through it. Every connection must be through
