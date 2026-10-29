@@ -93,6 +93,7 @@ bring several results and one reply several tasks.
 |---|---|---|
 | `stage` | request | the minion's public key and a correlation id: its first message, see [Staging](#staging) |
 | `hello` | request | the host and process: opens a session (see [Staging](#staging)), and again when core asks |
+| `get_tasks` | request | the minion takes new tasks, and how many at most: see [Asking for tasks](#asking-for-tasks) |
 | `result` | request | one part of a task's output |
 | `stage_response` | reply | core's answer to `stage`: a temporary id, new keys encrypted to the minion's public key, and the correlation id |
 | `hello_response` | reply | core's answer to `hello`: the session id |
@@ -104,13 +105,19 @@ bring several results and one reply several tasks.
 | `err` | both | a problem with an earlier message or item |
 
 ```cddl
-request-item = stage / hello / result / chunk / ack / err
+request-item = stage / hello / get_tasks / result / chunk / ack / err
 reply-item   = stage_response / hello_response / task / cancel / rehello / chunk / ack / err
 
 stage = {
   t: "stage",
   key: bstr,            ; the minion's RSA-2048 public key, DER SubjectPublicKeyInfo
   corr: bstr .size 16,  ; correlation id, random
+}
+
+get_tasks = {
+  t: "get_tasks",
+  ? max: uint,          ; at most this many tasks; absent: no limit of the
+                        ;   minion's. 0 is invalid.
 }
 
 stage_response = {
@@ -347,18 +354,18 @@ sequenceDiagram
     C-->>CH: 200 sealed {re, items: [stage_response: tid, keys encrypted, corr]}
     CH-->>M: reply
     M->>M: check corr, decrypt the new keys
-    M->>CH: temporary id + sealed with the new keys {items: [hello]}
+    M->>CH: temporary id + sealed with the new keys {items: [hello, get_tasks max 2]}
     CH->>C: sync
     C->>C: open with the temporary id's keys, create a session, record the host
     C-->>CH: 200 sealed {re, items: [hello_response: sid, task shell, task sleep]}
     CH-->>M: reply
     M->>M: run the tasks
-    M->>CH: session id + sealed {items: [ack tasks, result shell]}
+    M->>CH: session id + sealed {items: [ack tasks, result shell, get_tasks max 1]}
     CH->>C: sync
     C->>C: store the result, stop resending both tasks
-    C-->>CH: 200 sealed {re} (nothing new)
+    C-->>CH: 200 sealed {re} (no task waiting)
     CH-->>M: reply
-    M->>CH: session id + sealed {} (check-in)
+    M->>CH: session id + sealed {} (check-in, busy: no get_tasks)
     CH->>C: sync
     C-->>CH: 204 (nothing for the minion)
 ```
@@ -372,13 +379,37 @@ sequenceDiagram
 - **A minion counts its items as delivered only on a sealed reply with the
   matching `re`.** On a 404, a timeout or a 204 to a message with items, it
   sends them again in a later message, under a new `id`.
-- **Core resends a task** in every reply until the minion acks it or a result
-  for it arrives. The minion keeps the ids of the tasks it received in the
-  last 24 hours and runs each one once.
+- **Core sends tasks only when asked** (see [Asking for tasks](#asking-for-tasks)).
+  It sends a task again, when asked, until the minion acks it or a result for
+  it arrives. The minion keeps the ids of the tasks it received in the last 24
+  hours and runs each one once.
 - **Results are idempotent** by `(task, seq)`, chunks by `(xfer, off)`, acks
   and hellos as they are, so a resent item changes nothing.
 - A long task streams its output as results `seq` 0, 1, 2, …, the last with
   `done`. `cancel` asks the minion to stop it; it still sends a final result.
+
+### Asking for tasks
+
+How many tasks a minion runs at once is the build's business: some run one
+at a time, some many. So the minion asks.
+
+- **Core puts tasks in a reply only when its request has a `get_tasks` item**,
+  and never more than its `max`. Without `get_tasks` the minion gets no new
+  task, whatever else the request carries: a minion that is busy just leaves
+  it out.
+- **`get_tasks` can share a request** with results, acks, chunks or a
+  `hello`, so a minion that finishes a task sends the result and takes the
+  next task in one round trip.
+- **`max` absent** means no limit of the minion's: core sends what it has,
+  within the [limits](#limits) of one message, and the rest in later replies.
+  `max: 0` is invalid; a minion that wants nothing leaves `get_tasks` out.
+- **Tasks sent before and not yet acked come first** and count toward `max`.
+  If a reply with tasks was lost, the minion never got them, still has room
+  for them, and gets them on its next `get_tasks`.
+- **Only tasks wait for `get_tasks`.** `cancel`, `rehello`, acks, chunks,
+  `stage_response` and `hello_response` come whenever core has them, so a
+  minion busy with a long task can still be told to stop it.
+- **One `get_tasks` per request.** A second one is a `bad_message`.
 
 ### File transfers
 
@@ -426,7 +457,8 @@ Example sizes, CBOR plaintext → sealed → packed by the HTTP channel:
 
 | Message | CBOR | JSON, for comparison | On the wire |
 |---|---|---|---|
-| empty check-in | 24 B | 39 B | 99 B |
+| empty check-in (busy) | 24 B | 39 B | 99 B |
+| check-in asking for one task | 49 B | 75 B | 131 B |
 | `hello` | 181 B | 246 B | 259 B |
 | reply with two tasks | 165 B | 243 B | 243 B |
 | ack + one result with 17 bytes of output | 148 B | 237 B | 227 B |
