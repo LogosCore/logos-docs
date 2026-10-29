@@ -61,20 +61,23 @@ treats a reply it cannot open as no reply.
 ## Message
 
 The plaintext is one CBOR map, in [CDDL](https://www.rfc-editor.org/rfc/rfc8610).
-There are two formats, one per direction: the minion sends **requests** and
-core answers with **replies**. The frame's `dir` says which one to parse.
+There are two formats, one per direction: the **minion message** (minion →
+core) and the **core message** (core → minion). The frame's `dir` says which
+one to parse.
 
 ```cddl
-request = {             ; minion → core
+minion-message = {      ; minion → core
   v: 1,                 ; this format
-  id: msg-id,           ; random, unique per request
-  ? items: [* request-item],  ; absent or empty: nothing to say
+  ? id: msg-id,         ; when it starts an exchange
+  ? re: msg-id,         ; when it answers one
+  ? items: [* minion-item],  ; absent or empty: nothing to say
 }
 
-reply = {               ; core → minion
+core-message = {        ; core → minion
   v: 1,
-  re: msg-id,           ; the request this answers
-  ? items: [* reply-item],
+  ? id: msg-id,
+  ? re: msg-id,
+  ? items: [* core-item],
 }
 
 msg-id  = bstr .size 16
@@ -82,31 +85,41 @@ task-id = bstr .size 16
 xfer-id = bstr .size 16
 ```
 
-The minion picks a request's `id` at random (16 bytes from a CSPRNG). Core
-answers only requests, so every reply has `re` and needs no `id` of its own.
-A message carries any number of **items**, up to 256, so one check-in can
-bring several results and one reply several tasks.
+A message has **exactly one** of `id` and `re`. The side that starts an
+exchange picks an `id` at random (16 bytes from a CSPRNG); the answer carries
+it back as `re`. Who starts depends on the module in between:
+
+| Through | Starts the exchange | Its message has | The answer has |
+|---|---|---|---|
+| a channel (today) | the minion | `id` | `re` (core's message) |
+| a [dialer](../../module-types/#3-dialer-modules-planned) (planned) | core | `id` | `re` (the minion's message) |
+
+Items keep their direction whoever starts: tasks always go core → minion,
+results always minion → core. Below, **request** and **reply** mean the
+message that starts an exchange and its answer. A message carries any number
+of **items**, up to 256, so one check-in can bring several results and one
+reply several tasks.
 
 ### Items
 
-| `t` | In | Carries |
+| `t` | Sent by | Carries |
 |---|---|---|
-| `stage` | request | the minion's public key and a correlation id: its first message, see [Staging](#staging) |
-| `hello` | request | the host and process: opens a session (see [Staging](#staging)), and again when core asks |
-| `get_tasks` | request | the minion takes new tasks, and how many at most: see [Asking for tasks](#asking-for-tasks) |
-| `result` | request | one part of a task's output |
-| `stage_response` | reply | core's answer to `stage`: a temporary id, new keys encrypted to the minion's public key, and the correlation id |
-| `hello_response` | reply | core's answer to `hello`: the session id |
-| `task` | reply | a command to run, with its arguments |
-| `cancel` | reply | stop a running task |
-| `rehello` | reply | send a `hello` |
+| `stage` | minion | the minion's public key and a correlation id: its first message, see [Staging](#staging) |
+| `hello` | minion | the host and process: opens a session (see [Staging](#staging)), and again when core asks |
+| `get_tasks` | minion | the minion takes new tasks, and how many at most: see [Asking for tasks](#asking-for-tasks) |
+| `result` | minion | one part of a task's output |
+| `stage_response` | core | core's answer to `stage`: a temporary id, new keys encrypted to the minion's public key, and the correlation id |
+| `hello_response` | core | core's answer to `hello`: the session id |
+| `task` | core | a command to run, with its arguments |
+| `cancel` | core | stop a running task |
+| `rehello` | core | send a `hello` |
 | `chunk` | both | one piece of a file transfer |
 | `ack` | both | tasks received; transfer progress |
 | `err` | both | a problem with an earlier message or item |
 
 ```cddl
-request-item = stage / hello / get_tasks / result / chunk / ack / err
-reply-item   = stage_response / hello_response / task / cancel / rehello / chunk / ack / err
+minion-item = stage / hello / get_tasks / result / chunk / ack / err
+core-item   = stage_response / hello_response / task / cancel / rehello / chunk / ack / err
 
 stage = {
   t: "stage",
@@ -394,9 +407,12 @@ sequenceDiagram
     C-->>CH: 204 (nothing for the minion)
 ```
 
-- **The minion speaks first, always.** It sends a message every check-in
+This is the exchange through a **channel**, where the minion starts every
+exchange (a dialer's is an open question):
+
+- **The minion starts.** It sends a message every check-in
   (`checkin_interval` with `checkin_jitter`), or sooner when it has output.
-  Core can only answer.
+  Core answers.
 - **Core answers every message that carries items** with a sealed reply whose
   `re` is the request's `id`, even with no items of its own. Only an empty
   check-in, when core also has nothing, gets **204**.
@@ -450,16 +466,21 @@ Messages carry no time. Core stamps every message with its own receive time.
 
 - **Core** drops a message whose `id` it has seen in the last 24 hours
   (Redis, like the sync call's dedup) and answers 204.
-- **A reply is fresh** when its `re` is the `id` of a request the minion is
+- **A reply is fresh** when its `re` is the `id` of a request the sender is
   still waiting on. An old reply, replayed, matches nothing and is dropped.
 - **The direction byte** stops a frame from being turned around: both sides
-  share the keys, and a reply sent back to core as a request fails `dir`.
+  share the keys, and a core message sent back to core fails `dir`.
+- **A minion answering core's requests** (through a dialer) needs no replay
+  protection of its own: core does not require it. Without it, a captured
+  core message sent to the minion again opens fine and runs its tasks again;
+  a minion implementation may guard against that, for instance by
+  remembering recent `id`s.
 
 ## Errors
 
 | `code` | Sent by | Means |
 |---|---|---|
-| `bad_message` | both | the plaintext is not a valid request or reply. |
+| `bad_message` | both | the plaintext is not a valid minion or core message. |
 | `unknown_item` | both | an item type the receiver does not know (`item` says which). |
 | `unknown_task` | minion | a `cancel` or chunk for a task it does not have. |
 | `too_large` | both | a message or chunk over the limits below. |
@@ -507,6 +528,10 @@ tag). `Logos-Build-Id` carries the build id, a temporary id or a session id
 
 ## Open questions
 
+- **Exchanges through a dialer.** What a premade session looks like (a
+  session core creates ahead of time, under the build's own keys, so a minion
+  that only answers needs no staging), and how `get_tasks` and `hello` work
+  when core starts the exchange. See [Module Types](../../module-types/#3-dialer-modules-planned).
 - **Files as task arguments.** Params exclude `file` today. A task that puts a
   file on the host (an `upload` command) would name a transfer that core
   starts in the same reply.
@@ -542,12 +567,14 @@ tag). `Logos-Build-Id` carries the build id, a temporary id or a session id
   open a staged session's messages. A session that skipped staging uses the
   build's own keys, so anyone with the artifact can read it: skipping trades
   that protection for one round trip less and no RSA in the minion.
-- **Why two formats.** The directions differ in more than they share: only
-  the minion starts, only replies answer, and only three item types go both
-  ways. A schema per direction makes a request with `re` or a `task`, or a
-  reply without `re`, simply invalid, so a frame turned around fails to parse
-  even before `dir` is checked. A minion writes only requests and reads only
-  replies, so its codec covers half the items.
+- **Why two formats, by direction.** Only three item types go both ways, so
+  a schema per direction makes a minion message with a `task`, or a core
+  message with a `result`, simply invalid: a frame turned around fails to
+  parse even before `dir` is checked. A minion writes only minion messages
+  and reads only core messages, so its codec covers half the items. Who
+  starts an exchange is kept apart from direction (`id` or `re`), so the same
+  formats serve a channel, where the minion starts, and a dialer, where core
+  does.
 - **Why no time in messages.** Core's own clock is the only one it trusts,
   so it stamps messages as they arrive. The sync call is request and
   response, so a minion needs no clock either to know a reply is fresh: it

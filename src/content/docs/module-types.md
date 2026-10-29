@@ -115,39 +115,52 @@ Guidance for factories that implement them:
 ## 3) Dialer Modules (planned)
 
 An idea for later, not designed or built. A **dialer** is the opposite of a
-channel: a channel waits for minions to connect to it, a dialer connects to a
-minion that **listens** (on a TCP port, a named pipe, …) when core asks it to.
-It is a separate module type, `dialer`, next to `channel` and `factory`.
+channel: a channel waits for minions to reach it, a dialer reaches a minion
+that **only answers**, when core asks it to. The minion is a server: a page
+on a web server (a PHP script, say), an HTTP handler, a listener on a port.
+It keeps no connection and starts nothing. It is a separate module type,
+`dialer`, next to `channel` and `factory`.
 
 ### How it would work
 
-1. Core decides a listening minion should be contacted: an operator queued a
-   task for it, a schedule is due, or an operator asks to connect now.
-2. Core asks a dialer over the control plane (an RPC like management's,
-   e.g. `dialer.connect`) to connect to the minion's address.
-3. The dialer opens the connection. The minion sends the first message on it,
-   as it does to a channel: `stage`, `hello`, or `get_tasks` with its results
-   ([Minion Messages](../contracts/minion-messages/)).
-4. The dialer relays it to core like a channel does, with the
-   [sync call](../contracts/channel-core-sync/), and writes core's reply back.
-   It keeps the connection for further check-ins, or closes it.
+1. **A session exists before the first call.** A minion that only answers
+   cannot stage, so core creates its session ahead of time, when an operator
+   registers the minion's address: a premade session under the build's own
+   keys.
+2. Core decides to talk to the minion: an operator queued a task for it, a
+   schedule is due, or an operator asks now.
+3. Core seals a **core message** (tasks, or a request for its details) in
+   that session and asks a dialer over the control plane (an RPC like
+   management's, e.g. `dialer.call`) to deliver it.
+4. The dialer makes the call, for instance one HTTP request to the PHP page
+   carrying the sealed message, and gets the minion's answer back: a sealed
+   **minion message** with results.
+5. The dialer returns the answer to core, and keeps no state between calls.
 
-The messages between minion and core stay exactly as they are: core still
-only answers a minion's request, and the dialer, like a channel, never
-decrypts. What changes is who opens the connection, and that core decides
-when.
+The message formats are the same as through a channel
+([Minion Messages](../contracts/minion-messages/)); only who starts the
+exchange changes. Core's message carries an `id` and the minion's answer the
+matching `re`. Like a channel, a dialer never decrypts.
+
+Core does not require such a minion to protect itself from replays: a
+captured core message sent to it again would run its tasks again. A minion
+implementation may guard against that its own way, for instance by
+remembering recent message ids.
 
 ### To decide when it is designed
 
-- **The control-plane operation**: what core sends (the target, the build or
-  session id for logs, a deadline) and what the dialer answers (connected or
-  failed, and why).
-- **Target addresses**: a listening minion has no channel endpoint to reach.
-  A dialer declares what its targets look like (host and port, a pipe name),
-  the way a channel declares its connection schema; operators enter them per
-  minion, or core takes them from the minion's `hello` addresses.
-- **When core asks**: on a new task, on a schedule, on demand, and what it
-  does when a connection fails.
+- **The premade session**: how core creates it, under which id, and how the
+  minion's details (its `hello`) reach core when core starts the exchange.
+- **The control-plane operation**: what core sends (the sealed message, the
+  target, a deadline) and what the dialer answers (the minion's sealed
+  message, or why the call failed).
+- **Target addresses**: a dialer declares what its targets look like (a URL,
+  host and port), the way a channel declares its connection schema;
+  operators enter them per minion.
+- **Long tasks**: a stateless minion answers within one call; a task that
+  runs longer leaves its results for a later call.
+- **When core calls**: on a new task, on a schedule, on demand, and what it
+  does when a call fails.
 - **The pieces it would bring**: `module_type: "dialer"`, its RPC exchange
   `logos.dialer.rpc`, an SDK `logos-golang-dialer-core` beside channel-core
   and factory-core, and a "Dialers" section in these docs.
