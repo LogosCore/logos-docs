@@ -112,6 +112,46 @@ Guidance for factories that implement them:
 - Declare the commands its minions can be built with (the build schema's
   `commands`); operators pick each build's, and the minion has those.
 
+## 3) Dialer Modules (planned)
+
+An idea for later, not designed or built. A **dialer** is the opposite of a
+channel: a channel waits for minions to connect to it, a dialer connects to a
+minion that **listens** (on a TCP port, a named pipe, …) when core asks it to.
+It is a separate module type, `dialer`, next to `channel` and `factory`.
+
+### How it would work
+
+1. Core decides a listening minion should be contacted: an operator queued a
+   task for it, a schedule is due, or an operator asks to connect now.
+2. Core asks a dialer over the control plane (an RPC like management's,
+   e.g. `dialer.connect`) to connect to the minion's address.
+3. The dialer opens the connection. The minion sends the first message on it,
+   as it does to a channel: `stage`, `hello`, or `get_tasks` with its results
+   ([Minion Messages](../contracts/minion-messages/)).
+4. The dialer relays it to core like a channel does, with the
+   [sync call](../contracts/channel-core-sync/), and writes core's reply back.
+   It keeps the connection for further check-ins, or closes it.
+
+The messages between minion and core stay exactly as they are: core still
+only answers a minion's request, and the dialer, like a channel, never
+decrypts. What changes is who opens the connection, and that core decides
+when.
+
+### To decide when it is designed
+
+- **The control-plane operation**: what core sends (the target, the build or
+  session id for logs, a deadline) and what the dialer answers (connected or
+  failed, and why).
+- **Target addresses**: a listening minion has no channel endpoint to reach.
+  A dialer declares what its targets look like (host and port, a pipe name),
+  the way a channel declares its connection schema; operators enter them per
+  minion, or core takes them from the minion's `hello` addresses.
+- **When core asks**: on a new task, on a schedule, on demand, and what it
+  does when a connection fails.
+- **The pieces it would bring**: `module_type: "dialer"`, its RPC exchange
+  `logos.dialer.rpc`, an SDK `logos-golang-dialer-core` beside channel-core
+  and factory-core, and a "Dialers" section in these docs.
+
 ## Cross-Cutting Module Requirements
 
 All module types should:
