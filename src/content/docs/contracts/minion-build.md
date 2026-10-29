@@ -600,8 +600,9 @@ for (its description), the factory kind, instance and version,
 its commands, the connection settings as copied with the operators'
 descriptions of them, the factory's plan and step reports, the state, who
 cancelled it, and the result: artifact, warnings and log, or the error. It
-also keeps the minion's payload crypto suite and keys, never shown and sent
-only to the factory building it.
+also keeps the minion's payload crypto suite and keys: sent to the factory
+building it, and shown to operators under `crypto` in the build's JSON. A new
+build pasted from that JSON ignores them and gets keys of its own.
 
 A successful build creates the **minion**: identified by `minion_id`, with its
 factory kind, target, platform, who built it, and its build's commands as what
