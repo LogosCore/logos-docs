@@ -169,6 +169,8 @@ hello = {
   ? addrs: [* tstr],    ; local IP addresses
   ? version: tstr,      ; the minion implementation's own version
   ? x: { * tstr => any },  ; the factory's own extras
+  ? sid: bstr .size 16, ; the persisted session the build claims: see
+                        ;   Persisted sessions
 }
 
 task = {
@@ -367,7 +369,37 @@ several processes, on one host or several, and each one stages on its own.
 
 **Every message after that** is sent under the session id and sealed with the
 session's keys, for as long as the process runs. A new process of the build
-starts over.
+starts over, with a new session, unless its build has a persisted session.
+
+### Persisted sessions
+
+A minion whose host reboots starts again, and would open a new session each
+time. An operator who wants it back in the same session builds it **with a
+persisted session**: from an existing session, a new build of the same kind
+that names that session. Factories that support it say so in their [build
+schema](../minion-build/#the-build-schema) (`persisted_sessions`); core
+gives the factory the session id in the build request (`session_id`), and
+the factory builds it into the minion. One persisted session per build.
+
+- The minion stages as always, then **claims** the session: its `hello`
+  carries `sid`, the persisted session's id.
+- Core honours the claim when the message is from the build that names the
+  session (sent under that build's temporary id, or straight under its build
+  id), and the session is open. The session then **takes the claim's keys**
+  (the new ones from the stage, or the build's own) and the `hello`'s host
+  and process; core answers `hello_response` with the claimed `sid`, and
+  records the restart on the session. No session keys are built in: only the
+  build's own, as always.
+- A claim core does not honour (the session closed, of another build, or
+  unknown) **opens a new session** instead, as a `hello` without `sid` does:
+  the minion works, and `hello_response` says which session it got.
+- **One holder at a time; the newest claim wins.** The process that held the
+  session before (the session's original process, or another copy of the
+  build) still opens its next message, with the keys it has: core keeps a
+  session's replaced keys for 30 days, like a tombstone. It answers, sealed,
+  `err` `session_replaced`. That process starts over **without claiming**,
+  and carries on in a session of its own: two copies of a build never take
+  the session from each other in turn.
 
 ### Session lifetime
 
@@ -397,6 +429,7 @@ minion keeps its session through everything but a word from core:
 | no reply, a timeout, a refused connection | the channel cannot be reached | keeps the session, and checks in on its schedule |
 | any failure from the channel (the HTTP channel's 404) | something went wrong on the way: core down or failing, the channel not registered, a message core did not accept | keeps the session |
 | a sealed reply with `err` `session_closed` | core closed the session | starts over |
+| a sealed reply with `err` `session_replaced` | another process claimed the persisted session | starts over, without claiming |
 | a sealed reply with another `err` | core opened the message and refuses something in it | keeps the session, and logs it |
 | a sealed reply | all is well | carries on |
 
@@ -532,10 +565,12 @@ Messages carry no time. Core stamps every message with its own receive time.
 | `unknown_task` | minion | a `cancel` or chunk for a task it does not have. |
 | `too_large` | both | a message or chunk over the limits below. |
 | `session_closed` | core | the session the message was sent under is closed (see [Session lifetime](#session-lifetime)): start over. |
+| `session_replaced` | core | another process claimed the persisted session (see [Persisted sessions](#persisted-sessions)): start over without claiming it. |
 
 A frame that fails to open gets no `err`: the receiver cannot tell who sent it.
-A minion acts on `session_closed` alone; other codes are about the message or
-an item in it, and the session goes on (see [When an exchange fails](#when-an-exchange-fails)).
+A minion acts on `session_closed` and `session_replaced` alone; other codes
+are about the message or an item in it, and the session goes on (see [When
+an exchange fails](#when-an-exchange-fails)).
 
 ## Limits
 
@@ -547,6 +582,7 @@ an item in it, and the session goes on (see [When an exchange fails](#when-an-ex
 | Nesting | 16 levels |
 | Core's replay memory | message ids, 24 hours |
 | A closed session's tombstone | 30 days |
+| A persisted session's replaced keys | 30 days, the last 4 |
 | A minion's backstop | 24 hours of failed exchanges, then it starts over |
 | Task ids a minion remembers | the last 24 hours |
 

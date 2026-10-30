@@ -125,6 +125,7 @@ Declared in `module.register` under `build`:
 | `fields[]` | Build parameters shared by every target. Field specs as in a [management manifest](../module-management/#fields), plus the [types below](#field-types-for-builds). |
 | `targets[]` | What the factory can produce, at least one. |
 | `commands[]` | Optional. What the minions can do. Operators pick each build's [commands](#commands) from its target's. |
+| `persisted_sessions` | Optional, `false` by default. The minions can claim a persisted session: built with a `session_id`, they claim it in their `hello` (see [Persisted sessions](../minion-messages/#persisted-sessions)). Operators can build such a minion from a session only for a factory that says so. |
 
 A target:
 
@@ -417,6 +418,7 @@ Request `payload`:
 | `files` | The files the values name (connection parameter values included), by id, as in [Build files](#build-files). |
 | `connections` | The [connections](#connections), in the order the minion tries them: each one's settings as an endpoint [export](../minion-connection/#the-export) under `endpoint` (its `name`, channel kind, schema version, and `params` with defaults filled in), and its [connection parameter](#connection-parameters) `values`, defaults filled in. |
 | `crypto` | Present when the factory declares `crypto`: its `suite` and the minion's key `material`, fresh for every build. For `aes-256-cbc-hmac-sha256`: `enc_key`, the AES-256 key, and `mac_key`, the HMAC-SHA256 key, 32 random bytes each in base64. The factory puts them in the artifact and keeps them nowhere else. |
+| `session_id` | Present for a build with a persisted session (only to a factory that declares `persisted_sessions`): the session the minion claims in its `hello`, a lowercase UUID. The factory builds it in. |
 | `artifact` | Where to upload the artifact: `upload_url`, a presigned URL to `PUT` it to, valid until a minute past the deadline, and `max_size`, the largest artifact the factory may upload (a core setting, default 256 MiB). factory-core refuses to upload a larger one (`artifact_too_large`). A presigned upload cannot be capped, so core holds the factory to it by its result: see [`factory.build.result`](#factorybuildresult). |
 | `deadline` | When core stops waiting: the build timeout after the offer. |
 | `actor` | Who started the build, for the factory's own logs. |
