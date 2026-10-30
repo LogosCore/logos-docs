@@ -369,18 +369,52 @@ starts over.
 
 ### Session lifetime
 
-- A session lives **one day** waiting for its **first check-in**, the first
-  request under the session id. A session nobody checks in to within the day
-  is removed.
+- A session waits **one day** for its **first check-in**, the first request
+  under the session id. A session nobody checks in to within the day is
+  **closed**.
 - After its first check-in, a session lives **as long as core keeps it**: it
   does not expire.
-- **The build is responsible for starting over.** When staging or the hello
-  fails (no reply, a 404, an `err`), the process starts again from the
-  beginning: a new key pair, a new correlation id, a new `stage` (or a new
-  `hello` under the build id).
+- Core **closes** a session that expired waiting, and every session of an
+  operation that is deleted (later, also one an operator closes). A closed
+  session is gone from the operation, but core keeps its id and keys for
+  **30 days** (a **tombstone**): a message under it still opens, and core
+  answers with a sealed `err`, `session_closed`. After the 30 days core
+  forgets it, and its messages no longer open.
 - **`rehello`** works under a session: the minion sends a `hello` under its
   session id, core records the new host details, and answers
   `hello_response` with the same session id.
+
+### When an exchange fails
+
+A session's keys live only in the process that staged it, so starting over
+never mends a failure on the way; it only leaves a dead session behind. The
+minion keeps its session through everything but a word from core:
+
+| The minion gets | It means | The minion |
+|---|---|---|
+| no reply, a timeout, a refused connection | the channel cannot be reached | keeps the session, and checks in on its schedule |
+| any failure from the channel (the HTTP channel's 404) | something went wrong on the way: core down or failing, the channel not registered, a message core did not accept | keeps the session |
+| a sealed reply with `err` `session_closed` | core closed the session | starts over |
+| a sealed reply with another `err` | core opened the message and refuses something in it | keeps the session, and logs it |
+| a sealed reply | all is well | carries on |
+
+**The channel never says why.** A message core does not open (an id it does
+not know, a frame that fails its checks), a replayed message (see
+[Freshness and replay](#freshness-and-replay)), and every trouble between
+the channel and core look the same to the client: for the HTTP channel, a
+404, as for any request that is not a minion message at all. Whoever probes
+a channel, with garbage, random ids or a captured message sent again,
+learns nothing from the answers. What core has to tell a minion it tells
+inside a sealed reply, which only the minion can open and nobody can forge.
+
+**The backstop.** Core can say nothing about a session it no longer knows:
+one forgotten after its 30 days, or lost with core's data. So a minion
+whose exchanges have **all failed for 24 hours** starts over on its own.
+
+**Starting over** is staging again from the beginning: a new key pair, a new
+correlation id, a new `stage` (or a new `hello` under the build id). A
+failed stage or hello is tried again on the minion's schedule, with a new
+key pair each time.
 
 ## How an exchange goes
 
@@ -472,8 +506,11 @@ receiver checks.
 
 Messages carry no time. Core stamps every message with its own receive time.
 
-- **Core** drops a message whose `id` it has seen in the last 24 hours
-  (Redis, like the sync call's dedup) and answers 204.
+- **Core** refuses a message whose `id` it has seen in the last 24 hours
+  (Redis, like the sync call's dedup): the sync call answers **409**, and the
+  channel answers its client as for any failure (the HTTP channel's 404). A
+  minion never sends an `id` twice, so only a captured message sent again
+  meets this, and it learns nothing: it gets what garbage gets.
 - **A reply is fresh** when its `re` is the `id` of a request the sender is
   still waiting on. An old reply, replayed, matches nothing and is dropped.
 - **The direction byte** stops a frame from being turned around: both sides
@@ -492,8 +529,11 @@ Messages carry no time. Core stamps every message with its own receive time.
 | `unknown_item` | both | an item type the receiver does not know (`item` says which). |
 | `unknown_task` | minion | a `cancel` or chunk for a task it does not have. |
 | `too_large` | both | a message or chunk over the limits below. |
+| `session_closed` | core | the session the message was sent under is closed (see [Session lifetime](#session-lifetime)): start over. |
 
 A frame that fails to open gets no `err`: the receiver cannot tell who sent it.
+A minion acts on `session_closed` alone; other codes are about the message or
+an item in it, and the session goes on (see [When an exchange fails](#when-an-exchange-fails)).
 
 ## Limits
 
@@ -504,6 +544,8 @@ A frame that fails to open gets no `err`: the receiver cannot tell who sent it.
 | Items per message | 256 |
 | Nesting | 16 levels |
 | Core's replay memory | message ids, 24 hours |
+| A closed session's tombstone | 30 days |
+| A minion's backstop | 24 hours of failed exchanges, then it starts over |
 | Task ids a minion remembers | the last 24 hours |
 
 Example sizes, CBOR plaintext → sealed → packed by the HTTP channel:
@@ -518,11 +560,12 @@ Example sizes, CBOR plaintext → sealed → packed by the HTTP channel:
 
 ## Sync call
 
-One change to the [sync call](../channel-core-sync/): core answers **422**
+Two changes to the [sync call](../channel-core-sync/): core answers **422**
 when the ciphertext does not open (no keys for that id, or a bad frame or
-tag). `Logos-Build-Id` carries the build id, a temporary id or a session id
-(see [Staging](#staging)); core looks the keys up by any of them. A channel answers its client as for any failure (the HTTP channel's
-404), and logs it as the client's fault, not a core error.
+tag), and **409** for a message whose `id` it has seen (a replay). `Logos-Build-Id` carries the build id, a temporary id or a session id
+(see [Staging](#staging)); core looks the keys up by any of them. For both,
+a channel answers its client as for any failure (the HTTP channel's 404),
+and logs it as the client's fault, not a core error.
 
 ## To build
 

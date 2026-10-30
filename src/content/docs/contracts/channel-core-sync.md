@@ -60,8 +60,14 @@ In this order, so core reads no body for a request it will refuse:
    body → **400**.
 4. **Idempotency** — `Logos-Message-Id` is deduped via `SetNX` with a 24-hour
    window. A replay of an already-seen id gets the same no-op answer (**204**),
-   not an error. The dedup fails open: with the cache disabled or failing,
-   every message is processed.
+   not an error: a channel retrying a request it is unsure of. The dedup
+   fails open: with the cache disabled or failing, every message is
+   processed.
+5. **The minion's message** — core opens the ciphertext ([Minion
+   Messages](../minion-messages/)). One it cannot open → **422**; one whose
+   own message id core has seen (a captured message sent again) → **409**.
+   A channel answers its client for both as for any failure, so a stranger
+   learns nothing from them.
 
 ## Response
 
@@ -80,8 +86,10 @@ Logos-Build-Id: 550e8400-…
 | **204** | Nothing for the minion. |
 | **400** | A header missing or malformed, or an empty body. |
 | **403** | `Logos-Channel-Instance` is not a registered instance. |
+| **409** | The minion's message was seen before: a replay. |
 | **413** | The body is over the size limit. |
 | **415** | The body is not `application/octet-stream`. |
+| **422** | The minion's message does not open. |
 | **503** | The registration gate is unavailable (fails closed). |
 
 Both success replies carry `Logos-Message-Id` (core's own, a UUIDv4) and
