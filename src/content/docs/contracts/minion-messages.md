@@ -16,7 +16,9 @@ its jitter, keeps its session through failures on the way and starts over
 on `session_closed` or after 24 hours of failures; core keeps closed
 sessions as 30-day tombstones and refuses replays with 409; [persisted
 sessions](#persisted-sessions): built from a session in the Sessions page,
-claimed in the hello, `session_replaced` to the earlier holder). No tasks wait yet, so a
+claimed in the hello, `session_replaced` to the earlier holder; [late
+sessions](#late-sessions): the hello's `sleep`, `sleep_update`, `late_at`,
+Last seen colored and filtered by it). No tasks wait yet, so a
 `get_tasks` gets nothing back; under a session core answers any other item
 with `unknown_item`: tasks, results, chunks and acks are not built yet.
 :::
