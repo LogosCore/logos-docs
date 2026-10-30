@@ -488,12 +488,19 @@ schedule the minion says it keeps:
   **`late_at`**: the last check-in (the hello's time before the first) plus
   the interval stretched by its jitter, plus a grace of 30 seconds for slow
   networks. A session is **late** once the time is past `late_at`.
-- A session whose minion never said its schedule has no `late_at`: core does
-  not guess.
+- With it core sets **`lost_at`**: the last check-in plus three intervals
+  stretched by their jitter, plus the same grace. A session is **lost** once
+  the time is past `lost_at`: three check-ins missed. A minion that sleeps
+  an hour is lost after about three hours, one that checks in every second
+  after about half a minute.
+- A session whose minion never said its schedule has neither: core does not
+  guess.
 
-Operators see it in the Sessions page: "Last seen" is green while a
-session is on time and yellow once it is late, and its filter keeps live or
-late sessions.
+Late and lost only describe a session: it stays open, nothing is sent to
+its minion, and a lost minion that checks in again is on time at once.
+Operators see it in the Sessions page: "Last seen" is green while a session
+is on time, yellow once it is late, red once it is lost, and its filter
+keeps on-time, late (not lost yet) or lost sessions.
 
 ## How an exchange goes
 
