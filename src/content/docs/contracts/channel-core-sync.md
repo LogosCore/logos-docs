@@ -25,6 +25,7 @@ Content-Length: 1048698
 Logos-Message-Id: c4ca4238-a0b9-4382-8dcc-509a6f75849b
 Logos-Build-Id: 550e8400-e29b-41d4-a716-446655440000
 Logos-Channel-Instance: http-main
+Logos-Peer-Address: 203.0.113.7
 traceparent: 00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01
 
 <ciphertext bytes>
@@ -37,6 +38,7 @@ traceparent: 00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01
 | `Logos-Message-Id` | yes | Unique per request, a UUIDv4. Core dedups on it. |
 | `Logos-Build-Id` | yes | The id of the build that made the minion, as a lowercase UUID. |
 | `Logos-Channel-Instance` | yes | The sending channel's registered instance id, for the registration gate. |
+| `Logos-Peer-Address` | no | The IP address the channel got the message from, when its transport has one: the minion's host as the channel's network sees it (its NAT's outside address, say), or the client a proxy the channel trusts forwarded for. The channel's observation, not the minion's claim. Core keeps it as the session's external address, with the history of every one it was seen from; anything that is not an IP address is ignored. |
 | `traceparent` | no | [W3C Trace Context](https://www.w3.org/TR/trace-context/). Core returns it on the reply; an invalid one is ignored. |
 
 Header names are case-insensitive, as in all of HTTP.
