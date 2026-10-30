@@ -119,6 +119,7 @@ reply several tasks.
 | `stage` | minion | the minion's public key and a correlation id: its first message, see [Staging](#staging) |
 | `hello` | minion | the host and process: opens a session (see [Staging](#staging)), and again when core asks |
 | `get_tasks` | minion | the minion takes new tasks, and how many at most: see [Asking for tasks](#asking-for-tasks) |
+| `sleep_update` | minion | the minion's check-in schedule changed: see [Late sessions](#late-sessions) |
 | `result` | minion | one part of a task's output |
 | `stage_response` | core | core's answer to `stage`: a temporary id, new keys encrypted to the minion's public key, and the correlation id |
 | `hello_response` | core | core's answer to `hello`: the session id |
@@ -130,7 +131,7 @@ reply several tasks.
 | `err` | both | a problem with an earlier message or item |
 
 ```cddl
-minion-item = stage / hello / get_tasks / result / chunk / ack / err
+minion-item = stage / hello / get_tasks / sleep_update / result / chunk / ack / err
 core-item   = stage_response / hello_response / task / cancel / rehello / chunk / ack / err
 
 stage = {
@@ -138,6 +139,13 @@ stage = {
   key: bstr,            ; the minion's RSA-2048 public key, DER SubjectPublicKeyInfo
   corr: bstr .size 16,  ; correlation id, random
 }
+
+sleep = (
+  interval: uint,       ; milliseconds between check-ins
+  jitter: uint,         ; spread either way, percent of interval, 0 to 100
+)
+
+sleep_update = { t: "sleep_update", sleep }
 
 get_tasks = {
   t: "get_tasks",
@@ -173,6 +181,8 @@ hello = {
   ? x: { * tstr => any },  ; the factory's own extras
   ? sid: bstr .size 16, ; the persisted session the build claims: see
                         ;   Persisted sessions
+  ? sleep: { sleep },   ; the check-in schedule it starts with: see
+                        ;   Late sessions
 }
 
 task = {
@@ -462,6 +472,26 @@ whose exchanges have **all failed for 24 hours** starts over on its own.
 correlation id, a new `stage` (or a new `hello` under the build id). A
 failed stage or hello is tried again on the minion's schedule, with a new
 key pair each time.
+
+### Late sessions
+
+Core marks a session **late** when it has missed a check-in, by the
+schedule the minion says it keeps:
+
+- The minion says its schedule in its `hello` (`sleep`: the interval between
+  check-ins, in milliseconds, and the jitter, in percent of it either way),
+  and again with a `sleep_update` item, in any message, whenever it changes
+  (a task that changes how long it sleeps, say). A rehello may carry it too.
+- On every check-in, and on every schedule, core sets the session's
+  **`late_at`**: the last check-in (the hello's time before the first) plus
+  the interval stretched by its jitter, plus a grace of 30 seconds for slow
+  networks. A session is **late** once the time is past `late_at`.
+- A session whose minion never said its schedule has no `late_at`: core does
+  not guess.
+
+Operators see it in the Sessions page: "Last seen" is green while a
+session is on time and yellow once it is late, and its filter keeps live or
+late sessions.
 
 ## How an exchange goes
 
