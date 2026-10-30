@@ -18,9 +18,13 @@ sessions as 30-day tombstones and refuses replays with 409; [persisted
 sessions](#persisted-sessions): built from a session in the Sessions page,
 claimed in the hello, `session_replaced` to the earlier holder; [late
 sessions](#late-sessions): the hello's `sleep`, `sleep_update`, `late_at`,
-Last seen colored and filtered by it). No tasks wait yet, so a
-`get_tasks` gets nothing back; under a session core answers any other item
-with `unknown_item`: tasks, results, chunks and acks are not built yet.
+Last seen colored and filtered by it; tasks: `task`, `result`, `cancel` and
+`ack` for tasks, operators giving commands from a session's console, core
+queueing them, sending them on `get_tasks` until acked, keeping each result
+part once and in order, and a cancel with every reply until the task ends;
+BOB's minion runs `hello`, `ls`, `shell`, `sleep` and `exit`). File
+transfers (`chunk`, `ack` with `xfer`) are not built yet: core answers a
+chunk with `unknown_item`.
 :::
 
 A minion and core talk in **messages**. The [sync call](../channel-core-sync/)
@@ -251,7 +255,8 @@ A `result` carries what a person reads in `out` and what a program reads in
   `ls` entries or `ps` processes. Core does not check it: a factory handler
   may preprocess it later. Each part's `data` **adds rows** to the earlier
   parts': a key holding an array gets the new elements appended, any other key
-  takes the latest value.
+  takes the latest value. Output too big for one message (an `ls` of a large
+  directory) goes in parts, each of which fits one.
 - **`ok`** says whether the minion did what the task asked. **`exit`** says
   what the process it ran reported, so a program that exits with 1 is still
   `ok: true`, and a command the minion could not start is `ok: false` with no
@@ -631,6 +636,7 @@ an exchange fails](#when-an-exchange-fails)).
 | Message (plaintext) | at most 768 KiB, so a sealed and packed message fits the HTTP channel's 1 MiB default `max_body_bytes` |
 | Chunk data | at most 512 KiB |
 | Items per message | 256 |
+| Elements of an array or map inside an item (a result's `data`) | 65 536 |
 | Nesting | 16 levels |
 | Core's replay memory | message ids, 24 hours |
 | A closed session's tombstone | 30 days |
@@ -663,7 +669,9 @@ and logs it as the client's fault, not a core error.
   with the rules and limits above (`fxamacker/cbor`).
 - **Core**: open each sync, check freshness, store hellos and results, queue
   tasks per minion and resend them until acked, run transfers, seal replies.
-  How operators create tasks and read results is a separate design.
+  Operators give tasks from a session's console in the Sessions page (a work
+  pane tab per session) and read what came back there; core keeps each task
+  and its result parts, at most 4 MiB of output per task.
 - **A reference minion**: a small Go one, for core's tests and to work the
   flow end to end, as BOB does for builds.
 
