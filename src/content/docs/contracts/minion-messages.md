@@ -12,7 +12,9 @@ call's 200 and 422, sessions opened under a temporary id or straight under the
 build id, check-ins, `rehello` and `get_tasks` under a session id, the
 operation's live Sessions page; BOB's minion stages, says hello, then checks
 in with `get_tasks` (max 1) every check-in interval of its connection, with
-its jitter, and starts over when anything fails). No tasks wait yet, so a
+its jitter, keeps its session through failures on the way and starts over
+on `session_closed` or after 24 hours of failures; core keeps closed
+sessions as 30-day tombstones and refuses replays with 409). No tasks wait yet, so a
 `get_tasks` gets nothing back; under a session core answers any other item
 with `unknown_item`: tasks, results, chunks and acks are not built yet.
 :::
