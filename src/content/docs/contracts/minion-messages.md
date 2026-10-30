@@ -176,7 +176,8 @@ hello = {
   ? host: tstr,         ; the hostname
   ? user: tstr,         ; exactly as the OS reports it, e.g. "CORP\\svc_backup"
   ? domain: tstr,       ; the host's Windows domain or workgroup
-  ? proc: tstr,         ; the process image
+  ? proc: tstr,         ; the process's name: its image's file name,
+                        ;   "svchost.exe", not a path
   ? integrity: "low" / "medium" / "high" / "system" / "root" / "user",
   ? addrs: [* tstr],    ; local IP addresses
   ? version: tstr,      ; the minion implementation's own version
