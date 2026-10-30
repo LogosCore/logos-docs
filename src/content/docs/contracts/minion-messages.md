@@ -377,11 +377,21 @@ starts over, with a new session, unless its build has a persisted session.
 
 A minion whose host reboots starts again, and would open a new session each
 time. An operator who wants it back in the same session builds it **with a
-persisted session**: from an existing session, a new build of the same kind
-that names that session. Factories that support it say so in their [build
+persisted session**. Factories that support it say so in their [build
 schema](../minion-build/#the-build-schema) (`persisted_sessions`); core
 gives the factory the session id in the build request (`session_id`), and
-the factory builds it into the minion. One persisted session per build.
+the factory builds it into the minion. One persisted session per build,
+chosen when the build is made and fixed after:
+
+- **A new persisted session.** Core **reserves** a session id with the
+  build. A reserved session has no keys, host or number yet and is not in
+  the operation's sessions; the minion's first `hello` claims it, and it
+  opens there like any session (that first claim is no restart). A
+  reservation does not expire: a build may be deployed weeks later. It goes
+  with its build, or its operation, while unclaimed.
+- **An existing session**: "Build with persisted session" on a session, or
+  "Build again" from a build that persists one, keeping it. The new build's
+  minion takes the session over when it starts, replacing the process there.
 
 - The minion stages as always, then **claims** the session: its `hello`
   carries `sid`, the persisted session's id.
