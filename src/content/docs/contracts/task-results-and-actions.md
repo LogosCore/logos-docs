@@ -287,8 +287,9 @@ The web app shows a listing as a file browser:
   with those three; the button by the crumbs uses the session's first
   `upload_file` command. With [`upload_stream`](#upload_stream) commands
   too, Upload here is a submenu: the session's `upload_file` and
-  `upload_stream` commands, each its own dialog; a stream's has a **via
-  curl** switch.
+  `upload_stream` commands, each its own dialog. A stream's file may be
+  picked (it goes from the browser), or not: it goes with curl, and the
+  path must name the file.
 - Up, a crumb, and an entry's **List directory** (on a `dir` entry or a
   `link`, which may lead to one) run [`list_dir`](#list_dir) on that
   folder, as [Running an action](#running-an-action) says. Without a
@@ -464,8 +465,8 @@ Puts a file of any size on the host, streamed from its uploader through
 core, with nothing kept.
 
 - **Core gives** `path` (a `string`, as for
-  [`upload_file`](#upload_file)), `stream` (a `stream`: the file's name)
-  and `overwrite` (a `bool`).
+  [`upload_file`](#upload_file)), `stream` (a `stream`: the file's name;
+  without one, the path's last part names it) and `overwrite` (a `bool`).
 - **Needs result** `file_upload`.
 - The command's minion gets the file [streamed from
   core](../minion-messages/#streaming-a-file-to-a-minion), writes it to a
@@ -489,7 +490,7 @@ core, with nothing kept.
 
 From the console the browser sends the picked file in parts of 8 MiB, one
 after the other, and after a failure goes on from core's offset by itself.
-With **via curl** the view gives `curl -T <file> '<link>'`; after a drop,
+With none picked, the view gives `curl -T <file> '<link>'`; after a drop,
 **Resume** gives `curl -C <offset> -T <file> '<link>'` with core's offset
 filled in. (curl's `-C -` finds the offset for downloads only.)
 

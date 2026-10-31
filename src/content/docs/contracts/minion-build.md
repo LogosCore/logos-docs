@@ -210,9 +210,13 @@ A command's `params` may instead take a `stream`: the file's name, a
 `string`. The minion gets the file [streamed from
 core](../minion-messages/#streaming-a-file-to-a-minion) as its uploader
 sends it, of any size, nothing kept (see
-[`upload_stream`](../task-results-and-actions/#upload_stream)). In the
-command form it is a file picker with a **via curl** switch. A command takes
-one `file` or `stream` param at most, with no default.
+[`upload_stream`](../task-results-and-actions/#upload_stream)). A command
+takes one `file` or `stream` param at most, with no default. A stream may be
+optional: given no name (a file uploaded with curl, which says none), core
+names it by the last part of the task's `path` arg, and refuses a task whose
+path names no file. In the command form it is a file picker: a file picked
+there goes from the browser once the task is queued; none picked, it goes
+with curl from the task's view.
 
 ### Commands
 
