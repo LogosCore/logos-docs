@@ -183,7 +183,8 @@ the minion reads each from its own place.
 
 Three field types are added. `datetime` and `enum_list` join the shared types,
 so management properties and connection schemas can use them too; `file` is
-accepted only in build schemas.
+accepted only in build schemas: in a build's fields, and in a command's
+`params` (a file to send the minion with the task).
 
 | Type | JSON value | Rules |
 |---|---|---|
@@ -194,6 +195,16 @@ accepted only in build schemas.
 `accept` and `max_size` are new field spec members, for `file` only. In the
 UI, `datetime` is a date and time picker, `enum_list` a set of checkboxes, and
 `file` an upload or a choice from the operation's build files.
+
+In a command's `params`, a `file` value is not a build file: it is a file the
+operator uploads to core for the task (a [task
+file](../task-results-and-actions/#task-files)), and the minion gets it in a [transfer from
+core](../minion-messages/#core-sending-a-file). `max_size` may not be over
+core's limit for those (`MINION_FILE_MAX_SIZE`, 2 GiB by default); without
+one, that limit applies. In the command form, the param is a file picker:
+the file goes to core as soon as it is picked, with its progress, and Run
+queues the task with its id. A command line for a command with a file
+param, typed without it, opens the form.
 
 ### Commands
 
@@ -208,7 +219,7 @@ does when they build it: a minion built for one job carries nothing more.
 | `targets[]` | Optional. Narrows the command to these targets; empty means every target. |
 | `default` | Picked in a new build until the operator unpicks it, and what a build that names no commands gets. |
 | `required` | In every build of its targets: the minion cannot run without it (`sleep`, `exit`), so the operator cannot leave it out. |
-| `params[]` | What a task of the command takes: field specs as in a management action. `file` is refused, as outside build schemas. |
+| `params[]` | What a task of the command takes: field specs as in a management action, and `file` (a [task file](../task-results-and-actions/#task-files), sent to the minion with the task): one at most, with no default. |
 | `result` | Optional. What its task's `data` is: one of core's [results](../task-results-and-actions/) (`dir_listing`), its shape and view. Without one, the `data` shows as raw JSON. A name core does not know refuses the schema. |
 | `action` | Optional. What core can ask the command to do itself: one of core's [actions](../task-results-and-actions/) (`list_dir`). The command takes the action's params, gives every other param a default, and has the result the action needs. A name core does not know refuses the schema. |
 
@@ -809,5 +820,6 @@ downloads an artifact.
   afterwards. How tasks reach a command and what comes back belongs to the
   tasking contract, not written yet; `params` are declared now so a command
   is described whole.
-- **`file` only in build schemas.** Only a build hands files to a module. A
-  property or an endpoint holding a file would need its own way to deliver it.
+- **`file` only in build schemas.** Only a build hands files to a module,
+  and a command hands them to its minion. A property or an endpoint holding
+  a file would need its own way to deliver it.

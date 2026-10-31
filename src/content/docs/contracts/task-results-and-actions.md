@@ -72,15 +72,16 @@ A command names them in the [build schema](../minion-build/#commands):
 |---|---|---|
 | [`dir_listing`](#dir_listing) | One directory's entries | A file browser |
 | [`file_download`](#file_download) | A file the minion sent core: which one | A file card: progress, check, Download |
+| [`file_upload`](#file_upload) | A file core sent the minion: where it went | The upload's progress, then where and whether it checked out |
 
 | Action | Core gives | Needs result | Run from |
 |---|---|---|---|
 | [`list_dir`](#list_dir) | `path` (string) | `dir_listing` | a listing's Up, crumbs and List directory; Browse files |
 | [`download_file`](#download_file) | `path` (string) | `file_download` | a listing's file: Download |
+| [`upload_file`](#upload_file) | `path` (string), `file` (file), `overwrite` (bool) | `file_upload` | a listing's folder: Upload here |
 
-More come as commands need them (a process list, a screenshot, a file
-transfer, a download); each gets a section here first, and a release of the
-protocol and core.
+More come as commands need them (a process list, a screenshot); each gets
+a section here first, and a release of the protocol and core.
 
 ## Running an action
 
@@ -272,6 +273,14 @@ The web app shows a listing as a file browser:
   on a `file` offers **Download** ([`download_file`](#download_file)): the
   session's commands with it, a submenu when there are several, run with
   the file's path alone.
+- On a `dir` entry, and for the listed folder itself (a button by the
+  crumbs), **Upload here…** ([`upload_file`](#upload_file)). It opens a
+  dialog: the file (a picker: the file goes to core at once, with its
+  progress), its destination (the folder + `sep` + the file's name, until
+  the operator edits it) and **Overwrite** (off; the dialog says so when
+  the listing already has an entry of that name). Upload runs the command
+  with those three; the button by the crumbs uses the session's first
+  `upload_file` command.
 - Up, a crumb, and an entry's **List directory** (on a `dir` entry or a
   `link`, which may lead to one) run [`list_dir`](#list_dir) on that
   folder, as [Running an action](#running-an-action) says. Without a
@@ -354,6 +363,86 @@ Sends a file to core: what a listing's file's **Download** runs.
 - The command's minion sends the file in a
   [transfer](../minion-messages/#file-transfers) for the task, and ends the
   task with the `file_download` data once core has it all.
+
+## file_upload
+
+A file core sent the minion in a [transfer](../minion-messages/#core-sending-a-file):
+the result of a command that puts a file on the host. The task's `data`, in
+one part at its end, says where the file went and what the minion wrote:
+
+```cddl
+file-upload = {
+  xfer: bstr .size 16,  ; the transfer it came in
+  path: tstr,           ; where it is on the host, as the host writes it
+  size: uint,
+  sha256: bstr .size 32,
+}
+```
+
+The protocol package has it as `protocol.FileUpload`, read and checked by
+`protocol.ReadFileUpload`. Core checks `size` and `sha256` against the file
+it sent: data that does not match shows as a problem, as data that does not
+fit its result does. The upload's progress shows from the task's start,
+before the data: GraphQL gives it as the task's `upload`. That holds the
+file (name, size, SHA-256), how far the minion has acked, and the
+transfer's state: waiting for the minion's first ack, sending, done, failed
+or cancelled.
+
+### View
+
+The task's Upload tab, laid out like a downloaded file's Overview (two
+columns, centred):
+
+- the file's kind, name and size, and where it goes: the data's `path` once
+  it came, the `path` arg until then;
+- while it goes, a progress bar of what the minion has acked, the rate and
+  the time left; before the minion's first ack, "Waiting for the minion";
+- at its end, whether it checked out (the minion's size and SHA-256 against
+  core's), or why it failed;
+- its details: source name, size, SHA-256 (to copy), destination, state,
+  when it started and ended.
+
+The toggle shows the task's data as raw JSON.
+
+## upload_file
+
+Puts a file on the host: what a listing's **Upload here…** runs.
+
+- **Core gives**:
+  - `path`, a `string`: where the file goes, the folder + `sep` + the
+    file's name for one uploaded from a listing;
+  - `file`, a `file`: the [task file](#task-files) to send;
+  - `overwrite`, a `bool`: whether a file already at `path` is replaced.
+    When it is `false`, such a file fails the task with "exists", and
+    nothing is sent.
+- **Needs result** `file_upload`.
+- A `path` that is a folder that exists puts the file in it under its own
+  name (the arg's `name`), so a path typed in the console may name the
+  folder alone.
+- The command's minion gets the file in a
+  [transfer from core](../minion-messages/#core-sending-a-file). It writes
+  it to a temporary file next to `path`, moves that into place once its
+  size and SHA-256 check out, and ends the task with the `file_upload` data.
+
+### Task files
+
+The operator uploads the file to core before the task is queued, with
+`POST /api/v1/minion-files`: a multipart body with `operationId` first,
+then `file`, at most `MINION_FILE_MAX_SIZE` (2 GiB by default). Core reads
+it as it streams (an operator of the operation; the role is checked before
+the file is taken) straight into the minion files bucket, never holding it
+whole, and answers with its id, name, size, SHA-256 and content type.
+nginx passes this one path through unbuffered, with a body limit of its
+own above the 2 GiB.
+
+- A `file` arg names one of the operation's task files, checked against the
+  param's `accept` and `max_size` when the task is queued.
+- One upload can serve several tasks (one command fired at several
+  sessions).
+- A task file is kept **while a task that names it has not ended**. When
+  the last one ends (done, failed or stopped), the file is dropped. One that
+  no task names is dropped a day after its upload.
+- So **Run again** on an upload that ended asks for the file again.
 
 ## Changing the vocabulary
 

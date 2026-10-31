@@ -25,10 +25,11 @@ part once and in order, and a cancel with every reply until the task ends;
 [results and actions](../task-results-and-actions/): data kept as the CBOR
 it came in, checked and joined by the command's result, `dir_listing` shown
 as a file browser, `list_dir` run from it; [file
-transfers](#file-transfers) from a minion to core (`chunk`, `ack` with
-`xfer`), kept in core's minion files bucket; BOB's minion runs `hello`, `ls`
-(a `dir_listing`), `download` (a `file_download`), `shell`, `sleep` and
-`exit`). Transfers from core to a minion are not built yet.
+transfers](#file-transfers) both ways (`chunk`, `ack` with `xfer`): from a
+minion to core, kept in core's minion files bucket, and from core to a
+minion, a task file the minion pulls; BOB's minion runs `hello`, `ls` (a
+`dir_listing`), `download` (a `file_download`), `upload` (a
+`file_upload`), `shell`, `sleep` and `exit`).
 :::
 
 A minion and core talk in **messages**. The [sync call](../channel-core-sync/)
@@ -353,6 +354,7 @@ map to CBOR like this:
 | `datetime` | integer, unix seconds |
 | `string_list`, `enum_list` | array of text |
 | `string_map` | map of text to text |
+| `file` | map: the [file core sends](#core-sending-a-file) for the task: `{xfer, name, size, sha256}` |
 
 Core fills in defaults and checks the arguments against the params before a
 task is queued, so a minion gets every arg that has a value or a default. It
@@ -647,10 +649,11 @@ at a time, some many. So the minion asks.
 
 A file moves in chunks of at most 512 KiB, in either direction: a minion
 sending a file core asked for (a [`download_file`](../task-results-and-actions/#download_file)
-task), or, later, core sending one to the minion. The receiver acks with
-`{xfer, next}`, the offset it has every byte before; the sender continues
-from there, so a transfer resumes after a restart of either side. The last
-chunk carries `sha256` of the whole, which the receiver checks.
+task), or core sending one to the minion (an [`upload_file`](../task-results-and-actions/#upload_file)
+task). The receiver acks with `{xfer, next}`, the offset it has every byte
+before; the sender continues from there, so a transfer resumes after a
+restart of either side. The last chunk carries `sha256` of the whole, which
+the receiver checks.
 
 **A minion sending a file** (built):
 
@@ -689,6 +692,46 @@ the types the wiki shows inline (PDF, plain text, pictures, audio and video).
 Those carry a sandbox CSP and `nosniff`, so nothing in the file runs.
 The `minionFileStrings` query reads a kept file's printable strings (ASCII
 and UTF-16LE, as `strings` finds them), a page at a time from an offset.
+
+#### Core sending a file
+
+Core cannot start an exchange through a channel, so the minion **pulls**
+the file: each of its acks asks for the next chunk, and core's reply brings
+it. The file is one an operator uploaded to core for the task (see
+[`upload_file`](../task-results-and-actions/#upload_file)).
+
+1. The task names the file in an arg of type `file`: `{xfer, name, size,
+   sha256}`. Core picks `xfer` (16 random bytes) for the task, so the same
+   file sent to two tasks is two transfers. `name` is the file's name as
+   uploaded (no path), `size` and `sha256` the whole's.
+2. The minion gets ready to write (it checks the destination, opens a
+   temporary file next to it), then asks for the first chunk:
+   `ack {xfer, next: 0}`. A minion that cannot write the file ends the
+   task failed without asking, and nothing is sent.
+3. Core answers each ack with the chunk from `next`: at most 512 KiB, the
+   first with `total` and `task`, the last with `sha256`. The minion writes
+   it, and asks again **at once**, without waiting for its check-in
+   interval, while the file is not all there. Its ack is also how far it
+   has the file: core shows that as the task's progress. Core puts the
+   chunk in the room its reply has left once its other items are in; with
+   too little room it sends none, and the minion asks again.
+4. With every byte written, the minion says so with one more ack (`next`
+   the file's size: core sends nothing for it, and the progress ends at the
+   whole), checks the size and SHA-256 against the arg's, moves the
+   temporary file into place, and ends the task with its data
+   ([`file_upload`](../task-results-and-actions/#file_upload)).
+   A file that does not check out ends the task failed, its temporary file
+   removed.
+
+A lost reply costs one ack asked again; a chunk that came twice is written
+once (the minion keeps its own `next`). Core answers an ack it cannot serve
+with an `err` naming it, and the minion ends the task failed with the
+reason: `unknown_task` for a transfer no task of the session has, or whose
+task ended (but an ack saying the minion has the whole file, which may
+come with the task's end); `bad_message` for a `next` past the file's
+size, or a file core no longer has. A task stopped
+while its file comes ends the transfer: core sends no more, the minion
+removes its temporary file.
 
 ## Freshness and replay
 
@@ -731,7 +774,7 @@ an exchange fails](#when-an-exchange-fails)).
 |---|---|
 | Message (plaintext) | at most 768 KiB, so a sealed and packed message fits the HTTP channel's 1 MiB default `max_body_bytes` |
 | Chunk data | at most 512 KiB |
-| A file a minion sends | 2 GiB by default (`MINION_FILE_MAX_SIZE`) |
+| A file a minion sends, or core sends a minion | 2 GiB by default (`MINION_FILE_MAX_SIZE`) |
 | Items per message | 256 |
 | Elements of an array or map inside an item (a result's `data`) | 65 536 |
 | A task's output and data kept | 4 MiB together |
@@ -784,9 +827,6 @@ and logs it as the client's fault, not a core error.
   that only answers needs no staging), and how `get_tasks` and `hello` work
   when core starts the exchange. On a lasting connection both sides start
   exchanges; `id` and `re` keep them apart. See [Module Types](../../module-types/#3-dialer-modules-planned).
-- **Files as task arguments.** Params exclude `file` today. A task that puts a
-  file on the host (an `upload` command) would name a transfer that core
-  starts in the same reply.
 - **Keys per direction.** One key pair serves both directions; the direction
   byte stops reflection. Separate pairs would limit what one leaked direction
   exposes, at the cost of four keys per build.
