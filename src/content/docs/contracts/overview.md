@@ -101,6 +101,7 @@ Every contract in this section, regardless of surface, follows the same baseline
 | [Minion Build](../minion-build/) | Control plane | Core ↔ Factory | Implemented; payload crypto pending |
 | [Minion Messages](../minion-messages/) | Data plane, inside the ciphertext | Minion ↔ Core | Draft |
 | [Task Results and Actions](../task-results-and-actions/) | Data plane: a task's `data`; what core runs a command for | Minion → Core, named in the build schema | Implemented: `dir_listing`, `list_dir` |
+| [File Browser](../file-browser/) | A machine's file system, as tasks saw it | Core, from tasks' results | Implemented |
 
 To build a module against these contracts, see
 [Implementing a Module](../../implementing-a-module/).
