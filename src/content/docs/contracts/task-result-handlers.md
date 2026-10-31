@@ -55,6 +55,25 @@ A command names its handler in the [build schema](../minion-build/#commands):
 - A handler core does not know (a factory newer than core) is accepted: its
   commands show their `data` as raw JSON, as if they named none.
 
+## Running a handler's command
+
+Core runs a handler's command itself: a folder opened in a listing, a
+session's **Browse files**. A factory may give several commands one handler
+(an `ls` by system call and an `ls_sh` through a shell, say: they differ in
+how they work, and in what they leave on the host), and a build carries the
+ones its operator picked. So which command core runs is decided this way:
+
+- **Continuing a task** (a folder opened in a listing) runs that task's
+  command again, its other args as they were.
+- **Starting afresh** (Browse files) runs one of the session's commands with
+  the handler, with the handler's params alone and the rest their defaults:
+  - the one the operator picked for the session, while the session has it;
+  - otherwise the first in the factory's order: a factory lists the command
+    it prefers for a handler first.
+
+  With more than one, the web app says which will run, and lets the
+  operator pick another, remembered for the session in their browser.
+
 ## How core keeps data
 
 A result part's `data` is CBOR, as everything in a

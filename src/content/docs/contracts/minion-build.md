@@ -212,7 +212,10 @@ does when they build it: a minion built for one job carries nothing more.
 | `handler` | Optional. The core [result handler](../task-result-handlers/) whose shape the command's `data` follows (`dir_listing`); the command's params must meet its contract. Without one, the `data` shows as raw JSON. |
 
 - A build's commands are the ones picked, the target's required ones among
-  them, in the schema's order. A build that leaves `commands` out (or sends
+  them, in the schema's order. Among commands with one
+  [result handler](../task-result-handlers/#running-a-handlers-command), that
+  order is the factory's preference: core runs the first when it starts one
+  itself and the operator picked none. A build that leaves `commands` out (or sends
   `null`) gets the target's `default` and `required` ones; one that sends an
   empty list gets the required ones only.
 - The factory builds those in and no others: what the minion can do is its
