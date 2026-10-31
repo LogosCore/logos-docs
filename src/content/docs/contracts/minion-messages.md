@@ -251,12 +251,21 @@ A `result` carries what a person reads in `out` and what a program reads in
   guesswork, and offer it as a download where it does not decode. stdout and
   stderr may be mixed in it. The parts of a streamed task join in `seq` order
   into one output.
-- **`data`** is structured output in a shape the command defines, such as
-  `ls` entries or `ps` processes. Core does not check it: a factory handler
-  may preprocess it later. Each part's `data` **adds rows** to the earlier
-  parts': a key holding an array gets the new elements appended, any other key
-  takes the latest value. Output too big for one message (an `ls` of a large
-  directory) goes in parts, each of which fits one.
+- **`data`** is structured output, such as a directory's entries or a
+  process list. Its shape is the command's [result
+  handler](../task-result-handlers/)'s (draft), named in the build schema:
+  core checks each part against it and joins the parts by the handler's rule.
+  A command without a handler has no declared shape: core joins its parts by
+  a generic rule (a key holding an array gets each part's elements appended,
+  any other key takes the latest value) and shows the result as raw JSON.
+  Core keeps `data` as the CBOR it came in, never converted on the way in
+  ([How core keeps data](../task-result-handlers/#how-core-keeps-data)).
+  Output too big for one message (an `ls` of a large directory) goes in
+  parts, each of which fits one.
+- **The done part is the last** (draft): a part for a task that ended is
+  ignored. A task's output and data share one budget of 4 MiB, and a task
+  whose done part is `seq` *n* with fewer than *n* + 1 parts kept is marked
+  incomplete.
 - **`ok`** says whether the minion did what the task asked. **`exit`** says
   what the process it ran reported, so a program that exits with 1 is still
   `ok: true`, and a command the minion could not start is `ok: false` with no
@@ -637,6 +646,7 @@ an exchange fails](#when-an-exchange-fails)).
 | Chunk data | at most 512 KiB |
 | Items per message | 256 |
 | Elements of an array or map inside an item (a result's `data`) | 65 536 |
+| A task's output and data kept | 4 MiB together (draft: today output alone) |
 | Nesting | 16 levels |
 | Core's replay memory | message ids, 24 hours |
 | A closed session's tombstone | 30 days |
