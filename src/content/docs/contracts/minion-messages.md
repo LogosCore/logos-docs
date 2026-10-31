@@ -670,8 +670,10 @@ and logs it as the client's fault, not a core error.
 - **Core**: open each sync, check freshness, store hellos and results, queue
   tasks per minion and resend them until acked, run transfers, seal replies.
   Operators give tasks from a session's console in the Sessions page (a work
-  pane tab per session) and read what came back there; core keeps each task
-  and its result parts, at most 4 MiB of output per task.
+  pane tab per session: the task list beside the picked task's output) and
+  read what came back there; core keeps each task and its result parts, at
+  most 4 MiB of output per task. GraphQL gives the output as text; the bytes
+  as the minion sent them download from `GET /api/v1/minion-tasks/{id}/output`.
 - **A reference minion**: a small Go one, for core's tests and to work the
   flow end to end, as BOB does for builds.
 
