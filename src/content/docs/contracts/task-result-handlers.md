@@ -2,15 +2,6 @@
 title: "Task Result Handlers"
 ---
 
-:::caution[Draft]
-This page records an agreed design that is not built yet. Today a command's
-`data` has no declared shape: core stores it through JSON (losing byte
-strings and exact integers), joins the parts by a generic rule, and the web
-app guesses a file table from an `entries` key that only BOB's minion sends.
-When this lands, the page drops this aside and its status in the
-[contracts table](../overview/#contracts-in-this-section) changes.
-:::
-
 A task's [`data`](../minion-messages/#items) is structured output: a
 directory's entries, a process list, a screenshot. Core cannot show or check
 it without knowing its shape, and each factory naming its own shapes would

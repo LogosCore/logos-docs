@@ -209,7 +209,7 @@ does when they build it: a minion built for one job carries nothing more.
 | `default` | Picked in a new build until the operator unpicks it, and what a build that names no commands gets. |
 | `required` | In every build of its targets: the minion cannot run without it (`sleep`, `exit`), so the operator cannot leave it out. |
 | `params[]` | What a task of the command takes: field specs as in a management action. `file` is refused, as outside build schemas. |
-| `handler` | Optional, draft. The core [result handler](../task-result-handlers/) whose shape the command's `data` follows (`dir_listing`); the command's params must meet its contract. Without one, the `data` shows as raw JSON. |
+| `handler` | Optional. The core [result handler](../task-result-handlers/) whose shape the command's `data` follows (`dir_listing`); the command's params must meet its contract. Without one, the `data` shows as raw JSON. |
 
 - A build's commands are the ones picked, the target's required ones among
   them, in the schema's order. A build that leaves `commands` out (or sends

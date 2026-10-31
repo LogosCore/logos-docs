@@ -22,7 +22,10 @@ Last seen colored and filtered by it; tasks: `task`, `result`, `cancel` and
 `ack` for tasks, operators giving commands from a session's console, core
 queueing them, sending them on `get_tasks` until acked, keeping each result
 part once and in order, and a cancel with every reply until the task ends;
-BOB's minion runs `hello`, `ls`, `shell`, `sleep` and `exit`). File
+[result handlers](../task-result-handlers/): data kept as the CBOR it came
+in, checked and joined by the command's handler, `dir_listing` shown as a
+file browser; BOB's minion runs `hello`, `ls` (a `dir_listing`), `shell`,
+`sleep` and `exit`). File
 transfers (`chunk`, `ack` with `xfer`) are not built yet: core answers a
 chunk with `unknown_item`.
 :::
@@ -253,7 +256,7 @@ A `result` carries what a person reads in `out` and what a program reads in
   into one output.
 - **`data`** is structured output, such as a directory's entries or a
   process list. Its shape is the command's [result
-  handler](../task-result-handlers/)'s (draft), named in the build schema:
+  handler](../task-result-handlers/)'s, named in the build schema:
   core checks each part against it and joins the parts by the handler's rule.
   A command without a handler has no declared shape: core joins its parts by
   a generic rule (a key holding an array gets each part's elements appended,
@@ -262,8 +265,8 @@ A `result` carries what a person reads in `out` and what a program reads in
   ([How core keeps data](../task-result-handlers/#how-core-keeps-data)).
   Output too big for one message (an `ls` of a large directory) goes in
   parts, each of which fits one.
-- **The done part is the last** (draft): a part for a task that ended is
-  ignored. A task's output and data share one budget of 4 MiB, and a task
+- **The done part is the last**: a part for a task that ended is ignored,
+  but one it lacks before its done part, resent late, fills the gap. A task's output and data share one budget of 4 MiB, and a task
   whose done part is `seq` *n* with fewer than *n* + 1 parts kept is marked
   incomplete.
 - **`ok`** says whether the minion did what the task asked. **`exit`** says
@@ -646,7 +649,7 @@ an exchange fails](#when-an-exchange-fails)).
 | Chunk data | at most 512 KiB |
 | Items per message | 256 |
 | Elements of an array or map inside an item (a result's `data`) | 65 536 |
-| A task's output and data kept | 4 MiB together (draft: today output alone) |
+| A task's output and data kept | 4 MiB together |
 | Nesting | 16 levels |
 | Core's replay memory | message ids, 24 hours |
 | A closed session's tombstone | 30 days |
