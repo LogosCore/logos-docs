@@ -62,8 +62,8 @@ A command names its handler in the [build schema](../minion-build/#commands):
 A result part's `data` is CBOR, as everything in a
 [message](../minion-messages/#message) is. Core keeps it **as it came**: the
 part's `data` bytes, stored untouched beside the part, never converted to
-JSON or to Mongo's BSON. Byte strings stay bytes, integers stay exact, tags
-stay tags, and what the minion sent can always be given back.
+JSON or to Mongo's BSON. Byte strings stay bytes, integers stay exact, and
+what the minion sent can always be given back.
 
 Core decodes the CBOR when it needs it:
 
@@ -86,7 +86,7 @@ way out, by one mapping:
 
 | CBOR | JSON |
 |---|---|
-| map (text keys only, as the protocol allows) | object, keys in the order sent |
+| map (text keys only, as the protocol allows) | object |
 | array | array |
 | text | string |
 | integer within ±2^53 | number |
@@ -94,7 +94,9 @@ way out, by one mapping:
 | float | number; `NaN` and the infinities as the strings `"NaN"`, `"Infinity"`, `"-Infinity"` |
 | `true`, `false`, `null`; `undefined` | `true`, `false`, `null`; `null` |
 | byte string | `{"$bytes": "<base64>"}` |
-| tag *n* over a value | `{"$tag": n, "value": <the value>}` |
+
+Tags never come: the protocol's [CBOR rules](../minion-messages/#cbor-rules)
+refuse them.
 
 A handler's view does not go through this mapping for the fields it knows:
 it decodes them into their types (a `dir_listing`'s `modified` is seconds,
@@ -118,7 +120,8 @@ Some rules hold for every task, with a handler or without:
 
 - **The done part is the last.** A part that comes after the task ended
   (done, failed, or cancelled) is ignored and logged: it changes neither the
-  task's state nor its output.
+  task's state nor its output. The one exception is a part the task lacks
+  before its done part, resent late: it is kept, and fills the gap.
 - **Output and data share one budget**, 4 MiB per task. Past it, parts are
   still acknowledged but their output and data are dropped, and the task is
   marked truncated.
@@ -186,7 +189,8 @@ entry = {
 - `.` and `..` are not entries.
 - `type` is the entry itself, not what a link points to: a link to a folder
   is a `link` with its `target`. `other` is anything else (a device, a socket,
-  a pipe).
+  a pipe). A later version may add types; a reader shows one it does not
+  know as `other`.
 - The minion sends entries in any order; the view sorts them.
 - A key this page does not list is ignored, so a later version can add
   optional keys (see [Changing a handler](#changing-a-handler)). A factory's
@@ -269,7 +273,7 @@ and the old one stays for the minions already built.
   operator, and through them the factory's author, what is wrong.
 - **Why data stays CBOR.** Converting it on arrival (to JSON, as today, or to
   BSON) loses what CBOR has and they do not: byte strings, integers beyond
-  2^53 or beyond int64, tags. It also would not save work: Mongo keeps BSON
+  2^53 or beyond int64. It also would not save work: Mongo keeps BSON
   and the web app reads JSON, so a view converts either way, and decoding
   CBOR is one step where reading back BSON as JSON is two. Kept as it came,
   data can be checked strictly against a handler's types and given back
