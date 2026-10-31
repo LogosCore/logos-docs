@@ -94,7 +94,7 @@ export default defineConfig({
             { slug: "contracts/minion-connection" },
             { slug: "contracts/minion-build" },
             { slug: "contracts/minion-messages" },
-            { slug: "contracts/task-result-handlers" },
+            { slug: "contracts/task-results-and-actions" },
             { slug: "implementing-a-module" },
           ],
         },

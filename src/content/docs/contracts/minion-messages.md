@@ -22,9 +22,9 @@ Last seen colored and filtered by it; tasks: `task`, `result`, `cancel` and
 `ack` for tasks, operators giving commands from a session's console, core
 queueing them, sending them on `get_tasks` until acked, keeping each result
 part once and in order, and a cancel with every reply until the task ends;
-[result handlers](../task-result-handlers/): data kept as the CBOR it came
-in, checked and joined by the command's handler, `dir_listing` shown as a
-file browser; BOB's minion runs `hello`, `ls` (a `dir_listing`), `shell`,
+[results and actions](../task-results-and-actions/): data kept as the CBOR
+it came in, checked and joined by the command's result, `dir_listing` shown
+as a file browser, `list_dir` run from it; BOB's minion runs `hello`, `ls` (a `dir_listing`), `shell`,
 `sleep` and `exit`). File
 transfers (`chunk`, `ack` with `xfer`) are not built yet: core answers a
 chunk with `unknown_item`.
@@ -257,14 +257,14 @@ A `result` carries what a person reads in `out` and what a program reads in
   stderr may be mixed in it. The parts of a streamed task join in `seq` order
   into one output.
 - **`data`** is structured output, such as a directory's entries or a
-  process list. Its shape is the command's [result
-  handler](../task-result-handlers/)'s, named in the build schema:
-  core checks each part against it and joins the parts by the handler's rule.
-  A command without a handler has no declared shape: core joins its parts by
+  process list. Its shape is the command's
+  [result](../task-results-and-actions/)'s, named in the build schema: core
+  checks each part against it and joins the parts by the result's rule.
+  A command without a result has no declared shape: core joins its parts by
   a generic rule (a key holding an array gets each part's elements appended,
   any other key takes the latest value) and shows the result as raw JSON.
   Core keeps `data` as the CBOR it came in, never converted on the way in
-  ([How core keeps data](../task-result-handlers/#how-core-keeps-data)).
+  ([How core keeps data](../task-results-and-actions/#how-core-keeps-data)).
   Output too big for one message (an `ls` of a large directory) goes in
   parts, each of which fits one.
 - **The done part is the last**: a part for a task that ended is ignored,

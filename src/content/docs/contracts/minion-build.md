@@ -209,13 +209,14 @@ does when they build it: a minion built for one job carries nothing more.
 | `default` | Picked in a new build until the operator unpicks it, and what a build that names no commands gets. |
 | `required` | In every build of its targets: the minion cannot run without it (`sleep`, `exit`), so the operator cannot leave it out. |
 | `params[]` | What a task of the command takes: field specs as in a management action. `file` is refused, as outside build schemas. |
-| `handler` | Optional. The core [result handler](../task-result-handlers/) whose shape the command's `data` follows (`dir_listing`); the command's params must meet its contract. Without one, the `data` shows as raw JSON. |
+| `result` | Optional. What its task's `data` is: one of core's [results](../task-results-and-actions/) (`dir_listing`), its shape and view. Without one, the `data` shows as raw JSON. A name core does not know refuses the schema. |
+| `action` | Optional. What core can ask the command to do itself: one of core's [actions](../task-results-and-actions/) (`list_dir`). The command takes the action's params, gives every other param a default, and has the result the action needs. A name core does not know refuses the schema. |
 
 - A build's commands are the ones picked, the target's required ones among
   them, in the schema's order. Among commands with one
-  [result handler](../task-result-handlers/#running-a-handlers-command), that
-  order is the factory's preference: core runs the first when it starts one
-  itself and the operator picked none. A build that leaves `commands` out (or sends
+  [action](../task-results-and-actions/#running-an-action), that order is
+  the factory's preference: core runs the first when it starts one itself
+  and the operator picked none. A build that leaves `commands` out (or sends
   `null`) gets the target's `default` and `required` ones; one that sends an
   empty list gets the required ones only.
 - The factory builds those in and no others: what the minion can do is its
