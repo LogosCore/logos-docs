@@ -73,12 +73,14 @@ A command names them in the [build schema](../minion-build/#commands):
 | [`dir_listing`](#dir_listing) | One directory's entries | A file browser |
 | [`file_download`](#file_download) | A file the minion sent core: which one | A file card: progress, check, Download |
 | [`file_upload`](#file_upload) | A file core sent the minion: where it went | The upload's progress, then where and whether it checked out |
+| [`file_stream`](#file_stream) | A file the minion streamed: which one, how big | Download and a curl line, the stream's progress |
 
 | Action | Core gives | Needs result | Run from |
 |---|---|---|---|
 | [`list_dir`](#list_dir) | `path` (string) | `dir_listing` | a listing's Up, crumbs and List directory; Browse files |
 | [`download_file`](#download_file) | `path` (string) | `file_download` | a listing's file: Download |
 | [`upload_file`](#upload_file) | `path` (string), `file` (file), `overwrite` (bool) | `file_upload` | a listing's folder: Upload here |
+| [`stream_file`](#stream_file) | `path` (string) | `file_stream` | a listing's file: Stream |
 
 More come as commands need them (a process list, a screenshot); each gets
 a section here first, and a release of the protocol and core.
@@ -273,6 +275,8 @@ The web app shows a listing as a file browser:
   on a `file` offers **Download** ([`download_file`](#download_file)): the
   session's commands with it, a submenu when there are several, run with
   the file's path alone.
+- On a `file`, **Stream** ([`stream_file`](#stream_file)): as
+  Download, the session's commands with it, with the file's path alone.
 - On a `dir` entry, and for the listed folder itself (a button by the
   crumbs), **Upload here…** ([`upload_file`](#upload_file)). It opens a
   dialog: the file (a picker: the file goes to core at once, with its
@@ -443,6 +447,73 @@ own above the 2 GiB.
   the last one ends (done, failed or stopped), the file is dropped. One that
   no task names is dropped a day after its upload.
 - So **Run again** on an upload that ended asks for the file again.
+
+## file_stream
+
+A file the minion [streamed](../minion-messages/#streaming-a-file) to
+whoever downloaded it: the result of a command that sends a file of any
+size, with nothing kept in core. The task's `data`, in one part at its end
+(when the downloader had every byte), says which file:
+
+```cddl
+file-stream = {
+  xfer: bstr .size 16,
+  path: tstr,            ; the file's path on the host
+  size: uint,
+  ? sha256: bstr .size 32,  ; when the minion read it whole, in order
+}
+```
+
+The stream shows from the minion's announcement, before the data: GraphQL
+gives it as the task's `stream`: the file's name and size, how far the
+minion has sent and the downloader has, and the stream's state: waiting
+for a downloader, streaming, paused (its downloader went away, or is
+slow), done, or cancelled.
+
+### Downloading a stream
+
+`GET /api/v1/minion-streams/{task}`: to a browser or curl, a download like
+any other.
+
+- It answers at once with `Content-Length` (the size the minion
+  announced), `Content-Disposition` (the file's name), `Accept-Ranges:
+  bytes` and a strong `ETag`; the bytes follow as the minion sends them.
+- `Range: bytes=N-` resumes from N: `206 Partial Content`, as a browser's
+  Resume and `curl -C -` ask. `If-Range` with the `ETag` is honoured.
+- Before the minion has announced the file, a request waits for it (an
+  hour at most, then `503`); once the stream's task ended, `410 Gone`. A
+  range past the end is `416`.
+- One downloader at a time: **the newest wins**. A second request takes the
+  stream from its own `Range`, and the first is cut, so a retry whose old
+  connection core has not yet seen die works.
+- Auth: the session cookie (the view's Download button), or a **signed
+  link** (`?sig=…`) for that one stream, valid while the stream lasts and
+  24 hours at most: the view's **Copy curl** gives
+  `curl -C - -o <name> '<link>'`, which resumes when run again.
+
+### View
+
+The task's Stream tab, laid out as a file's Overview:
+
+- the file's kind, name, size and path on the host;
+- **Download**, and **Copy curl**;
+- the state: "Waiting for a downloader", or the downloader's progress (a
+  bar, the rate, the time left), "Paused" when it went away;
+- **Stop** (the task's own): ends the stream;
+- its details: path, size, SHA-256 once the data says it, state, when it
+  started and ended.
+
+## stream_file
+
+Streams a file to whoever downloads it: what a listing's file's **Stream**
+runs.
+
+- **Core gives** `path`, a `string`: the file to stream, `path` + `sep` +
+  the entry's name for a file in a listing.
+- **Needs result** `file_stream`.
+- The command's minion [streams](../minion-messages/#streaming-a-file) the
+  file for the task, and ends the task with the `file_stream` data once its
+  downloader has every byte.
 
 ## Changing the vocabulary
 

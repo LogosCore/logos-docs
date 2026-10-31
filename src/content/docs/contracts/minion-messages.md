@@ -28,8 +28,8 @@ as a file browser, `list_dir` run from it; [file
 transfers](#file-transfers) both ways (`chunk`, `ack` with `xfer`): from a
 minion to core, kept in core's minion files bucket, and from core to a
 minion, a task file the minion pulls; BOB's minion runs `hello`, `ls` (a
-`dir_listing`), `download` (a `file_download`), `upload` (a
-`file_upload`), `shell`, `sleep` and `exit`).
+`dir_listing`), `download` (a `file_download`), `stream_download` (a
+`file_stream`), `upload` (a `file_upload`), `shell`, `sleep` and `exit`).
 :::
 
 A minion and core talk in **messages**. The [sync call](../channel-core-sync/)
@@ -237,6 +237,8 @@ ack = {
   ? tasks: [* task-id], ; tasks received
   ? xfer: xfer-id,      ; with next: the receiver has every byte
   ? next: uint,         ;   of the transfer before next
+  ? hold: bool,         ; with xfer: send nothing more of it until an
+                        ;   ack without hold (a stream)
 }
 
 rehello = { t: "rehello" }
@@ -733,6 +735,46 @@ size, or a file core no longer has. A task stopped
 while its file comes ends the transfer: core sends no more, the minion
 removes its temporary file.
 
+#### Streaming a file
+
+A file of any size, sent straight to whoever downloads it, with nothing
+kept in core (a [`stream_file`](../task-results-and-actions/#stream_file)
+task). It is the same chunks and acks as [a minion sending a
+file](#file-transfers), with two differences: the minion first announces
+the file without data, and core's acks may say `hold`. Core acks a chunk
+when its downloader has room for it, so the downloader sets the pace; it
+acks `next` where the downloader wants the bytes from, so a download
+resumed from any offset is the minion reading from there again.
+
+1. The minion opens the file and sends the first chunk with no `data`:
+   `off` 0, `total`, `task` and `name`. Core answers `ack {xfer, next: 0,
+   hold: true}`: the stream waits for a downloader.
+2. While held, the minion sends nothing of the transfer. It checks in on
+   its own schedule until the stream first runs; after that, about every
+   second, so a paused download starts again quickly.
+3. A downloader attaches (`GET /api/v1/minion-streams/{task}`, with a
+   `Range` to resume). At the minion's next check-in core answers
+   `ack {xfer, next}` without `hold`, `next` where the downloader wants
+   the bytes from. The minion sends the chunk from `next`, at once and
+   again with each ack, as it does sending any file: an ack may set `next`
+   back (a download resumed from earlier), and the minion reads from
+   there. Its chunk from 0 says `total`, `task` and `name` again, as any
+   first chunk does; only the announcement has no `data`.
+4. Core passes each chunk to the downloader through a small buffer (a few
+   chunks, shared by core's instances). When the buffer is full, or the
+   downloader goes away, core acks with `hold`: the minion waits.
+5. The last chunk carries `sha256` when the minion read the whole file in
+   order once; a stream resumed from the middle may end without it. When
+   the downloader has every byte, core acks `next` = `total`, and the
+   minion ends the task with its data
+   ([`file_stream`](../task-results-and-actions/#file_stream)).
+
+A stream ends when its task does: stopped by an operator (core sends no
+more acks, cuts the download, and the minion closes the file), or after
+**an hour with no downloader**, when core cancels the task. A file that
+grows while streamed is sent as far as the size announced; one that
+shrinks fails the task.
+
 ## Freshness and replay
 
 Messages carry no time. Core stamps every message with its own receive time.
@@ -775,6 +817,7 @@ an exchange fails](#when-an-exchange-fails)).
 | Message (plaintext) | at most 768 KiB, so a sealed and packed message fits the HTTP channel's 1 MiB default `max_body_bytes` |
 | Chunk data | at most 512 KiB |
 | A file a minion sends, or core sends a minion | 2 GiB by default (`MINION_FILE_MAX_SIZE`) |
+| A file a minion streams | none: core keeps a few chunks of it at a time |
 | Items per message | 256 |
 | Elements of an array or map inside an item (a result's `data`) | 65 536 |
 | A task's output and data kept | 4 MiB together |
