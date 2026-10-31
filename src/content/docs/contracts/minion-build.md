@@ -203,7 +203,7 @@ does when they build it: a minion built for one job carries nothing more.
 
 | Field | Meaning |
 |---|---|
-| `id` | Identifier, unique in the schema, `^[a-z][a-z0-9_-]{0,62}$`. Builds name the command by it, and so will tasks. |
+| `id` | Identifier, unique in the schema, `^[a-z][a-z0-9_-]{0,62}$`, and not `help`. Builds name the command by it, and so will tasks. |
 | `label`, `description` | Shown in the UI. |
 | `targets[]` | Optional. Narrows the command to these targets; empty means every target. |
 | `default` | Picked in a new build until the operator unpicks it, and what a build that names no commands gets. |
@@ -216,6 +216,11 @@ does when they build it: a minion built for one job carries nothing more.
   empty list gets the required ones only.
 - The factory builds those in and no others: what the minion can do is its
   build's `commands`. A factory that cannot build one in fails the build.
+- `help` is core's own command, in every session's console: it lists the
+  session's commands with how each is typed, or (`help <command>`) one
+  command's params. Core answers it when it is queued and keeps it as a
+  finished task; it never goes to a minion. A schema that declares `help` is
+  refused, and factories do not implement it.
 - `params` describe tasks, which minions do not take yet; the build form shows
   only what each command is.
 - A command removed or renamed needs a new `version`, like a field. Adding

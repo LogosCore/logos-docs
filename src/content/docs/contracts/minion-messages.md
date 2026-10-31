@@ -674,6 +674,8 @@ and logs it as the client's fault, not a core error.
   read what came back there; core keeps each task and its result parts, at
   most 4 MiB of output per task. GraphQL gives the output as text; the bytes
   as the minion sent them download from `GET /api/v1/minion-tasks/{id}/output`.
+  `help` is core's own: it is answered at once and never goes out (see
+  [Commands](../minion-build/#commands)).
 - **A reference minion**: a small Go one, for core's tests and to work the
   flow end to end, as BOB does for builds.
 
