@@ -102,7 +102,7 @@ snapshot of the session's machine.
   their way into it.
 
 The tab keeps, in the operator's browser as the tabs are, the folder it
-shows, the session picked, the sort, Show deleted and the tree's open
+shows, the sort, Show deleted and the tree's open
 folders; closing it forgets them. The divider between the tree and the
 folder is the operator's, kept in core with their sessions layout
 (`filesSplit`, as the console's `consoleSplit`): every file browser opens
@@ -119,11 +119,12 @@ directory**, **Download**, **Stream**, **Upload here…**, **Delete…** and
 commands for it. A queued task says so, with a link to the session's
 console; the snapshot changes when it ends.
 
-They go through **the tab's session**, the one it was opened from, until the
-operator picks another of the machine's sessions in the tab's header (each
-with its host user: a root session lists what a user's cannot). A closed
-session runs nothing: the snapshot stays readable, and the picker offers the
-machine's open ones.
+They go through **the tab's session**. **Act as**, in the tab's header,
+picks another of the machine's sessions (each with its host user: a root
+session lists what a user's cannot): the tab becomes that session's file
+browser, with its number and mark, at the same folder; into the session's
+own file browser tab when one is open. A closed session runs nothing: the
+snapshot stays readable, and the picker offers the machine's open ones.
 
 A task's listing view ([`dir_listing`](../task-results-and-actions/#dir_listing))
 has **Open in File Browser**: the machine's browser, at that folder.
