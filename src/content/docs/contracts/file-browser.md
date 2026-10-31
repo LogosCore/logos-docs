@@ -103,7 +103,10 @@ snapshot of the session's machine.
 
 The tab keeps, in the operator's browser as the tabs are, the folder it
 shows, the session picked, the sort, Show deleted and the tree's open
-folders; closing it forgets them.
+folders; closing it forgets them. The divider between the tree and the
+folder is the operator's, kept in core with their sessions layout
+(`filesSplit`, as the console's `consoleSplit`): every file browser opens
+with it where they left it.
 
 ### Its actions
 
