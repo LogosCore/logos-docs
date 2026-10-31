@@ -24,10 +24,11 @@ queueing them, sending them on `get_tasks` until acked, keeping each result
 part once and in order, and a cancel with every reply until the task ends;
 [results and actions](../task-results-and-actions/): data kept as the CBOR
 it came in, checked and joined by the command's result, `dir_listing` shown
-as a file browser, `list_dir` run from it; BOB's minion runs `hello`, `ls` (a `dir_listing`), `shell`,
-`sleep` and `exit`). File
-transfers (`chunk`, `ack` with `xfer`) are not built yet: core answers a
-chunk with `unknown_item`.
+as a file browser, `list_dir` run from it; [file
+transfers](#file-transfers) from a minion to core (`chunk`, `ack` with
+`xfer`), kept in core's minion files bucket; BOB's minion runs `hello`, `ls`
+(a `dir_listing`), `download` (a `file_download`), `shell`, `sleep` and
+`exit`). Transfers from core to a minion are not built yet.
 :::
 
 A minion and core talk in **messages**. The [sync call](../channel-core-sync/)
@@ -645,11 +646,44 @@ at a time, some many. So the minion asks.
 ### File transfers
 
 A file moves in chunks of at most 512 KiB, in either direction: a minion
-sending a file core asked for (a `download` command), or core sending one to
-the minion. The receiver acks with `{xfer, next}`, the offset it has every
-byte before; the sender continues from there, so a transfer resumes after a
-restart of either side. The last chunk carries `sha256` of the whole, which the
-receiver checks.
+sending a file core asked for (a [`download_file`](../task-results-and-actions/#download_file)
+task), or, later, core sending one to the minion. The receiver acks with
+`{xfer, next}`, the offset it has every byte before; the sender continues
+from there, so a transfer resumes after a restart of either side. The last
+chunk carries `sha256` of the whole, which the receiver checks.
+
+**A minion sending a file** (built):
+
+1. The minion picks the transfer's `xfer` (16 random bytes) and sends the
+   first chunk, `off` 0, with `total` (the whole's size), `task` (the task
+   it is for) and `name` (the file's path on its host), then the next chunk
+   in each message, from where core's last ack said. It checks in again at
+   once while it has a chunk to send.
+2. Core takes chunks **in order** only: a chunk from where core has the file
+   is kept, and core acks the new `next`; one sent again, or out of order,
+   is not kept twice, and the ack says where to go on from. A lost message
+   costs a chunk sent again, nothing more.
+3. The last chunk (`off` + its size = `total`) says `sha256`. Core then
+   joins the chunks and checks the whole against `total` and `sha256`, in
+   the background: the file is kept, or failed with why. The minion ends the
+   task with the file's data once core has every byte
+   ([`file_download`](../task-results-and-actions/#file_download)).
+
+Core refuses a chunk with an `err` naming it, and the minion ends the task
+failed, with the reason: `unknown_task` for a first chunk naming no task of
+the session, `bad_message` for a task whose command sends no file (no
+result `file_download`), a chunk past `total`, a last chunk without
+`sha256`, or a transfer that ended; `too_large` for a file over core's limit
+(`MINION_FILE_MAX_SIZE`, 2 GiB by default). A task that ends, stopped or
+failed, while its file is coming cancels the transfer, and a transfer with
+no chunk for a day is given up; their chunks are dropped.
+
+Core keeps each chunk as an object of its own until the file is joined (so
+any core instance takes the next one), and the file in its **minion files
+bucket** (`MINION_FILE_BUCKET`, `minion-files`), apart from the wiki's and
+the builds'. Files stay until their operation is deleted. Any member of the
+operation downloads one: `GET /api/v1/minion-files/{id}`, always an
+attachment, never rendered.
 
 ## Freshness and replay
 
@@ -692,6 +726,7 @@ an exchange fails](#when-an-exchange-fails)).
 |---|---|
 | Message (plaintext) | at most 768 KiB, so a sealed and packed message fits the HTTP channel's 1 MiB default `max_body_bytes` |
 | Chunk data | at most 512 KiB |
+| A file a minion sends | 2 GiB by default (`MINION_FILE_MAX_SIZE`) |
 | Items per message | 256 |
 | Elements of an array or map inside an item (a result's `data`) | 65 536 |
 | A task's output and data kept | 4 MiB together |

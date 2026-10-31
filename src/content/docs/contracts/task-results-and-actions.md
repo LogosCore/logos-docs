@@ -71,10 +71,12 @@ A command names them in the [build schema](../minion-build/#commands):
 | Result | What `data` is | View |
 |---|---|---|
 | [`dir_listing`](#dir_listing) | One directory's entries | A file browser |
+| [`file_download`](#file_download) | A file the minion sent core: which one | A file card: progress, check, Download |
 
 | Action | Core gives | Needs result | Run from |
 |---|---|---|---|
 | [`list_dir`](#list_dir) | `path` (string) | `dir_listing` | a listing's Up, crumbs and List directory; Browse files |
+| [`download_file`](#download_file) | `path` (string) | `file_download` | a listing's file: Download |
 
 More come as commands need them (a process list, a screenshot, a file
 transfer, a download); each gets a section here first, and a release of the
@@ -266,7 +268,10 @@ The web app shows a listing as a file browser:
   then name, size, modified (in the app's format), mode, owner. A link shows
   its target next to its name.
 - An entry's **actions are in its context menu** (a right click), not on a
-  click: a click runs nothing. The menu copies the entry's path or name.
+  click: a click runs nothing. The menu copies the entry's path or name, and
+  on a `file` offers **Download** ([`download_file`](#download_file)): the
+  session's commands with it, a submenu when there are several, run with
+  the file's path alone.
 - Up, a crumb, and an entry's **List directory** (on a `dir` entry or a
   `link`, which may lead to one) run [`list_dir`](#list_dir) on that
   folder, as [Running an action](#running-an-action) says. Without a
@@ -291,6 +296,44 @@ Lists a directory: what Up, a crumb, List directory and Browse files run.
 - **Needs result** `dir_listing`.
 - The command may take other params, each with a default (`all`, default
   `false`, to show hidden entries).
+
+## file_download
+
+A file the minion sent core in a [file transfer](../minion-messages/#file-transfers):
+the result of a command that downloads a file from the host. Core keeps the
+file itself; the task's `data`, in one part at its end, says which one:
+
+```cddl
+file-download = {
+  xfer: bstr .size 16,  ; the transfer the file came in
+  path: tstr,           ; the file's path on the host
+  size: uint,
+  sha256: bstr .size 32,
+}
+```
+
+The protocol package has it as `protocol.FileDownload`, read and checked by
+`protocol.ReadFileDownload`. A task's file shows from its first chunk, before
+the data: GraphQL gives it as the task's `file`.
+
+### View
+
+A file card, in the task's File tab: the file's name on the host and its
+size; while it comes, how much came (a bar), then whether it checked out
+against its size and SHA-256 (or why not); its SHA-256, to copy; and, once
+kept, **Download** (`GET /api/v1/minion-files/{id}`, the bytes as they
+came). The toggle shows the task's data as raw JSON.
+
+## download_file
+
+Sends a file to core: what a listing's file's **Download** runs.
+
+- **Core gives** `path`, a `string`: the file to send, `path` + `sep` + the
+  entry's name for a file in a listing.
+- **Needs result** `file_download`.
+- The command's minion sends the file in a
+  [transfer](../minion-messages/#file-transfers) for the task, and ends the
+  task with the `file_download` data once core has it all.
 
 ## Changing the vocabulary
 
