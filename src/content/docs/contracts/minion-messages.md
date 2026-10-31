@@ -181,6 +181,8 @@ hello = {
   os: tstr,             ; GOOS-style: "windows", "linux", "darwin"
   arch: tstr,           ; GOARCH-style: "amd64", "arm64", "386"
   ? host: tstr,         ; the hostname
+  machine_id: tstr,     ; what tells this machine apart: see Machine
+                        ;   identity ("smbios-uuid:4c4c4544-…")
   ? user: tstr,         ; exactly as the OS reports it, e.g. "CORP\\svc_backup"
   ? domain: tstr,       ; the host's Windows domain or workgroup
   ? proc: tstr,         ; the process's name: its image's file name,
@@ -277,8 +279,10 @@ A `result` carries what a person reads in `out` and what a program reads in
   A process killed by a signal has no exit code: the minion leaves `exit` out
   and says so in `err`.
 
-In a `hello`, `pid`, `os` and `arch` are required: a minion always knows
-them. The rest are optional, since a minion cannot always learn its host or
+In a `hello`, `pid`, `os`, `arch` and `machine_id` are required: a minion
+always knows them (`machine_id` falls back as far as a random id; see
+[Machine identity](#machine-identity)). Core still takes a hello without
+`machine_id` from minions built before it was asked for, and shows none. The rest are optional, since a minion cannot always learn its host or
 user (in a sandbox, say). `os` and `arch` use the vocabulary of build
 platforms, so core shows them next to the build's platform and flags a
 mismatch (a 32-bit build on a 64-bit OS, or any build of an `any/any`
@@ -291,6 +295,47 @@ all of it when a `rehello` brings new values.
 A receiver ignores keys it does not know, so either side can add optional
 keys without a new `v`. An item type it does not know gets an `err` with
 `unknown_item` and is skipped.
+
+### Machine identity
+
+Host and user do not tell machines apart: two machines named `work`, each
+with a `user`, are common (cloned VMs, a naming standard). So every hello
+says **`machine_id`**: a string, `"<source>:<value>"`, lowercase, at most
+256 characters, with no spaces or control characters in the value. The
+source says where the value came from, so two sources never collide by
+chance and an operator sees what kind of identity it is. Core checks the
+shape only; a factory may use a source of its own.
+
+A minion takes the **first** of these it can read **quietly**, skipping
+placeholders:
+
+| | Source | Where | Notes |
+|---|---|---|---|
+| 1 | `smbios-uuid` | Linux `/sys/class/dmi/id/product_uuid` (root only); Windows `GetSystemFirmwareTable("RSMB")`, the SMBIOS system UUID | The hardware's or the VM's: survives reinstalls. Not through WMI on Windows: watched. |
+| 1 | `mac-platform-uuid` | macOS `IOPlatformUUID`, through IOKit | Not by running `ioreg`. |
+| 1 | `bsd-host-uuid` | FreeBSD `kern.hostuuid` | |
+| 2 | `container` | the container's id, from `/proc/self/mountinfo` or the cgroup | Inside a container only, and before 3: an image's install id is every container's. |
+| 3 | `linux-machine-id` | `/etc/machine-id`, else `/var/lib/dbus/machine-id` | Any user can read it. New with each install; shared by clones that did not regenerate it. |
+| 3 | `win-machine-guid` | `HKLM\SOFTWARE\Microsoft\Cryptography\MachineGuid` | New with each install or sysprep; shared by clones made without sysprep. |
+| 4 | `domain-sid` | a domain-joined Windows machine's computer account SID | |
+| 5 | `hostname` | the host name | Does not tell apart the machines this is for, but stays the same. |
+| 6 | `kept` | a random id the minion generates once and keeps | Names the minion's install, not the machine, and leaves a file or key on the host: only where the factory accepts that. |
+| 7 | `ephemeral` | a random id for this process | Tells nothing apart across restarts; core can tell it from the source. |
+
+**Placeholders** are firmware values boards ship with instead of their own,
+shared by many machines: all zeros, all `F`s, `03000200-0400-0500-0006-000700080009`,
+or text such as "To be filled by O.E.M.", "Default string", "Not Settable".
+A minion skips them as if there were none (the protocol package has the
+list: `PlaceholderMachineUUID`, and builds the value: `MachineID`).
+
+Not identities, whatever they look like: `/proc/sys/kernel/random/boot_id`
+(new each boot), a NIC's MAC address (randomized, or changed with the
+card), a volume's serial (copied with the disk image).
+
+BOB's minion, on Linux: the firmware's UUID when it runs as root, else the
+container's id when in one, else the machine-id, else the host name, else a
+random id for the process. It keeps none of its own: it leaves nothing on
+the host.
 
 ### Arguments
 
