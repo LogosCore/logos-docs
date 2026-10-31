@@ -206,6 +206,14 @@ the file goes to core as soon as it is picked, with its progress, and Run
 queues the task with its id. A command line for a command with a file
 param, typed without it, opens the form.
 
+A command's `params` may instead take a `stream`: the file's name, a
+`string`. The minion gets the file [streamed from
+core](../minion-messages/#streaming-a-file-to-a-minion) as its uploader
+sends it, of any size, nothing kept (see
+[`upload_stream`](../task-results-and-actions/#upload_stream)). In the
+command form it is a file picker with a **via curl** switch. A command takes
+one `file` or `stream` param at most, with no default.
+
 ### Commands
 
 A minion can do only what was built into it. The factory declares what its

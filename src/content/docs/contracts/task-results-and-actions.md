@@ -80,6 +80,7 @@ A command names them in the [build schema](../minion-build/#commands):
 | [`list_dir`](#list_dir) | `path` (string) | `dir_listing` | a listing's Up, crumbs and List directory; Browse files |
 | [`download_file`](#download_file) | `path` (string) | `file_download` | a listing's file: Download |
 | [`upload_file`](#upload_file) | `path` (string), `file` (file), `overwrite` (bool) | `file_upload` | a listing's folder: Upload here |
+| [`upload_stream`](#upload_stream) | `path` (string), `stream` (stream), `overwrite` (bool) | `file_upload` | a listing's folder: Upload here |
 | [`stream_file`](#stream_file) | `path` (string) | `file_stream` | a listing's file: Stream |
 
 More come as commands need them (a process list, a screenshot); each gets
@@ -284,7 +285,10 @@ The web app shows a listing as a file browser:
   the operator edits it) and **Overwrite** (off; the dialog says so when
   the listing already has an entry of that name). Upload runs the command
   with those three; the button by the crumbs uses the session's first
-  `upload_file` command.
+  `upload_file` command. With [`upload_stream`](#upload_stream) commands
+  too, Upload here is a submenu: the session's `upload_file` and
+  `upload_stream` commands, each its own dialog; a stream's has a **via
+  curl** switch.
 - Up, a crumb, and an entry's **List directory** (on a `dir` entry or a
   `link`, which may lead to one) run [`list_dir`](#list_dir) on that
   folder, as [Running an action](#running-an-action) says. Without a
@@ -384,8 +388,9 @@ file-upload = {
 ```
 
 The protocol package has it as `protocol.FileUpload`, read and checked by
-`protocol.ReadFileUpload`. Core checks `size` and `sha256` against the file
-it sent: data that does not match shows as a problem, as data that does not
+`protocol.ReadFileUpload`. It is the data of a [stream](#upload_stream)
+too. Core checks `size` and `sha256` against the file it sent (a
+stream's: the bytes it passed on, hashed as they went): data that does not match shows as a problem, as data that does not
 fit its result does. The upload's progress shows from the task's start,
 before the data: GraphQL gives it as the task's `upload`. That holds the
 file (name, size, SHA-256), how far the minion has acked, and the
@@ -405,6 +410,11 @@ columns, centred):
   core's), or why it failed;
 - its details: source name, size, SHA-256 (to copy), destination, state,
   when it started and ended.
+
+A stream's shows its uploader too: "Waiting for an uploader" (with
+a file picker and the curl command), how far the uploader is and the
+minion is, and, after the uploader went away, "Paused", with a **Resume**:
+pick the file again, or the curl command from where core is.
 
 The toggle shows the task's data as raw JSON.
 
@@ -447,6 +457,41 @@ own above the 2 GiB.
   the last one ends (done, failed or stopped), the file is dropped. One that
   no task names is dropped a day after its upload.
 - So **Run again** on an upload that ended asks for the file again.
+
+## upload_stream
+
+Puts a file of any size on the host, streamed from its uploader through
+core, with nothing kept.
+
+- **Core gives** `path` (a `string`, as for
+  [`upload_file`](#upload_file)), `stream` (a `stream`: the file's name)
+  and `overwrite` (a `bool`).
+- **Needs result** `file_upload`.
+- The command's minion gets the file [streamed from
+  core](../minion-messages/#streaming-a-file-to-a-minion), writes it to a
+  temporary file next to `path`, and moves it into place once its size and
+  SHA-256 check out.
+
+### Uploading a stream
+
+`PUT /api/v1/minion-streams/{task}`: the body is the file, or a part of it.
+
+- A part says where it is: `Content-Range: bytes N-M/total`. A body without
+  one is the whole file, from 0. Core takes a part only from where it is:
+  any other gets `409`, with `Upload-Offset` saying where. `HEAD` says it
+  too (`Upload-Offset`, `Upload-Length` once known). The first part, or the
+  whole, says the size (`total`, or `Content-Length`).
+- Core reads the body as the minion takes it: while its buffer is full, the
+  uploader waits.
+- One uploader at a time: **the newest wins**, as for a download.
+- Auth: the session cookie, or a **signed link** for that one stream (as
+  for [downloading a stream](#downloading-a-stream)).
+
+From the console the browser sends the picked file in parts of 8 MiB, one
+after the other, and after a failure goes on from core's offset by itself.
+With **via curl** the view gives `curl -T <file> '<link>'`; after a drop,
+**Resume** gives `curl -C <offset> -T <file> '<link>'` with core's offset
+filled in. (curl's `-C -` finds the offset for downloads only.)
 
 ## file_stream
 

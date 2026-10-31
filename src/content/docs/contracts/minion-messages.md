@@ -29,7 +29,8 @@ transfers](#file-transfers) both ways (`chunk`, `ack` with `xfer`): from a
 minion to core, kept in core's minion files bucket, and from core to a
 minion, a task file the minion pulls; BOB's minion runs `hello`, `ls` (a
 `dir_listing`), `download` (a `file_download`), `stream_download` (a
-`file_stream`), `upload` (a `file_upload`), `shell`, `sleep` and `exit`).
+`file_stream`), `upload` and `stream_upload` (a `file_upload`), `shell`,
+`sleep` and `exit`).
 :::
 
 A minion and core talk in **messages**. The [sync call](../channel-core-sync/)
@@ -237,8 +238,11 @@ ack = {
   ? tasks: [* task-id], ; tasks received
   ? xfer: xfer-id,      ; with next: the receiver has every byte
   ? next: uint,         ;   of the transfer before next
-  ? hold: bool,         ; with xfer: send nothing more of it until an
-                        ;   ack without hold (a stream)
+  ? hold: bool,         ; with xfer: a stream waits. From core to a minion
+                        ;   streaming a file: send nothing more of it; to a
+                        ;   minion pulling one: core has nothing to
+                        ;   send yet, ask again in a while. Until an ack
+                        ;   without hold.
 }
 
 rehello = { t: "rehello" }
@@ -357,6 +361,7 @@ map to CBOR like this:
 | `string_list`, `enum_list` | array of text |
 | `string_map` | map of text to text |
 | `file` | map: the [file core sends](#core-sending-a-file) for the task: `{xfer, name, size, sha256}` |
+| `stream` | map: the [file core streams](#streaming-a-file-to-a-minion) for the task, as its uploader sends it: `{xfer, name, stream: true}` |
 
 Core fills in defaults and checks the arguments against the params before a
 task is queued, so a minion gets every arg that has a value or a default. It
@@ -775,6 +780,33 @@ more acks, cuts the download, and the minion closes the file), or after
 grows while streamed is sent as far as the size announced; one that
 shrinks fails the task.
 
+#### Streaming a file to a minion
+
+A file of any size, sent to the minion as its uploader sends it to core,
+with nothing kept in core (an [`upload_stream`](../task-results-and-actions/#upload_stream)
+task). It is [core sending a file](#core-sending-a-file), the minion
+pulling it, with three differences:
+
+1. The task's `stream` arg is `{xfer, name, stream: true}`: core knows
+   neither the size nor the SHA-256 when the task goes out. The first chunk
+   says `total`, which core learns from its uploader.
+2. Core passes the uploader's bytes through a small buffer (a few chunks,
+   shared by core's instances). It answers each ask with the chunk from
+   `next` when the buffer has it, and drops the chunks before `next`. With
+   nothing to send yet (no uploader, or the uploader behind), it answers
+   `ack {xfer, next, hold: true}` instead, and the minion asks no more until
+   an ack without hold (before the first chunk, on its own schedule; after,
+   it checks in about every second). Every reply carries the stream's ack, so the minion hears
+   when bytes are there.
+3. The last chunk says `sha256` of the bytes core passed on: core takes them
+   in order, once each, and hashes them as they go. The minion checks it,
+   as it checks a file core sends, and ends the task with the
+   [`file_upload`](../task-results-and-actions/#file_upload) data.
+
+A stream ends when its task does: stopped by an operator, or after **an hour
+with no uploader**, when core cancels the task. Its uploader then gets an
+error, and the minion removes its temporary file.
+
 ## Freshness and replay
 
 Messages carry no time. Core stamps every message with its own receive time.
@@ -817,7 +849,7 @@ an exchange fails](#when-an-exchange-fails)).
 | Message (plaintext) | at most 768 KiB, so a sealed and packed message fits the HTTP channel's 1 MiB default `max_body_bytes` |
 | Chunk data | at most 512 KiB |
 | A file a minion sends, or core sends a minion | 2 GiB by default (`MINION_FILE_MAX_SIZE`) |
-| A file a minion streams | none: core keeps a few chunks of it at a time |
+| A file a minion streams, or core streams a minion | none: core keeps a few chunks of it at a time |
 | Items per message | 256 |
 | Elements of an array or map inside an item (a result's `data`) | 65 536 |
 | A task's output and data kept | 4 MiB together |
