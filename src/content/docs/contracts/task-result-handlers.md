@@ -42,9 +42,16 @@ A command names its handler in the [build schema](../minion-build/#commands):
   `data` only as raw JSON.
 - A handler's id matches `^[a-z][a-z0-9_]{0,62}$`. Any number of a schema's
   commands may name the same handler (`ls` and `ls_hidden`).
+- A handler names its own params (`dir_listing`: `path`), each of a type.
+  The command must take them, and **every other param it takes must have a
+  default** (required or not): core runs a command of a handler itself
+  (a folder opened in a listing) with the handler's params alone, and the
+  rest take their defaults. A param that is optional without a default is
+  refused too: the default says what the minion does without it.
 - At registration core checks each command against its handler's
   [params contract](#params) and refuses the schema when one does not
-  meet it, as it refuses an invalid schema (`validation_failed`).
+  meet it, as it refuses an invalid schema (`validation_failed`), naming
+  the command and the param.
 - A handler core does not know (a factory newer than core) is accepted: its
   commands show their `data` as raw JSON, as if they named none.
 
@@ -139,8 +146,9 @@ One directory's entries, for a command that lists a directory on the host:
 The command must declare a param `path` of type `string`: the directory to
 list, as the host writes paths. It may be required or have a default (`.`);
 without either, the minion lists its working directory. The command may take
-other params (`all`, to show hidden entries); core passes them through as
-they are.
+other params, each with a default (`all`, default `false`, to show hidden
+entries); a folder opened in the view keeps the args of the listing it was
+opened from.
 
 Core relies on `path` to [open a folder](#view): it runs the same command
 again with `path` set to the folder's.
