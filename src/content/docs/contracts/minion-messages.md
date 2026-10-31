@@ -681,9 +681,14 @@ no chunk for a day is given up; their chunks are dropped.
 Core keeps each chunk as an object of its own until the file is joined (so
 any core instance takes the next one), and the file in its **minion files
 bucket** (`MINION_FILE_BUCKET`, `minion-files`), apart from the wiki's and
-the builds'. Files stay until their operation is deleted. Any member of the
-operation downloads one: `GET /api/v1/minion-files/{id}`, always an
-attachment, never rendered.
+the builds'. Files stay until their operation is deleted. Once a file is joined, core
+reads its type from its first bytes. Any member of the operation can
+download it from `GET /api/v1/minion-files/{id}`, which answers byte ranges.
+It comes as an attachment. With `?preview=1` it comes inline, but only for
+the types the wiki shows inline (PDF, plain text, pictures, audio and video).
+Those carry a sandbox CSP and `nosniff`, so nothing in the file runs.
+The `minionFileStrings` query reads a kept file's printable strings (ASCII
+and UTF-16LE, as `strings` finds them), a page at a time from an offset.
 
 ## Freshness and replay
 

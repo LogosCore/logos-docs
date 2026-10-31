@@ -318,11 +318,31 @@ the data: GraphQL gives it as the task's `file`.
 
 ### View
 
-A file card, in the task's File tab: the file's name on the host and its
-size; while it comes, how much came (a bar), then whether it checked out
-against its size and SHA-256 (or why not); its SHA-256, to copy; and, once
-kept, **Download** (`GET /api/v1/minion-files/{id}`, the bytes as they
-came). The toggle shows the task's data as raw JSON.
+The task's File tab has four views:
+
+- **Overview**, centred in the pane:
+  - the file's kind, name, size and type;
+  - while it comes, how much has arrived, with a progress bar;
+  - then whether it checked out against its size and SHA-256 (or why not);
+  - once kept, **Download** (`GET /api/v1/minion-files/{id}`, the bytes as
+    they came);
+  - its details: path, exact size, type, SHA-256 (to copy) and state.
+- **Preview**, for a kept file of a type the wiki previews: pictures, PDF,
+  video and audio, and documents converted into a sandboxed frame (Word,
+  Excel, HTML, Markdown, CSV, JSON, YAML, scripts, text). It uses the same
+  renderers as wiki attachments.
+- **Hex**, read-only. It shows offset, hex and text columns, and reads the
+  file in 64 KiB blocks as they come into sight. It handles files of any
+  size, and offers:
+  - go to offset;
+  - select with the mouse or the arrow keys (Shift extends);
+  - copy as hex or as text;
+  - read the bytes at the caret as integers.
+- **Strings**: the printable strings in it, from core
+  (`minionFileStrings`), with their offsets. You can search them, set the
+  shortest length and pick the encoding. Double-click one to show it in Hex.
+
+The toggle shows the task's data as raw JSON.
 
 ## download_file
 
