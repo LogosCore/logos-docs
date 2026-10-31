@@ -63,8 +63,10 @@ session's **Browse files**. A factory may give several commands one handler
 how they work, and in what they leave on the host), and a build carries the
 ones its operator picked. So which command core runs is decided this way:
 
-- **Continuing a task** (a folder opened in a listing) runs that task's
-  command again, its other args as they were.
+- **Continuing a task** (Up or a crumb in a listing) runs that task's
+  command again, its other args as they were; an item's action in a view
+  offers the task's command first and the session's others of the handler
+  after it.
 - **Starting afresh** (Browse files) runs one of the session's commands with
   the handler, with the handler's params alone and the rest their defaults:
   - the one the operator picked for the session, while the session has it;
@@ -259,12 +261,20 @@ The web app shows a listing as a file browser:
 - The **entries** as a table, folders first, then by name: an icon by type,
   then name, size, modified (in the app's format), mode, owner. A link shows
   its target next to its name.
-- **Opening a folder** (a click on a `dir` entry, or on a `link`, which may
-  lead to one) runs the command again on the session with `path` set to
-  `path` + `sep` + the entry's name, its other args as they were. It is a new
-  task like any other: it goes in the list, and the console shows it.
-  Opening a folder takes an operator and an open session, as any task does;
-  a viewer browses what is already listed.
+- An entry's **actions are in its context menu** (a right click), not on a
+  click: a click runs nothing. **List directory**, on a `dir` entry or a
+  `link` (which may lead to one), lists `path` + `sep` + the entry's name.
+  With one `dir_listing` command it is an item naming it; with several, a
+  submenu of them, the listing's own command first. The listing's own
+  command keeps its other args; another runs with `path` alone, the rest
+  its defaults ([Running a handler's command](#running-a-handlers-command)).
+  The menu also copies the entry's path or name.
+- Listing a folder is a new task like any other: it goes in the list, and
+  the console shows it. It takes an operator and an open session, as any
+  task does; a viewer browses what is already listed (and copies).
+
+Every handler's view works this way: an item's actions in its context menu,
+each the session's commands of a handler, a submenu when there are several.
 
 The Data tab's toggle shows the joined listing as raw JSON instead.
 
