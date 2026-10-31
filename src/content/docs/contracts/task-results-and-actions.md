@@ -62,7 +62,8 @@ A command names them in the [build schema](../minion-build/#commands):
   minion does without it.
 - An **action's result**: the action names the result its commands must
   have, so what core does with the task next works (`list_dir` needs
-  `dir_listing`: the folder listed opens in the file browser).
+  `dir_listing`: the folder listed opens in the file browser). An action
+  may name none (`delete_path`): its commands then name none either.
 - Any number of a schema's commands may name the same result, or the same
   action (an `ls` by system call and an `ls_sh` through a shell).
 
@@ -81,6 +82,7 @@ A command names them in the [build schema](../minion-build/#commands):
 | [`download_file`](#download_file) | `path` (string) | `file_download` | a listing's file: Download |
 | [`upload_file`](#upload_file) | `path` (string), `file` (file), `overwrite` (bool) | `file_upload` | a listing's folder: Upload here |
 | [`upload_stream`](#upload_stream) | `path` (string), `stream` (stream), `overwrite` (bool) | `file_upload` | a listing's folder: Upload here |
+| [`delete_path`](#delete_path) | `path` (string), `recursive` (bool) | none | a listing's entry: Delete |
 | [`stream_file`](#stream_file) | `path` (string) | `file_stream` | a listing's file: Stream |
 
 More come as commands need them (a process list, a screenshot); each gets
@@ -290,6 +292,10 @@ The web app shows a listing as a file browser:
   `upload_stream` commands, each its own dialog. A stream's file may be
   picked (it goes from the browser), or not: it goes with curl, and the
   path must name the file.
+- On any entry, **Delete…** ([`delete_path`](#delete_path)): a
+  confirmation first, always, with the entry's full path, and for a
+  folder a **Delete everything in it** box (`recursive`). The listing stays
+  as it was listed; re-list the folder to see it gone.
 - Up, a crumb, and an entry's **List directory** (on a `dir` entry or a
   `link`, which may lead to one) run [`list_dir`](#list_dir) on that
   folder, as [Running an action](#running-an-action) says. Without a
@@ -493,6 +499,22 @@ after the other, and after a failure goes on from core's offset by itself.
 With none picked, the view gives `curl -T <file> '<link>'`; after a drop,
 **Resume** gives `curl -C <offset> -T <file> '<link>'` with core's offset
 filled in. (curl's `-C -` finds the offset for downloads only.)
+
+## delete_path
+
+Removes a file, a link or a folder on the host: what a listing's
+**Delete…** runs.
+
+- **Core gives** `path`, a `string`: the entry to remove, `path` + `sep` +
+  the entry's name for one in a listing; and `recursive`, a `bool`: a
+  folder that is not empty goes with everything in it. Without it, such a
+  folder stays and the task fails, saying so.
+- **No result.** An action needs no result when nothing comes back for core
+  to show: the task's output says what went (`removed /tmp/x (file)`), and
+  its commands name no result either.
+- A link goes itself, never what it points to. A command should refuse a
+  filesystem's root (`/`, `C:\`), whatever `recursive` says: BOB's `rm`
+  does.
 
 ## file_stream
 
