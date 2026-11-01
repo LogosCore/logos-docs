@@ -22,7 +22,7 @@ flowchart LR
 ## A machine's snapshot
 
 A snapshot belongs to a **machine of an operation**: its key is the
-operation and the sessions' [`machine_id`](../minion-messages/#machine-identity).
+operation and the sessions' [`machine_id`](../minion-messages/sessions/#machine-identity).
 Every session of the machine feeds it, and it outlives them: it stays when
 sessions close or are archived, and goes with the operation.
 
@@ -39,7 +39,7 @@ listing's `sep`). Its parent and name, then what was last known of it:
 
 | | |
 |---|---|
-| `type`, `size`, `modified`, `mode`, `owner`, `group`, `target`, `hidden` | as the last [listing](../minion-messages/#listings)'s entry for it said, or the last upload |
+| `type`, `size`, `modified`, `mode`, `owner`, `group`, `target`, `hidden` | as the last [listing](../minion-messages/tasks-and-results/#listings)'s entry for it said, or the last upload |
 | `seen_at`, `seen_by` | when, and by which task and session, it was last seen or changed |
 | `known` | false for a folder known only as one on the way to another entry (a download's file's folders, say): nothing was said of it yet |
 | `gone_at`, `gone_by` | it was deleted (`rm`), or a later listing of its folder no longer had it; null while it is there |
@@ -62,7 +62,7 @@ command's; the rest as each task ends, done.
 
 | What a task sends | The snapshot |
 |---|---|
-| A [listing](../minion-messages/#listings) (an `ls`'s, a walk's: any command's), as its pieces come | The folder's children become the listing's: entries it has are seen, and once the whole listing is in, those it no longer has are gone (a partial one marks nothing gone). The folder, and its parents up to the root, are entries too. A folder not read (`err`) says so. |
+| A [listing](../minion-messages/tasks-and-results/#listings) (an `ls`'s, a walk's: any command's), as its pieces come | The folder's children become the listing's: entries it has are seen, and once the whole listing is in, those it no longer has are gone (a partial one marks nothing gone). The folder, and its parents up to the root, are entries too. A folder not read (`err`) says so. |
 | `delete_path` (an `rm`) | The entry is gone; a folder, with everything under it. |
 | `file_download`, `file_stream` | The file is seen (its size), and `downloaded` gets the kept file (a download's; a stream keeps none: its SHA-256 only). |
 | `file_upload` | The file is seen, with the size the minion wrote, and `uploaded` gets it. |
@@ -77,7 +77,7 @@ than.
 see different files, and a folder shows the one listed last, saying by whom.
 
 Nothing of a file's content is in the snapshot: what core keeps of a file is
-a download's, in the [minion files bucket](../minion-messages/#file-transfers).
+a download's, in the [minion files bucket](../minion-messages/file-transfers/).
 
 ## The browser
 

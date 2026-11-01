@@ -125,7 +125,7 @@ Declared in `module.register` under `build`:
 | `fields[]` | Build parameters shared by every target. Field specs as in a [management manifest](../module-management/#fields), plus the [types below](#field-types-for-builds). |
 | `targets[]` | What the factory can produce, at least one. |
 | `commands[]` | Optional. What the minions can do. Operators pick each build's [commands](#commands) from its target's. |
-| `persisted_sessions` | Optional, `false` by default. The minions can claim a persisted session: built with a `session_id`, they claim it in their `hello` (see [Persisted sessions](../minion-messages/#persisted-sessions)). Operators can build such a minion from a session only for a factory that says so. |
+| `persisted_sessions` | Optional, `false` by default. The minions can claim a persisted session: built with a `session_id`, they claim it in their `hello` (see [Persisted sessions](../minion-messages/sessions/#persisted-sessions)). Operators can build such a minion from a session only for a factory that says so. |
 
 A target:
 
@@ -199,7 +199,7 @@ UI, `datetime` is a date and time picker, `enum_list` a set of checkboxes, and
 In a command's `params`, a `file` value is not a build file: it is a file the
 operator uploads to core for the task (a [task
 file](../task-results-and-actions/#task-files)), and the minion gets it in a [transfer from
-core](../minion-messages/#core-sending-a-file). `max_size` may not be over
+core](../minion-messages/file-transfers/#core-sending-a-file). `max_size` may not be over
 core's limit for those (`MINION_FILE_MAX_SIZE`, 2 GiB by default); without
 one, that limit applies. In the command form, the param is a file picker:
 the file goes to core as soon as it is picked, with its progress, and Run
@@ -208,7 +208,7 @@ param, typed without it, opens the form.
 
 A command's `params` may instead take a `stream`: the file's name, a
 `string`. The minion gets the file [streamed from
-core](../minion-messages/#streaming-a-file-to-a-minion) as its uploader
+core](../minion-messages/file-transfers/#streaming-a-file-to-a-minion) as its uploader
 sends it, of any size, nothing kept (see
 [`upload_stream`](../task-results-and-actions/#upload_stream)). A command
 takes one `file` or `stream` param at most, with no default. A stream may be

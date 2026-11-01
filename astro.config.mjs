@@ -93,7 +93,16 @@ export default defineConfig({
             { slug: "contracts/module-logs" },
             { slug: "contracts/minion-connection" },
             { slug: "contracts/minion-build" },
-            { slug: "contracts/minion-messages" },
+            {
+              label: "Minion Messages",
+              items: [
+                { slug: "contracts/minion-messages" },
+                { slug: "contracts/minion-messages/wire-format" },
+                { slug: "contracts/minion-messages/sessions" },
+                { slug: "contracts/minion-messages/tasks-and-results" },
+                { slug: "contracts/minion-messages/file-transfers" },
+              ],
+            },
             { slug: "contracts/task-results-and-actions" },
             { slug: "contracts/file-browser" },
             { slug: "implementing-a-module" },

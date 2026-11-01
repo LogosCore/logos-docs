@@ -110,7 +110,7 @@ its operator picked. Which one core runs:
 ## How core keeps data
 
 A result part's `data` is CBOR, as everything in a
-[message](../minion-messages/#message) is. Core keeps it **as it came**: the
+[message](../minion-messages/wire-format/#message) is. Core keeps it **as it came**: the
 part's `data` bytes, stored untouched beside the part, never converted to
 JSON or to Mongo's BSON. Byte strings stay bytes, integers stay exact, and
 what the minion sent can always be given back.
@@ -126,7 +126,7 @@ A **download** gives the parts' `data` exactly as the minion sent them:
 `GET /api/v1/minion-tasks/{id}/data`, a CBOR sequence
 ([RFC 8742](https://www.rfc-editor.org/rfc/rfc8742),
 `application/cbor-seq`), one item per part in `seq` order. Like the
-[output download](../minion-messages/#to-build), it takes a member of the
+[output download](../minion-messages/tasks-and-results/#results), it takes a member of the
 operation.
 
 ### As JSON, for the web app
@@ -145,7 +145,7 @@ way out, by one mapping:
 | `true`, `false`, `null`; `undefined` | `true`, `false`, `null`; `null` |
 | byte string | `{"$bytes": "<base64>"}` |
 
-Tags never come: the protocol's [CBOR rules](../minion-messages/#cbor-rules)
+Tags never come: the protocol's [CBOR rules](../minion-messages/wire-format/#cbor-rules)
 refuse them.
 
 A result's view does not go through this mapping for the fields it knows:
@@ -190,7 +190,7 @@ the host (`ls`, `dir`, `list`, whatever the factory calls it), or of one that
 finds files and gives them the same way.
 
 The minion does not send it as `data`: it sends what it read as a
-[listing](../minion-messages/#listings) (`ls` on its result parts), which
+[listing](../minion-messages/tasks-and-results/#listings) (`ls` on its result parts), which
 core also keeps in the machine's [file browser](../file-browser/), and core
 makes the task's `data` from the task's first listing (`id` 0). For the
 task's view, its actions and every reader of its data, nothing else
@@ -264,7 +264,7 @@ That part is 237 bytes of CBOR; the same values as JSON take 315.
 ### Parts
 
 A large directory does not fit one message, so its listing comes in pieces
-([Listings](../minion-messages/#listings)), several to a result part or one
+([Listings](../minion-messages/tasks-and-results/#listings)), several to a result part or one
 over several. Core makes each result part's `data` from the first listing's
 pieces on it:
 
@@ -340,7 +340,7 @@ Lists a directory: what Up, a crumb, List directory and Browse files run.
 
 ## file_download
 
-A file the minion sent core in a [file transfer](../minion-messages/#file-transfers):
+A file the minion sent core in a [file transfer](../minion-messages/file-transfers/):
 the result of a command that downloads a file from the host. Core keeps the
 file itself; the task's `data`, in one part at its end, says which one:
 
@@ -393,12 +393,12 @@ Sends a file to core: what a listing's file's **Download** runs.
   entry's name for a file in a listing.
 - **Needs result** `file_download`.
 - The command's minion sends the file in a
-  [transfer](../minion-messages/#file-transfers) for the task, and ends the
+  [transfer](../minion-messages/file-transfers/) for the task, and ends the
   task with the `file_download` data once core has it all.
 
 ## file_upload
 
-A file core sent the minion in a [transfer](../minion-messages/#core-sending-a-file):
+A file core sent the minion in a [transfer](../minion-messages/file-transfers/#core-sending-a-file):
 the result of a command that puts a file on the host. The task's `data`, in
 one part at its end, says where the file went and what the minion wrote:
 
@@ -458,7 +458,7 @@ Puts a file on the host: what a listing's **Upload here…** runs.
   name (the arg's `name`), so a path typed in the console may name the
   folder alone.
 - The command's minion gets the file in a
-  [transfer from core](../minion-messages/#core-sending-a-file). It writes
+  [transfer from core](../minion-messages/file-transfers/#core-sending-a-file). It writes
   it to a temporary file next to `path`, moves that into place once its
   size and SHA-256 check out, and ends the task with the `file_upload` data.
 
@@ -492,7 +492,7 @@ core, with nothing kept.
   without one, the path's last part names it) and `overwrite` (a `bool`).
 - **Needs result** `file_upload`.
 - The command's minion gets the file [streamed from
-  core](../minion-messages/#streaming-a-file-to-a-minion), writes it to a
+  core](../minion-messages/file-transfers/#streaming-a-file-to-a-minion), writes it to a
   temporary file next to `path`, and moves it into place once its size and
   SHA-256 check out.
 
@@ -537,7 +537,7 @@ Removes a file, a link or a folder on the host: what a listing's
 
 A walk through a directory and the folders under it: the result of a command
 that lists many folders in one task (BOB's `walk`). What it read goes to
-core as [listings](../minion-messages/#listings), one a folder, into the
+core as [listings](../minion-messages/tasks-and-results/#listings), one a folder, into the
 machine's [file browser](../file-browser/) as they come; its `data` only says
 where the walk stands:
 
@@ -585,7 +585,7 @@ listing's folder, and in the file browser on a folder or the folder shown.
 
 ## file_stream
 
-A file the minion [streamed](../minion-messages/#streaming-a-file) to
+A file the minion [streamed](../minion-messages/file-transfers/#streaming-a-file) to
 whoever downloaded it: the result of a command that sends a file of any
 size, with nothing kept in core. The task's `data`, in one part at its end
 (when the downloader had every byte), says which file:
@@ -646,7 +646,7 @@ runs.
 - **Core gives** `path`, a `string`: the file to stream, `path` + `sep` +
   the entry's name for a file in a listing.
 - **Needs result** `file_stream`.
-- The command's minion [streams](../minion-messages/#streaming-a-file) the
+- The command's minion [streams](../minion-messages/file-transfers/#streaming-a-file) the
   file for the task, and ends the task with the `file_stream` data once its
   downloader has every byte.
 
