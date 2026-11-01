@@ -22,14 +22,16 @@ Actions](../../task-results-and-actions/).
 
 ```cddl
 chunk = {
-  t: "chunk",
-  xfer: xfer-id,        ; the transfer: 16 random bytes
-  off: uint,            ; where data starts in the whole
-  data: bstr,           ; at most 512 KiB
-  ? total: uint,        ; the whole's size: in the first chunk (off 0)
-  ? sha256: bstr .size 32,  ; of the whole: in the last chunk
-  ? task: task-id,      ; the task the transfer belongs to: in the first chunk
-  ? name: tstr,         ; the file's name, or its path on the host: first chunk
+  0: 12,                ; t: chunk
+  1: xfer-id,           ; xfer: the transfer, 16 random bytes
+  2: uint,              ; off: where data starts in the whole
+  3: bstr,              ; data: at most 512 KiB
+  ? 4: uint,            ; total: the whole's size, in the first chunk (off 0)
+  ? 5: bstr .size 32,   ; sha256: of the whole, in the last chunk
+  ? 6: task-id,         ; task: the task the transfer belongs to, in the
+                        ;   first chunk
+  ? 7: tstr,            ; name: the file's name, or its path on the host,
+                        ;   in the first chunk
 }
 ```
 
@@ -87,8 +89,8 @@ the minion (an `upload_file` task). Core cannot start an exchange through a
 channel, so the minion **pulls** it: each ack asks for the next chunk, and
 core's reply brings it.
 
-1. The task names the file in an arg of type `file`: `{xfer, name, size,
-   sha256}`. Core picks `xfer` per task, so the same file sent to two tasks is
+1. The task names the file in an arg of type `file`, a
+   [`file-offer`](../tasks-and-results/#tasks): `{xfer, name, size, sha256}`. Core picks `xfer` per task, so the same file sent to two tasks is
    two transfers. `name` is the file's name as uploaded (no path); `size` and
    `sha256` are the whole's.
 2. The minion gets ready to write (it checks the destination, opens a

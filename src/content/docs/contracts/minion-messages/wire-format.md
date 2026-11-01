@@ -48,21 +48,24 @@ open as no reply.
 ## Message
 
 The plaintext is one CBOR map. There are two formats, one per direction; the
-frame's `dir` says which one to parse.
+frame's `dir` says which one to parse. Its keys are numbers, as are those of
+every item and of the structures inside them ([Registry](#registry)): these
+pages call each key by its name, and each CDDL gives the number with the name
+beside it.
 
 ```cddl
 minion-message = {      ; minion → core
-  v: 1,                 ; this format
-  ? id: msg-id,         ; when it starts an exchange
-  ? re: msg-id,         ; when it answers one
-  ? items: [* minion-item],  ; absent or empty: nothing to say
+  0: 2,                 ; v: this format
+  ? 1: msg-id,          ; id: when it starts an exchange
+  ? 2: msg-id,          ; re: when it answers one
+  ? 3: [* minion-item], ; items: absent or empty, nothing to say
 }
 
 core-message = {        ; core → minion
-  v: 1,
-  ? id: msg-id,
-  ? re: msg-id,
-  ? items: [* core-item],
+  0: 2,                 ; v
+  ? 1: msg-id,          ; id
+  ? 2: msg-id,          ; re
+  ? 3: [* core-item],   ; items
 }
 
 minion-item = stage / hello / sleep_update / get_tasks / result / chunk / ack / err
@@ -93,7 +96,10 @@ Who starts depends on the module in between:
 
 Both sides write, and accept, a subset of CBOR that maps onto JSON and back:
 
-- map keys are text, each once;
+- map keys are unsigned integers in the protocol's own maps (the message, its
+  items, and the structures the [registry](#registry) numbers), and text in
+  maps that belong to a command or a factory (a task's `args`, a result's
+  `data`, an `x`); each key once;
 - definite lengths only;
 - no tags, no `undefined`, no simple values other than `false`, `true` and
   `null`;
@@ -128,21 +134,23 @@ Messages carry no time: core stamps each with its own receive time.
 
 ```cddl
 err = {
-  t: "err",
-  code: tstr,           ; one of the codes below
-  ? msg: tstr,          ; for a person
-  ? item: uint,         ; which item of the message it is about (0-based)
+  0: 13,                ; t: err
+  1: uint,              ; code: one of the codes below
+  ? 2: tstr,            ; msg: for a person
+  ? 3: uint,            ; item: which item of the message it is about (0-based)
 }
 ```
 
-| `code` | Sent by | Means | The receiver |
-|---|---|---|---|
-| `bad_message` | both | the message, or an item in it, is not valid | logs it; a task or transfer the item was about ends failed |
-| `unknown_item` | both | an item type the receiver does not know (`item` says which) | logs it |
-| `unknown_task` | both | a `cancel`, `chunk` or `ack` for a task or transfer the receiver does not have | ends that task or transfer failed |
-| `too_large` | both | a message, chunk or file over the [limits](#limits) | ends the task or transfer it was about failed |
-| `session_closed` | core | the session the message was sent under is [closed](../sessions/#session-lifetime) | starts over |
-| `session_replaced` | core | another process claimed the [persisted session](../sessions/#persisted-sessions) | starts over, without claiming it |
+| `code` | Name | Sent by | Means | The receiver |
+|---|---|---|---|---|
+| 1 | `bad_message` | both | the message, or an item in it, is not valid | logs it; a task or transfer the item was about ends failed |
+| 2 | `unknown_item` | both | an item type the receiver does not know (`item` says which) | logs it |
+| 3 | `unknown_task` | both | a `cancel`, `chunk` or `ack` for a task or transfer the receiver does not have | ends that task or transfer failed |
+| 4 | `too_large` | both | a message, chunk or file over the [limits](#limits) | ends the task or transfer it was about failed |
+| 5 | `session_closed` | core | the session the message was sent under is [closed](../sessions/#session-lifetime) | starts over |
+| 6 | `session_replaced` | core | another process claimed the [persisted session](../sessions/#persisted-sessions) | starts over, without claiming it |
+
+These pages call a code by its name; on the wire it is the number.
 
 Only `session_closed` and `session_replaced` end a session; every other code
 is about one message or item, and the session goes on. A frame that fails to
@@ -167,15 +175,53 @@ when an exchange fails is in [Sessions](../sessions/#when-an-exchange-fails).
 Session timings (the first check-in, tombstones, replaced keys, the
 backstop) are in [Sessions](../sessions/).
 
-Example sizes, CBOR plaintext → sealed → packed by the HTTP channel:
+Example sizes, CBOR plaintext → sealed → packed by the HTTP channel, with
+the same message's text-keyed forms for comparison:
 
-| Message | CBOR | JSON, for comparison | On the wire |
+| Message | CBOR | With text keys (v 1) | JSON | On the wire |
+|---|---|---|---|---|
+| empty check-in (busy) | 21 B | 24 B | 39 B | 99 B |
+| check-in asking for one task | 28 B | 49 B | 75 B | 99 B |
+| `hello` | 164 B | 249 B | 325 B | 243 B |
+| reply with two tasks | 112 B | 152 B | 231 B | 195 B |
+| ack and one result with 17 bytes of output | 91 B | 131 B | 210 B | 163 B |
+
+## Registry
+
+Every number the protocol gives a name. A number, once given, is never
+reused for something else: a key or type that goes away leaves its number
+unused. The protocol package holds the same numbers (the `cbor` tags of its
+types, and the item and code constants), and a test fails when one moves.
+
+**Item types**, an item's key `0` (`t`). Every item is a map whose key `0`
+says its type; its own fields count from `1`, numbered per item, and are
+given in its CDDL on the page that defines it.
+
+| `t` | Item | `t` | Item |
 |---|---|---|---|
-| empty check-in (busy) | 24 B | 39 B | 99 B |
-| check-in asking for one task | 49 B | 75 B | 131 B |
-| `hello` | 181 B | 246 B | 259 B |
-| reply with two tasks | 165 B | 243 B | 243 B |
-| ack and one result with 17 bytes of output | 148 B | 237 B | 227 B |
+| 1 | [`stage`](../sessions/#stage) | 8 | [`task`](../tasks-and-results/#tasks) |
+| 2 | [`stage_response`](../sessions/#stage) | 9 | [`cancel`](../tasks-and-results/#cancelling-a-task) |
+| 3 | [`hello`](../sessions/#hello) | 10 | [`result`](../tasks-and-results/#results) |
+| 4 | [`hello_response`](../sessions/#hello) | 11 | [`ack`](../tasks-and-results/#acknowledging) |
+| 5 | [`sleep_update`](../sessions/#late-and-lost-sessions) | 12 | [`chunk`](../file-transfers/#chunks) |
+| 6 | `rehello` (planned) | 13 | [`err`](#errors) |
+| 7 | [`get_tasks`](../tasks-and-results/#asking-for-tasks) | | |
+
+**The message**: `v` 0, `id` 1, `re` 2, `items` 3, as [above](#message).
+
+**Structures inside items**, numbered from `1` each, in the CDDL where they
+are defined: a [sleep](../sessions/#hello), a [listing
+piece](../tasks-and-results/#listings) and its entries, a [file
+offer](../tasks-and-results/#tasks) (a `file` or `stream` arg), and the
+[stage keys](../sessions/#stage).
+
+**Err codes**: in [Errors](#errors).
+
+What stays text: the values that are data (a host's `os`, an `integrity`
+level, an entry's `type`, paths, names), and the maps that belong to a
+command or a factory, keys and all: a task's `args` (keyed by the build
+schema's params), a result's `data` (its command's result's shape), and every
+`x`.
 
 ## Open questions
 
@@ -188,11 +234,19 @@ Example sizes, CBOR plaintext → sealed → packed by the HTTP channel:
 
 ## Design notes
 
+- **Why numbers for keys.** A message's text keys, item types and codes were
+  a third of its size or more (see the [example sizes](#limits)), and they
+  were the same in every message of every minion: words like
+  `stage_response` and `machine_id` in a minion's binary say what it is.
+  Numbers make messages smaller and leave the protocol's vocabulary out of
+  the minion. Names live in the docs, the protocol package and core's logs.
+  What a command or factory defines (args, data, `x`) keeps its own text
+  keys: those belong to the build, and core shows them as they are.
 - **Why CBOR.** Messages are designed like JSON, but files, screenshots and
   raw command output travel as bytes: no base64 inside the encryption, and
   none outside it either, since the sync call carries the ciphertext raw. The
-  subset above converts to JSON and back, so core can show any message to
-  operators as JSON.
+  subset above converts to JSON and back (a numbered key named from the
+  registry), so a message can always be shown as JSON.
 - **Why encrypt-then-MAC with the full tag.** The tag is checked before
   anything is decrypted, so a forged or altered frame never reaches the CBC
   padding check, the classic way CBC leaks. A 32-byte tag costs 16 bytes more

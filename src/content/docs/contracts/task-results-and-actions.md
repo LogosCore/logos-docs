@@ -136,7 +136,7 @@ way out, by one mapping:
 
 | CBOR | JSON |
 |---|---|
-| map (text keys only, as the protocol allows) | object |
+| map (text keys only: data keeps text keys, though the protocol's own maps number theirs) | object |
 | array | array |
 | text | string |
 | integer within ±2^53 | number |

@@ -83,30 +83,33 @@ sequenceDiagram
 
 ## Items
 
-A message carries a list of **items**, each a map with its type in `t`. Each
-is defined, in [CDDL](https://www.rfc-editor.org/rfc/rfc8610), on the page
-that explains it.
+A message carries a list of **items**, each a map with its type in key `0`
+(`t`), a number. Each is defined, in [CDDL](https://www.rfc-editor.org/rfc/rfc8610),
+on the page that explains it. Keys are numbers too: the pages call them by
+name, and the CDDL gives both ([Registry](wire-format/#registry)).
 
-| `t` | Sent by | Carries | Defined in |
-|---|---|---|---|
-| `stage` | minion | its public key and a correlation id: its first message | [Sessions](sessions/#stage) |
-| `stage_response` | core | a temporary id and new keys, encrypted to that public key | [Sessions](sessions/#stage) |
-| `hello` | minion | the host and process: opens a session, or updates it | [Sessions](sessions/#hello) |
-| `hello_response` | core | the session id | [Sessions](sessions/#hello) |
-| `sleep_update` | minion | its check-in schedule changed | [Sessions](sessions/#late-and-lost-sessions) |
-| `rehello` | core | *planned*: send a `hello` again | [Sessions](sessions/#hello) |
-| `get_tasks` | minion | it takes new tasks, and how many at most | [Tasks and results](tasks-and-results/#asking-for-tasks) |
-| `task` | core | a command to run, with its arguments | [Tasks and results](tasks-and-results/#tasks) |
-| `cancel` | core | stop a running task | [Tasks and results](tasks-and-results/#cancelling-a-task) |
-| `result` | minion | one part of a task's output, data and listings | [Tasks and results](tasks-and-results/#results) |
-| `ack` | both | tasks received; how far a file transfer got | [Tasks and results](tasks-and-results/#acknowledging) |
-| `chunk` | both | one piece of a file | [File transfers](file-transfers/#chunks) |
-| `err` | both | a problem with a message or one of its items | [Wire format](wire-format/#errors) |
+| `t` | Item | Sent by | Carries | Defined in |
+|---|---|---|---|---|
+| 1 | `stage` | minion | its public key and a correlation id: its first message | [Sessions](sessions/#stage) |
+| 2 | `stage_response` | core | a temporary id and new keys, encrypted to that public key | [Sessions](sessions/#stage) |
+| 3 | `hello` | minion | the host and process: opens a session, or updates it | [Sessions](sessions/#hello) |
+| 4 | `hello_response` | core | the session id | [Sessions](sessions/#hello) |
+| 5 | `sleep_update` | minion | its check-in schedule changed | [Sessions](sessions/#late-and-lost-sessions) |
+| 6 | `rehello` | core | *planned*: send a `hello` again | [Sessions](sessions/#hello) |
+| 7 | `get_tasks` | minion | it takes new tasks, and how many at most | [Tasks and results](tasks-and-results/#asking-for-tasks) |
+| 8 | `task` | core | a command to run, with its arguments | [Tasks and results](tasks-and-results/#tasks) |
+| 9 | `cancel` | core | stop a running task | [Tasks and results](tasks-and-results/#cancelling-a-task) |
+| 10 | `result` | minion | one part of a task's output, data and listings | [Tasks and results](tasks-and-results/#results) |
+| 11 | `ack` | both | tasks received; how far a file transfer got | [Tasks and results](tasks-and-results/#acknowledging) |
+| 12 | `chunk` | both | one piece of a file | [File transfers](file-transfers/#chunks) |
+| 13 | `err` | both | a problem with a message or one of its items | [Wire format](wire-format/#errors) |
 
 ## Changing these formats
 
 - **A receiver ignores keys it does not know**, so either side can add
-  optional keys without a new message version (`v`).
+  optional keys without a new message version (`v`). A new key or item type
+  takes a new number; a number is never reused
+  ([Registry](wire-format/#registry)).
 - **An item type it does not know** gets an `err` with `unknown_item` and is
   skipped; the rest of the message is taken.
 - A change that breaks either rule needs a new `v`, and a protocol release

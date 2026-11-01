@@ -34,8 +34,8 @@ asks:
 
 ```cddl
 get_tasks = {
-  t: "get_tasks",
-  ? max: uint,          ; at most this many; absent: no limit of the
+  0: 7,                 ; t: get_tasks
+  ? 1: uint,            ; max: at most this many; absent, no limit of the
                         ;   minion's. 0 is invalid.
 }
 ```
@@ -61,10 +61,18 @@ get_tasks = {
 
 ```cddl
 task = {
-  t: "task",
-  task: task-id,
-  cmd: tstr,            ; a command id of the minion's build
-  ? args: { * tstr => arg },
+  0: 8,                 ; t: task
+  1: task-id,           ; task
+  2: tstr,              ; cmd: a command id of the minion's build
+  ? 3: { * tstr => arg },  ; args: keyed by the command's params, text
+}
+
+file-offer = {          ; a file or stream param's arg
+  1: xfer-id,           ; xfer: the transfer, core's pick, one a task
+  2: tstr,              ; name: the file's name as uploaded, no path
+  ? 3: uint,            ; size: the whole's (not a stream's)
+  ? 4: bstr .size 32,   ; sha256: the whole's (not a stream's)
+  ? 5: true,            ; stream: the file is streamed to the minion
 }
 ```
 
@@ -83,8 +91,8 @@ or a default. Their types map to CBOR like this:
 | `datetime` | integer, unix seconds |
 | `string_list`, `enum_list` | array of text |
 | `string_map` | map of text to text |
-| `file` | map: the [file core sends](../file-transfers/#core-sending-a-file) for the task, `{xfer, name, size, sha256}` |
-| `stream` | map: the [file core streams](../file-transfers/#streaming-a-file-to-a-minion) for the task, `{xfer, name, stream: true}` |
+| `file` | `file-offer`: the [file core sends](../file-transfers/#core-sending-a-file) for the task, `{xfer, name, size, sha256}` |
+| `stream` | `file-offer`: the [file core streams](../file-transfers/#streaming-a-file-to-a-minion) for the task, `{xfer, name, stream: true}` |
 
 - **Core sends a task again**, when asked, until the minion acks it or a
   result for it arrives.
@@ -99,11 +107,12 @@ or a default. Their types map to CBOR like this:
 
 ```cddl
 ack = {
-  t: "ack",
-  ? tasks: [* task-id], ; tasks received
-  ? xfer: xfer-id,      ; with next: the receiver has every byte of the
-  ? next: uint,         ;   transfer before next
-  ? hold: bool,         ; with xfer: the transfer waits (see File transfers)
+  0: 11,                ; t: ack
+  ? 1: [* task-id],     ; tasks: tasks received
+  ? 2: xfer-id,         ; xfer, with next: the receiver has every byte of
+  ? 3: uint,            ;   the transfer before next
+  ? 4: bool,            ; hold, with xfer: the transfer waits (see File
+                        ;   transfers)
 }
 ```
 
@@ -114,7 +123,7 @@ stops sending them. `xfer`, `next` and `hold` move a file transfer along
 ## Cancelling a task
 
 ```cddl
-cancel = { t: "cancel", task: task-id }
+cancel = { 0: 9, 1: task-id }   ; t: cancel, task
 ```
 
 When an operator stops a task, core sends `cancel` with **every reply** until
@@ -127,16 +136,19 @@ goes out. The minion stops the task and still sends a final `result`
 
 ```cddl
 result = {
-  t: "result",
-  task: task-id,
-  seq: uint,            ; 0, 1, 2, …: the parts of one task's output
-  ? done: bool,         ; the last part; ok is then required
-  ? ok: bool,           ; the minion did what the task asked
-  ? out: bstr,          ; output as raw bytes, in the host's own encoding
-  ? err: tstr,          ; what went wrong, with ok: false
-  ? data: { * tstr => any },  ; structured output, its command's result's shape
-  ? exit: int,          ; the exit code of a process the task ran: done part only
-  ? ls: [* listing-piece],  ; what the task saw of the file system: Listings
+  0: 10,                ; t: result
+  1: task-id,           ; task
+  2: uint,              ; seq: 0, 1, 2, …, the parts of one task's output
+  ? 3: bool,            ; done: the last part; ok is then required
+  ? 4: bool,            ; ok: the minion did what the task asked
+  ? 5: bstr,            ; out: output as raw bytes, in the host's own encoding
+  ? 6: tstr,            ; err: what went wrong, with ok: false
+  ? 7: { * tstr => any },  ; data: structured output, its command's
+                        ;   result's shape, text keys
+  ? 8: int,             ; exit: the exit code of a process the task ran,
+                        ;   done part only
+  ? 9: [* listing-piece],  ; ls: what the task saw of the file system,
+                        ;   Listings
 }
 ```
 
@@ -178,16 +190,33 @@ keeps them in the machine's [file browser](../../file-browser/) as they come.
 
 ```cddl
 listing-piece = {
-  id: uint,             ; which listing of the task: 0, 1, 2…
-  part: uint,           ; which piece of it: 0, 1, 2…
-  ? last: bool,         ; the listing's last piece
-  ? path: tstr,         ; part 0 only (then required): the directory,
-  ? sep: "/" / "\\",    ;   absolute, as the host writes it; its separator;
-  ? parent: tstr,       ;   and the directory above it, left out at a root
-  ? entries: [* entry], ; as a dir_listing's (Task Results and Actions)
-  ? partial: bool,      ; some entries could not be read: not the whole
-  ? err: tstr,          ; the directory could not be read at all: part 0,
-                        ;   last, no entries
+  1: uint,              ; id: which listing of the task, 0, 1, 2…
+  2: uint,              ; part: which piece of it, 0, 1, 2…
+  ? 3: bool,            ; last: the listing's last piece
+  ? 4: tstr,            ; path: the directory, absolute, as the host
+                        ;   writes it
+  ? 5: "/" / "\\",      ; sep: the host's separator
+  ? 6: tstr,            ; parent: the directory above, left out at a root
+                        ;   (path, sep, parent: part 0 only, which needs
+                        ;   path and sep)
+  ? 7: [* entry],       ; entries
+  ? 8: bool,            ; partial: some entries could not be read, not the
+                        ;   whole
+  ? 9: tstr,            ; err: the directory could not be read at all,
+                        ;   part 0, last, no entries
+}
+
+entry = {               ; as a dir_listing's entry (Task Results and
+  1: tstr,              ;   Actions), numbered: name
+  2: tstr,              ; type: "dir", "file", "link", "other"
+  ? 3: uint,            ; size
+  ? 4: int,             ; modified: unix seconds
+  ? 5: tstr,            ; mode
+  ? 6: tstr,            ; owner
+  ? 7: tstr,            ; group
+  ? 8: tstr,            ; target: a link's
+  ? 9: bool,            ; hidden
+  ? 10: { * tstr => any },  ; x: the factory's own fields, text keys
 }
 ```
 

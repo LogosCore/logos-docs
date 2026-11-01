@@ -42,17 +42,24 @@ id. The session then keeps the build's own keys:
 
 ```cddl
 stage = {
-  t: "stage",
-  key: bstr,            ; the minion's RSA-2048 public key, DER SubjectPublicKeyInfo
-  corr: bstr .size 16,  ; correlation id, random
+  0: 1,                 ; t: stage
+  1: bstr,              ; key: the minion's RSA-2048 public key, DER
+                        ;   SubjectPublicKeyInfo
+  2: bstr .size 16,     ; corr: correlation id, random
 }
 
 stage_response = {
-  t: "stage_response",
-  tid: bstr .size 16,   ; the temporary id: a UUIDv4, raw bytes
-  keys: bstr,           ; new key material for the build's suite, encrypted
-                        ;   with RSA-OAEP (SHA-256) under the key from stage
-  corr: bstr .size 16,  ; the correlation id from stage
+  0: 2,                 ; t: stage_response
+  1: bstr .size 16,     ; tid: the temporary id, a UUIDv4, raw bytes
+  2: bstr,              ; keys: new key material for the build's suite,
+                        ;   encrypted with RSA-OAEP (SHA-256) under the key
+                        ;   from stage
+  3: bstr .size 16,     ; corr: the correlation id from stage
+}
+
+stage-keys = {          ; aes-256-cbc-hmac-sha256's key material, as keys
+  1: bstr .size 32,     ;   holds it (encrypted): enc_key
+  2: bstr .size 32,     ; mac_key
 }
 ```
 
@@ -66,38 +73,41 @@ stage_response = {
 4. Core answers with the temporary id, the key material **encrypted with the
    minion's public key**, and the correlation id.
 5. The minion checks the correlation id and decrypts the key material: for
-   this suite, the CBOR map `{enc_key, mac_key}`, about 80 bytes, well within
+   this suite, the CBOR map `stage-keys`, 71 bytes, well within
    one RSA-2048 OAEP operation (190 bytes at most).
 
 ### Hello
 
 ```cddl
 hello = {
-  t: "hello",
-  pid: uint,
-  os: tstr,             ; GOOS-style: "windows", "linux", "darwin"
-  arch: tstr,           ; GOARCH-style: "amd64", "arm64", "386"
-  machine_id: tstr,     ; what tells this machine apart: see Machine identity
-  ? host: tstr,         ; the host name
-  ? user: tstr,         ; as the OS reports it, e.g. "CORP\\svc_backup"
-  ? domain: tstr,       ; the host's Windows domain or workgroup
-  ? proc: tstr,         ; the process's image file name ("svchost.exe"), no path
-  ? integrity: "low" / "medium" / "high" / "system" / "root" / "user",
-  ? addrs: [* tstr],    ; local IP addresses
-  ? version: tstr,      ; the minion implementation's own version
-  ? x: { * tstr => any },  ; the factory's own fields
-  ? sid: bstr .size 16, ; the persisted session the build claims
-  ? sleep: { sleep },   ; the check-in schedule it starts with
+  0: 3,                 ; t: hello
+  1: uint,              ; pid
+  2: tstr,              ; os: GOOS-style, "windows", "linux", "darwin"
+  3: tstr,              ; arch: GOARCH-style, "amd64", "arm64", "386"
+  11: tstr,             ; machine_id: what tells this machine apart, see
+                        ;   Machine identity
+  ? 4: tstr,            ; host: the host name
+  ? 5: tstr,            ; user: as the OS reports it, e.g. "CORP\\svc_backup"
+  ? 6: tstr,            ; domain: the host's Windows domain or workgroup
+  ? 7: tstr,            ; proc: the process's image file name
+                        ;   ("svchost.exe"), no path
+  ? 8: "low" / "medium" / "high" / "system" / "root" / "user",  ; integrity
+  ? 9: [* tstr],        ; addrs: local IP addresses
+  ? 10: tstr,           ; version: the minion implementation's own version
+  ? 12: { * tstr => any },  ; x: the factory's own fields, text keys
+  ? 13: bstr .size 16,  ; sid: the persisted session the build claims
+  ? 14: { sleep },      ; sleep: the check-in schedule it starts with
 }
 
 sleep = (
-  interval: uint,       ; milliseconds between check-ins
-  jitter: uint,         ; spread either way, percent of interval, 0 to 100
+  1: uint,              ; interval: milliseconds between check-ins
+  2: uint,              ; jitter: spread either way, percent of interval,
+                        ;   0 to 100
 )
 
 hello_response = {
-  t: "hello_response",
-  sid: bstr .size 16,   ; the session id: a UUIDv4, raw bytes
+  0: 4,                 ; t: hello_response
+  1: bstr .size 16,     ; sid: the session id, a UUIDv4, raw bytes
 }
 ```
 
@@ -235,7 +245,7 @@ Core marks a session **late** when it missed a check-in, and **lost** when it
 missed three, by the schedule the minion says it keeps.
 
 ```cddl
-sleep_update = { t: "sleep_update", sleep }
+sleep_update = { 0: 5, sleep }   ; t: sleep_update
 ```
 
 - The minion says its schedule in its `hello` (`sleep`), and again with a
