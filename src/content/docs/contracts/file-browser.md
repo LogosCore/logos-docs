@@ -10,7 +10,7 @@ Actions](../task-results-and-actions/)) as they end.
 
 ```mermaid
 flowchart LR
-    LS[ls: dir_listing] --> S[(Snapshot of a machine)]
+    LS["listings (ls, any command's), as they come"] --> S[(Snapshot of a machine)]
     RM[rm: delete_path] --> S
     DL[download, stream_download] --> S
     UP[upload, stream_upload] --> S
@@ -39,7 +39,7 @@ listing's `sep`). Its parent and name, then what was last known of it:
 
 | | |
 |---|---|
-| `type`, `size`, `modified`, `mode`, `owner`, `group`, `target`, `hidden` | as the last [`dir_listing`](../task-results-and-actions/#dir_listing) entry for it said, or the last upload |
+| `type`, `size`, `modified`, `mode`, `owner`, `group`, `target`, `hidden` | as the last [listing](../minion-messages/#listings)'s entry for it said, or the last upload |
 | `seen_at`, `seen_by` | when, and by which task and session, it was last seen or changed |
 | `known` | false for a folder known only as one on the way to another entry (a download's file's folders, say): nothing was said of it yet |
 | `gone_at`, `gone_by` | it was deleted (`rm`), or a later listing of its folder no longer had it; null while it is there |
@@ -48,27 +48,30 @@ listing's `sep`). Its parent and name, then what was last known of it:
 
 A **folder** also says when its children were last listed (`listed_at`, by
 which session and host user): a folder never listed holds only what other
-tasks put in it, and says so.
+tasks put in it, and says so. One a task could not read says why
+(`list_err`, permission denied), when and by whom, until a listing of it.
 
 On a Windows host (a `\` listing), paths compare without case: `C:\Users` and
 `c:\users` are one entry.
 
 ### What feeds it
 
-Core changes the snapshot as each task ends, done, whatever started it: the
-console, a typed line, the browser itself.
+Core changes the snapshot from every task, whatever started it: the
+console, a typed line, the browser itself. Listings as they come, any
+command's; the rest as each task ends, done.
 
-| Task's result or action | The snapshot |
+| What a task sends | The snapshot |
 |---|---|
-| `dir_listing` (an `ls`) | The folder's children become the listing's: entries it has are seen, those it no longer has are gone. The folder, and its parents up to the root, are entries too. |
+| A [listing](../minion-messages/#listings) (an `ls`'s, a walk's: any command's), as its pieces come | The folder's children become the listing's: entries it has are seen, and once the whole listing is in, those it no longer has are gone (a partial one marks nothing gone). The folder, and its parents up to the root, are entries too. A folder not read (`err`) says so. |
 | `delete_path` (an `rm`) | The entry is gone; a folder, with everything under it. |
 | `file_download`, `file_stream` | The file is seen (its size), and `downloaded` gets the kept file (a download's; a stream keeps none: its SHA-256 only). |
 | `file_upload` | The file is seen, with the size the minion wrote, and `uploaded` gets it. |
 
-**Newer wins.** Results end out of order (a slow listing ending after a
-delete it raced): each change is stamped with its task's end, and an entry
-takes a change only newer than the one it holds. A listing replaces only what
-it is newer than.
+**Newer wins.** Results come out of order (a slow listing ending after a
+delete it raced): each change is stamped (a listing with when core took its
+first piece, any other with its task's end), and an entry takes a change
+only newer than the one it holds. A listing replaces only what it is newer
+than.
 
 **The latest listing wins**, whoever's: two sessions as different host users
 see different files, and a folder shows the one listed last, saying by whom.
@@ -96,7 +99,8 @@ snapshot of the session's machine.
 - **Freshness**: "listed 3 h ago by #46 (root)", or "never listed: only what
   other tasks put here", on every folder.
 - **Listed or not**: a folder listed shows amber, in the table and the tree;
-  one never listed (known only as the way to another entry) grey and dashed.
+  one never listed (known only as the way to another entry) grey and dashed;
+  one a task could not read, a red lock, its line saying why.
 - **Marks**: downloaded (opens the kept file's view; a stream keeps none),
   uploaded (when, its SHA-256), deleted (struck through, with when and how).
   **Show deleted** hides them; it is on.
@@ -161,8 +165,13 @@ command and params, as from a listing.
 
 - **Why from results, not a minion's own crawl.** Every listing an operator
   makes already says what a folder holds; keeping it costs nothing on the
-  host and says nothing new on the wire. A recursive crawl, if it comes, is
-  one more command whose results are `dir_listing`s.
+  host and says nothing new on the wire. A recursive crawl is one more
+  command that sends listings.
+- **Why listings apart from a task's data.** As data, a listing was one
+  folder a task, within its 4 MiB, taken when the task ended: a walk over
+  thousands of folders fit none of it. Apart, any command sends any number,
+  of any size, taken as they come; an `ls`'s own view is made from its
+  first.
 - **Why a machine, not a session.** Sessions come and go (restarts,
   persisted sessions replaced, a second implant on the same host); the files
   are the machine's. `machine_id` was asked for this.

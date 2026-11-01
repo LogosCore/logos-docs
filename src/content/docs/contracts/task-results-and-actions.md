@@ -186,11 +186,19 @@ One directory's entries: the result of a command that lists a directory on
 the host (`ls`, `dir`, `list`, whatever the factory calls it), or of one that
 finds files and gives them the same way.
 
+The minion does not send it as `data`: it sends what it read as a
+[listing](../minion-messages/#listings) (`ls` on its result parts), which
+core also keeps in the machine's [file browser](../file-browser/), and core
+makes the task's `data` from the task's first listing (`id` 0). For the
+task's view, its actions and every reader of its data, nothing else
+changes.
+
 ### Data
 
-In CBOR, described in CDDL as in [Minion Messages](../minion-messages/#items).
-The protocol package has it as Go types (`protocol.DirListing`,
-`protocol.DirEntry`), which a minion in Go encodes as they are:
+The data core makes, in CBOR, described in CDDL as in [Minion
+Messages](../minion-messages/#items). The protocol package has it as Go
+types (`protocol.DirListing`, `protocol.DirEntry`); a listing's pieces carry
+the same entries:
 
 ```cddl
 dir-listing = {
@@ -227,11 +235,13 @@ entry = {
 - A key this page does not list is ignored, so a later version can add
   optional keys (see [Changing the vocabulary](#changing-the-vocabulary)). A factory's
   own fields go under `x`, as in a `hello`.
-- A directory the minion cannot list is not a listing: the task ends
-  `ok: false` with the reason in `err`, and no `data`.
+- A directory the minion may not read is a listing with `err` and no
+  entries (core marks the folder in the file browser), and the task ends
+  `ok: false` with the reason in `err`; core makes no `data` of it. One that
+  is not a directory at all is no listing: just the failed task.
 
-For example, the first part of an `ls` of `/home/ann/Downloads`, in CBOR's
-diagnostic notation:
+For example, the data core makes of an `ls` of `/home/ann/Downloads`, in
+CBOR's diagnostic notation:
 
 ```cddl
 {
@@ -250,17 +260,21 @@ That part is 237 bytes of CBOR; the same values as JSON take 315.
 
 ### Parts
 
-A large directory does not fit one message (at most 65 536 elements in an
-item's `data`, 768 KiB in a message), so the minion splits it:
+A large directory does not fit one message, so its listing comes in pieces
+([Listings](../minion-messages/#listings)), several to a result part or one
+over several. Core makes each result part's `data` from the first listing's
+pieces on it:
 
-- The **first part** (`seq` 0) carries `path`, `sep`, `parent` and the first
-  entries.
-- **Later parts** carry `entries` only. A later part with `path`, `sep` or
-  `parent` is a problem (rule 1 above).
-- The **done part** may carry entries or none.
+- The listing's **first piece** (`part` 0), with `path`, `sep`, `parent`
+  and the first entries, comes on the task's **first result part** (`seq`
+  0): that part's data names the directory.
+- **Later pieces**, on later parts, give data of `entries` only.
+- The **done part** may carry pieces or none.
 
-Core joins them into one listing: `path`, `sep` and `parent` from the first
-part, the entries of every part appended in `seq` order.
+Core joins the parts' data into one listing as before: `path`, `sep` and
+`parent` from the first part, the entries of every part appended in `seq`
+order. The listing's data counts toward the task's 4 MiB; what goes into
+the file browser does not.
 
 ### View
 

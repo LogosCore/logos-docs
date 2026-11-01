@@ -24,11 +24,12 @@ queueing them, sending them on `get_tasks` until acked, keeping each result
 part once and in order, and a cancel with every reply until the task ends;
 [results and actions](../task-results-and-actions/): data kept as the CBOR
 it came in, checked and joined by the command's result, `dir_listing` shown
-as a file browser, `list_dir` run from it; [file
+as a file browser, `list_dir` run from it; [listings](#listings) (`ls` on
+result parts), any command's, into the machine's file browser as they come; [file
 transfers](#file-transfers) both ways (`chunk`, `ack` with `xfer`): from a
 minion to core, kept in core's minion files bucket, and from core to a
 minion, a task file the minion pulls; BOB's minion runs `hello`, `ls` (a
-`dir_listing`), `download` (a `file_download`), `stream_download` (a
+listing, its `dir_listing`), `download` (a `file_download`), `stream_download` (a
 `file_stream`), `upload` and `stream_upload` (a `file_upload`), `rm` (a
 `delete_path`), `shell`, `sleep` and `exit`).
 :::
@@ -218,6 +219,22 @@ result = {
   ? data: { * tstr => any },  ; structured output, the command's own
   ? exit: int,          ; exit code of the process the task ran: only on
                         ;   the done part, only for commands that ran one
+  ? ls: [* listing-piece],  ; what the task saw of the host's file system
+                        ;   (Listings, below): any command's
+}
+
+listing-piece = {
+  id: uint,             ; which listing of the task: 0, 1, 2…
+  part: uint,           ; which piece of it: 0, 1, 2…
+  ? last: bool,         ; the listing's last piece
+  ? path: tstr,         ; the directory, absolute, as the host writes it;
+  ? sep: "/" / "\\",    ;   its separator; and the directory above it, left
+  ? parent: tstr,       ;   out at a root: on part 0 only, path and sep then
+                        ;   required
+  ? entries: [* entry], ; as a dir_listing's (Task Results and Actions)
+  ? partial: bool,      ; some entries could not be read: not the whole
+  ? err: tstr,          ; the directory could not be read at all: part 0,
+                        ;   last, no entries
 }
 
 cancel = { t: "cancel", task: task-id }
@@ -652,6 +669,47 @@ at a time, some many. So the minion asks.
   minion busy with a long task can still be told to stop it.
 - **One `get_tasks` per request.** A second one is a `bad_message`.
 
+### Listings
+
+What a task saw of the host's file system travels as **listings**, on its
+result parts (`ls`), beside or instead of `out` and `data`: a directory's
+entries, read by any command (an `ls` of one folder, a walk over many).
+Core keeps them in the machine's [file browser](../file-browser/) snapshot
+as they come.
+
+```mermaid
+flowchart LR
+    T[A task's result parts] -- "ls: pieces" --> C[Core]
+    C -- each piece, as it comes --> S[(The machine's snapshot)]
+    C -- "a dir_listing command: its first listing" --> D[The task's data]
+```
+
+- **A listing is one directory**, numbered `id` within its task. A task can
+  send any number: an `ls` sends one, a walk one a folder.
+- **In pieces**, numbered `part` from 0, the last with `last`. The first
+  names the directory (`path`, `sep`, `parent`); every piece adds entries,
+  at most a message's room: a big directory goes in several. One result
+  part can carry pieces of several listings, and one listing can span
+  several parts.
+- **Whole** is a listing whose pieces 0 to `last` all came and none says
+  `partial`. Only a whole listing tells core what the folder no longer has
+  (marked gone in the snapshot); one cut short adds what it has.
+- **`err`** is a directory the minion may not read (permission denied): one
+  piece, `part` 0 and `last`, no entries. Core marks the folder so.
+
+Core, as each result part comes:
+
+1. **Takes its pieces into the snapshot at once**, not when the task ends: a
+   long walk fills the browser as it goes, and a stopped one keeps what it
+   saw. A listing's time is when core took its first piece (not the
+   minion's clock), and every piece of it shares it.
+2. **Keeps them apart from the task's output and data**: listings do not
+   count toward its 4 MiB. A piece that comes before its listing's first
+   (a part resent late) waits for it.
+3. **Makes a [`dir_listing`](../task-results-and-actions/#dir_listing)
+   command's data from its first listing** (`id` 0): its task shows what it
+   read, as any task's data.
+
 ### File transfers
 
 A file moves in chunks of at most 512 KiB, in either direction: a minion
@@ -852,7 +910,7 @@ an exchange fails](#when-an-exchange-fails)).
 | A file a minion streams, or core streams a minion | none: core keeps a few chunks of it at a time |
 | Items per message | 256 |
 | Elements of an array or map inside an item (a result's `data`) | 65 536 |
-| A task's output and data kept | 4 MiB together |
+| A task's output and data kept | 4 MiB together; its [listings](#listings) apart, into the snapshot |
 | Nesting | 16 levels |
 | Core's replay memory | message ids, 24 hours |
 | A closed session's tombstone | 30 days |
