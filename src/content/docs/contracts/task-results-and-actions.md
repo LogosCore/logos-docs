@@ -75,6 +75,7 @@ A command names them in the [build schema](../minion-build/#commands):
 | [`file_download`](#file_download) | A file the minion sent core: which one | A file card: progress, check, Download |
 | [`file_upload`](#file_upload) | A file core sent the minion: where it went | The upload's progress, then where and whether it checked out |
 | [`file_stream`](#file_stream) | A file the minion streamed: which one, how big | Download and a curl line, the stream's progress |
+| [`dir_walk`](#dir_walk) | Where a walk through a directory stands (its listings go to the file browser) | Its progress, Open in File Browser |
 
 | Action | Core gives | Needs result | Run from |
 |---|---|---|---|
@@ -84,6 +85,7 @@ A command names them in the [build schema](../minion-build/#commands):
 | [`upload_stream`](#upload_stream) | `path` (string), `stream` (stream), `overwrite` (bool) | `file_upload` | a listing's folder: Upload here |
 | [`delete_path`](#delete_path) | `path` (string), `recursive` (bool) | none | a listing's entry: Delete |
 | [`stream_file`](#stream_file) | `path` (string) | `file_stream` | a listing's file: Stream |
+| [`walk_dir`](#walk_dir) | `path` (string) | `dir_walk` | the file browser's folder: Walk from here |
 
 More come as commands need them (a process list, a screenshot); each gets
 a section here first, and a release of the protocol and core.
@@ -161,8 +163,9 @@ For a command with a result, core:
    problem found, and the web app shows that task's `data` as raw JSON with
    the problem above it. The minion gets no error: it delivered the part,
    and only its factory can fix the shape.
-2. **Joins the parts by the result's rule** ([dir_listing's](#parts)), in
-   `seq` order, instead of the generic one.
+2. **Joins the parts by the result's rule** ([dir_listing's](#parts): its
+   entries appended; [dir_walk's](#dir_walk): the latest part), in `seq`
+   order, instead of the generic one.
 3. **Shows it with the result's view**, with the raw JSON a toggle away.
 
 A task keeps the result its command had when it was queued.
@@ -529,6 +532,51 @@ Removes a file, a link or a folder on the host: what a listing's
 - A link goes itself, never what it points to. A command should refuse a
   filesystem's root (`/`, `C:\`), whatever `recursive` says: BOB's `rm`
   does.
+
+## dir_walk
+
+A walk through a directory and the folders under it: the result of a command
+that lists many folders in one task (BOB's `walk`). What it read goes to
+core as [listings](../minion-messages/#listings), one a folder, into the
+machine's [file browser](../file-browser/) as they come; its `data` only says
+where the walk stands:
+
+```cddl
+dir-walk = {
+  root: tstr,           ; the directory walked, absolute, as the host writes it
+  folders: uint,        ; folders listed so far
+  entries: uint,        ; their entries
+  ? unread: uint,       ; folders it could not read (each a listing with err)
+  ? skipped: uint,      ; folders it did not enter: deeper than it goes, past
+                        ;   its limit, on another file system, hidden
+  ? current: tstr,      ; the folder it is reading; left out once it ended
+  ? x: { * tstr => any },
+}
+```
+
+- **Every part says it whole**, `root` included, and core shows the latest
+  (`DirWalk`, `ReadDirWalk` in the protocol package). A minion sends one as
+  the walk goes (BOB's every 2 seconds) and one at its end.
+- **How it walks is the command's**: BOB's goes breadth first (the top
+  levels first), never follows a link, and stops at its `depth`,
+  `max_folders`, its file system and, unless asked, hidden folders, all
+  params with defaults. It reads on only while few of its pieces wait to be
+  sent, so a walk goes as fast as the channel takes it and does not crowd
+  out other tasks.
+- **Its view** shows the folder walked, the folders and entries so far, how
+  many it could not read or did not enter, and the folder it is reading,
+  with **Open in File Browser** at the folder walked.
+
+## walk_dir
+
+Walks a folder and those under it: what the file browser's **Walk from
+here** runs, on a folder or on the folder shown.
+
+- **Core gives** `path`, a `string`: the folder to walk. How deep and how
+  far are the command's own params, with defaults (BOB's `depth` 5,
+  `max_folders` 10 000).
+- **The result is a `dir_walk`.** The file browser shows the walk's folders
+  as their listings come, the folder walked marked "walking…".
 
 ## file_stream
 

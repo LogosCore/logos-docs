@@ -31,7 +31,8 @@ minion to core, kept in core's minion files bucket, and from core to a
 minion, a task file the minion pulls; BOB's minion runs `hello`, `ls` (a
 listing, its `dir_listing`), `download` (a `file_download`), `stream_download` (a
 `file_stream`), `upload` and `stream_upload` (a `file_upload`), `rm` (a
-`delete_path`), `shell`, `sleep` and `exit`).
+`delete_path`), `walk` (listings, a `dir_walk`), `shell`, `sleep` and
+`exit`).
 :::
 
 A minion and core talk in **messages**. The [sync call](../channel-core-sync/)

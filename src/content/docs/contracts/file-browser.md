@@ -121,10 +121,11 @@ with it where they left it.
 The same as a listing's (see [dir_listing's view](../task-results-and-actions/#view)),
 run as tasks of a session of the machine: **Refresh** (the folder's
 `list_dir`, with the command picked for the session in its console),
-**Upload here** (the folder), and in an entry's menu **Open**, **List
-directory**, **Download**, **Stream**, **Upload here…**, **Delete…** and
-**Open downloaded file**, each a submenu when the session has several
-commands for it. A queued task says so, with a link to the session's
+**Upload here** and **Walk from here** (the folder), and in an entry's menu
+**Open**, **List directory**, **Walk from here** (a folder and those under
+it, [`walk_dir`](../task-results-and-actions/#walk_dir)), **Download**,
+**Stream**, **Upload here…**, **Delete…** and **Open downloaded file**, each
+a submenu when the session has several commands for it. A queued task says so, with a link to the session's
 console; the snapshot changes when it ends.
 
 They go through **the tab's session**. **Act as**, in the tab's header,

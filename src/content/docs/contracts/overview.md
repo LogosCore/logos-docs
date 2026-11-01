@@ -100,7 +100,7 @@ Every contract in this section, regardless of surface, follows the same baseline
 | [Minion Connection Schema](../minion-connection/) | Control plane | Channel → Core | Implemented |
 | [Minion Build](../minion-build/) | Control plane | Core ↔ Factory | Implemented; payload crypto pending |
 | [Minion Messages](../minion-messages/) | Data plane, inside the ciphertext | Minion ↔ Core | Draft |
-| [Task Results and Actions](../task-results-and-actions/) | Data plane: a task's `data`; what core runs a command for | Minion → Core, named in the build schema | Implemented: `dir_listing`, `list_dir` |
+| [Task Results and Actions](../task-results-and-actions/) | Data plane: a task's `data`; what core runs a command for | Minion → Core, named in the build schema | Implemented: results `dir_listing`, `dir_walk`, `file_download`, `file_upload`, `file_stream`; actions `list_dir`, `walk_dir`, `download_file`, `upload_file`, `upload_stream`, `stream_file`, `delete_path` |
 | [File Browser](../file-browser/) | A machine's file system, as tasks saw it | Core, from tasks' results | Implemented |
 
 To build a module against these contracts, see
