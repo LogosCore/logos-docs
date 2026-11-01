@@ -123,9 +123,10 @@ sequenceDiagram
 
 **Declaring kinds.**
 
-- A channel declares at registration the kinds it supports. The `bind` kinds
-  also need **target fields**: where to reach a minion (a page's URL; a host,
-  a port and credentials), which operators fill in for a session once the
+- A channel declares at registration the kinds it supports, in its
+  [connection schema](#the-connection-schema-by-kind). The `bind` kinds also
+  need **target fields**: where to reach a minion (a page's URL; a host, a
+  port and credentials), which operators fill in for a target once the
   minion is in place, not when it is built.
 - A factory declares, for each target and channel of its [build
   schema](../contracts/minion-build/), the kinds its minions support: a PHP
@@ -279,8 +280,8 @@ On the **control link**, key 0 says what the frame is:
 
 | Frame | Direction | Keys |
 |---|---|---|
-| `call` (1) | core → channel | 1 request id; 2 the target (the channel's target fields, text keys); 3 the id the message is sent under; 4 the ciphertext; 5 deadline in milliseconds, optional (the channel keeps to the shorter of it and its own request timeout) |
-| `open` (2) | core → channel | 1 request id; 2 the target; 5 deadline, 30 seconds unless core says otherwise |
+| `call` (1) | core → channel | 1 request id; 2 the values: the build connection's and the target's, in one map by the keys the channel [declared](#the-connection-schema-by-kind); 3 the id the message is sent under; 4 the ciphertext; 5 deadline in milliseconds, optional (the channel keeps to the shorter of it and its own request timeout) |
+| `open` (2) | core → channel | 1 request id; 2 the values, as for `call`; 5 deadline, 30 seconds unless core says otherwise |
 | `answer` (3) | channel → core | 1 request id; then either 4 the body that came back and 6 the transport's status (the HTTP status, say), or 7 a failure: `{1: kind, 2: message}`, the kind unreachable 1 (DNS, refused), timeout 2, TLS 3, other 4 |
 
 - **Every request gets exactly one `answer`.** An `open` that worked is
@@ -301,8 +302,53 @@ On the **control link**, key 0 says what the frame is:
   task ids runs those tasks again. Only a lost answer does that; it comes
   with a minion that keeps nothing.
 
+### The connection schema by kind
+
+A `bind` connection has values of two kinds: those **built into the minion**
+(for an HTTP page: the method, and where the message travels, the body, a
+cookie or a header), which the page reads and the channel calls with; and
+those of **each target** (the page's URL, a host header, a proxy; for SSH a
+host, a port, a user and a password or key), which only the channel uses.
+The [connection schema](../contracts/minion-connection/) a channel declares
+at registration says both, by kind (its `schema_version` `"2"`):
+
+```json
+{
+  "schema_version": "2",
+  "version": 3,
+  "fields": [ "…shared by every kind…" ],
+  "kinds": {
+    "reverse-call": { "fields": [ "base_url", "checkin_interval", "…" ] },
+    "reverse-persistent": { "fields": [ "base_url", "ws_reconnect_backoff", "…" ] },
+    "bind-call": {
+      "fields": [ "method", "carrier" ],
+      "target": [ "url", "host_header", "proxy", "tls_verify" ]
+    }
+  }
+}
+```
+
+- **`kinds`'s keys are the kinds the channel supports.**
+- **`fields` are built into the minion**: those at the top every kind has,
+  each kind's its own besides.
+- **`target`**, for the `bind` kinds only: what an operator fills in for each
+  target, never built into a minion.
+- **A kind's keys are unique** across the shared fields, its own and its
+  target's: `call` and `open` give the channel one map of them, under the
+  keys it declared.
+- **Every field is a field spec**, as now. A target field may be a `secret`
+  (an SSH password or key): core keeps it, shows it masked, and gives it to
+  the channel, which dials with it, never to a minion.
+- **Endpoints** name a connection kind and keep values for its built-in
+  fields: an address for a `reverse` kind, a way of calling for a `bind`
+  kind, reused across builds. **Targets** stay apart: one per deployment.
+- **`version`** covers the built-in fields, as now: changing those changes
+  what built minions read. Target fields can change without it: nothing is
+  built from them. A target that lacks a value a new target field requires
+  shows **needs editing** until an operator fills it in.
+
 ### To decide
-- **Target fields**: how the connection schema declares them.
+
 - **Who opens `bind-persistent` and when**: an operator for the session, core
   on a new task, or both; and what closes it (the operator, an idle timeout).
 - **Kinds in the build schema** and in a build's connections.
