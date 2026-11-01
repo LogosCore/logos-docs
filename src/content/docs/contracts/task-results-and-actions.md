@@ -677,7 +677,11 @@ Moves the minion to another of its build's connections: what a session's
 
 - **Core gives** `conn`, an `int`: the connection's place in the build's
   connections, from 1, as a [`hello`](../minion-messages/sessions/#connections)
-  names it.
+  names it. The command's `conn` should have the [format](../module-management/#fields)
+  `connection`: operators then pick the connection by name in the command
+  form, and type its name in the console (`connect ws`; Tab completes it),
+  without knowing the build's order. A name two connections share is typed
+  as its place.
 - **No result.** The task's output says how it went ("switched to connection
   2"), and it fails when the minion stays where it is ("connection 2 did not
   answer, staying on 1", "already on connection 2"). A minion that moved
