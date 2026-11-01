@@ -466,6 +466,49 @@ there, better than check-ins do.
 | `reverse-persistent` | `connected` | late and lost from when it closed, by the minion's `sleep` |
 | `bind-persistent` | `connected` | `not connected`, on purpose; `unreachable since` when opens fail |
 
+### Connection management
+
+A minion may be built with several connections, of several kinds: BOB's
+could poll (`reverse-call`) and keep a WebSocket (`reverse-persistent`) through
+the same channel. Which one it uses first is its build's choice; operators
+need to see which one it uses, and to move it to another. It goes as the
+schedule does: the minion **reports** its connection in the protocol, and an
+operator **changes** it with a command.
+
+**Reporting**, new in the protocol:
+
+- The `hello` says **the connection in use**: its place in the build's
+  connections, a number, so a minion carries no connection names; core knows
+  each one's name, kind, channel and endpoint from the build.
+- **`conn_update`** (minion → core) says when it changes, whatever changed
+  it: an operator's command, a fallback after failures, the minion's own
+  logic; and, optionally, why ("fell back after 5 failures").
+
+The session's view lists the build's connections with the one in use, and
+the changes it reported.
+
+**Switching** is an [action](../contracts/task-results-and-actions/):
+**`switch_connection`**, core giving the connection's place and, optionally,
+a duration after which the minion goes back. A factory maps it to a command
+of its own (BOB's might be `connect`), so:
+
+- the session's connection list has a **Switch to** button on each
+  connection, which runs the action, and the console has the factory's
+  command, `help` listing it;
+- it is a task: it ends with a result, "switched to 2" or "failed: TLS
+  handshake, staying on 1", a switch to an unreachable endpoint being
+  something to report, and who switched what stays on record;
+- it is the factory's to offer: a minion built with one connection has no
+  such command, and no button shows;
+- it goes as tasks go, within the [allowance](#get_tasks-on-a-persistent-connection):
+  a minion that takes no tasks takes no switch. `cancel` is the one thing that
+  always reaches a minion.
+
+**Giving a running minion a new connection** (a fresh redirector when one is
+burned) is planned the same way: an action, `add_connection`, with the kind,
+the settings and the values, which core checks against the channel's and the
+factory's fields as a build's connection.
+
 ### Kinds in the build schema and in builds
 
 A factory says which kinds its minions support in its [build
