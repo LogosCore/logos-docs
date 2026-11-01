@@ -37,24 +37,39 @@ Declared in `module.register` under `build`:
 
 ```json
 {
-  "schema_version": "2",
+  "schema_version": "3",
   "version": 1,
   "channels": [
     {
-      "module_name": "http", "versions": [2],
-      "fields": [
+      "module_name": "http", "versions": [3],
+      "kinds": [
         {
-          "key": "method", "type": "enum", "label": "Method", "default": "POST",
-          "options": [{ "value": "GET" }, { "value": "POST" }, { "value": "PUT" }]
+          "kind": "reverse-call",
+          "fields": [
+            {
+              "key": "method", "type": "enum", "label": "Method", "default": "POST",
+              "options": [{ "value": "GET" }, { "value": "POST" }, { "value": "PUT" }]
+            },
+            {
+              "key": "path_prefix", "type": "string", "label": "Path prefix", "default": "/",
+              "description": "Every request path starts with it, e.g. /cdn/assets/ when the front forwards only that path.",
+              "pattern": "^/[A-Za-z0-9._~!$&'()*+,;=:@%/-]*$", "max_length": 256
+            }
+          ]
         },
         {
-          "key": "path_prefix", "type": "string", "label": "Path prefix", "default": "/",
-          "description": "Every request path starts with it, e.g. /cdn/assets/ when the front forwards only that path.",
-          "pattern": "^/[A-Za-z0-9._~!$&'()*+,;=:@%/-]*$", "max_length": 256
+          "kind": "reverse-persistent",
+          "fields": [
+            {
+              "key": "path_prefix", "type": "string", "label": "Path prefix", "default": "/",
+              "description": "The WebSocket's path starts with it.",
+              "pattern": "^/[A-Za-z0-9._~!$&'()*+,;=:@%/-]*$", "max_length": 256
+            }
+          ]
         }
       ]
     },
-    { "module_name": "dns", "versions": [1] }
+    { "module_name": "dns", "versions": [1], "kinds": [{ "kind": "reverse-call" }] }
   ],
   "crypto": "aes-256-cbc-hmac-sha256",
   "fields": [
@@ -90,7 +105,7 @@ Declared in `module.register` under `build`:
     {
       "id": "shellcode", "label": "Shellcode", "format": "bin",
       "platforms": ["windows/amd64", "linux/amd64"],
-      "channels": [{ "module_name": "http", "versions": [2] }]
+      "channels": [{ "module_name": "http", "versions": [3], "kinds": ["reverse-call"] }]
     }
   ],
   "commands": [
@@ -118,9 +133,10 @@ Declared in `module.register` under `build`:
 
 | Field | Meaning |
 |---|---|
-| `schema_version` | Format of this structure: `"2"` (commands and their params numbered). `"1"` is no longer taken. |
+| `schema_version` | Format of this structure: `"3"` (connection kinds, each with its own parameters, per channel; commands and their params numbered). `"1"` and `"2"` are no longer taken. |
 | `version` | Version of the factory's parameter set, from 1. Raised when values saved against the previous set would build something else or fail: a field or target removed, renamed or given another meaning. Adding an optional field or a target does not need it. |
-| `channels[]` | At least one: the channel kinds the minions can speak: `module_name`, the connection schema `versions` they read (1 to 16), and optional `fields`, the factory's own [connection parameters](#connection-parameters) for that kind. |
+| `channels[]` | At least one: the channel kinds the minions can speak: `module_name`, the connection schema `versions` they read (1 to 16), and `kinds`. |
+| `channels[].kinds[]` | At least one, in the factory's order of preference: the [connection kinds](../channel-core-connections/#kinds-in-the-build-schema-and-in-builds) the minions support through that channel, each `kind` with optional `fields`, the factory's own [connection parameters](#connection-parameters) for a connection of that kind, in full. |
 | `crypto` | Optional. The one payload crypto suite the minions implement; core generates each minion's keys for it. Core implements only `aes-256-cbc-hmac-sha256` (AES-256-CBC, then HMAC-SHA256 over the ciphertext) for now and refuses a registration with any other suite (`validation_failed`). |
 | `fields[]` | Build parameters shared by every target. Field specs as in a [management manifest](../module-management/#fields), plus the [types below](#field-types-for-builds). |
 | `targets[]` | What the factory can produce, at least one. |
@@ -136,7 +152,7 @@ A target:
 | `format` | What the artifact is: `exe`, `dll`, `elf`, `so`, `macho`, `dylib`, `bin` (raw shellcode), `script`, `zip`, or another name of the same form. Shown and filtered on; the factory names the file. |
 | `platforms[]` | Where the artifact runs, as `os/arch` with Go's names (`windows/amd64`, `linux/arm64`, `darwin/arm64`). `any` stands for either half: `any/any` for a script. Checked by form only, so a new platform needs no protocol release. |
 | `fields[]` | Parameters of this target only, added to the shared ones. |
-| `channels[]` | Optional. Narrows the factory's `channels` for this target, to kinds and `versions` the factory lists. The connection parameters stay the factory's. |
+| `channels[]` | Optional. Narrows the factory's `channels` for this target, to channel kinds, `versions` and connection `kinds` (names only) the factory lists. The connection parameters stay the factory's. |
 
 - Core validates the schema at registration (structure, limits, defaults
   against their own specs) and refuses a registration whose schema is invalid
@@ -170,9 +186,11 @@ channel accepts any method and any path, so which method a minion sends, and
 under which path, is the minion's choice. An operator may need to set that per
 connection, for example when a CDN forwards only `/cdn/assets/*` to the channel.
 
-A factory declares such parameters as the `fields` of a `channels` entry. They
-are field specs like any other, set **per connection**: the build holds one
-set of values for each [connection](#connections) the minion is given.
+A factory declares such parameters as the `fields` of a connection kind of a
+`channels` entry: each kind its own, in full (a WebSocket has one handshake,
+so BOB's `reverse-persistent` has no `method`). They are field specs like any
+other, set **per connection**: the build holds one set of values for each
+[connection](#connections) the minion is given, by its kind.
 In the build request, each connection's settings come as an endpoint export,
 next to these values with defaults filled in (see [`factory.build`](#factorybuild)).
 
@@ -300,18 +318,19 @@ tries them. Each one is:
 | Property | Meaning |
 |---|---|
 | `module_name` | The channel kind, one the target speaks. |
-| `kind` | *Planned, a draft*: the connection kind, one the channel and the target both support ([Channel ↔ Core: Connections](../channel-core-connections/#kinds-in-the-build-schema-and-in-builds)). Today every connection is `reverse-call`. |
+| `kind` | Optional. The connection kind, one the channel and the target both support ([Channel ↔ Core: Connections](../channel-core-connections/#kinds-in-the-build-schema-and-in-builds)); left out, the first of those in the factory's order. |
 | `name` | Optional. What the minion calls the connection, a slug like an endpoint name, unique among the build's connections. Without one, it is `<channel>-<position>`, e.g. `http-1`. |
 | `description` | Optional. The operators' note on what the connection is for, at most 500 characters. Core keeps it with the build record; it is never part of a build request. |
-| `settings` | By the channel's [connection schema](../minion-connection/) field key, validated like an endpoint's values. A field without a value takes the schema's default. |
-| `values` | The factory's [connection parameters](#connection-parameters) for that channel kind. |
+| `settings` | By the field key of the kind in the channel's [connection schema](../minion-connection/), validated like an endpoint's values. A field without a value takes its default. |
+| `values` | The factory's [connection parameters](#connection-parameters) for that channel kind and connection kind. |
 
 The build form fills a connection in from scratch or from one of the operation's
 [endpoints](../minion-connection/#channel-endpoints), picked from a searchable
-list: that copies the endpoint's values, its name (made unique among the
-connections) and its description, unless the operator wrote their own, for the
+list of endpoints of kinds the connection can use: that copies the endpoint's
+kind and values, its name (made unique among the connections) and its
+description, unless the operator wrote their own, for the
 operator to change as needed. The other way, **Save as endpoint** keeps a
-connection's settings, name and description as a new endpoint of the
+connection's kind, settings, name and description as a new endpoint of the
 operation, for later builds; the factory's parameters stay with the build.
 Either way it is a copy: nothing refers back afterwards.
 
@@ -355,9 +374,10 @@ latest schema:
   channel kind the target supports, whose current connection schema `version`
   is one the factory lists, with a `name`, when it has one, that is a slug no
   other connection is called (see [Connections](#connections));
-- each connection's settings follow that connection schema, and its values the
-  connection parameters the factory declares for that channel kind, by the same
-  rules;
+- each connection's kind is one the target and the channel both support, its
+  settings follow that kind's fields in the connection schema, and its values
+  the connection parameters the factory declares for that channel kind and
+  connection kind, by the same rules;
 - a live instance of the kind declares that latest `version`.
 
 A value of `null`, `""` or `[]` leaves its field unset. Defaults are then
@@ -427,9 +447,10 @@ Request `payload`:
   "connections": [
     {
       "endpoint": {
-        "format": "logos.channel-endpoint.v1",
+        "format": "logos.channel-endpoint.v2",
         "name": "edge-eu",
-        "channel": { "module_name": "http", "schema_version": 2 },
+        "channel": { "module_name": "http", "schema_version": 3 },
+        "kind": "reverse-call",
         "params": { "base_url": "https://edge-eu.example.com", "tls_verify": false, "request_timeout": "40s" }
       },
       "values": { "method": "POST", "path_prefix": "/cdn/assets/" }
@@ -457,7 +478,7 @@ Request `payload`:
 | `values` | Every field of the target that has a value or a default. A `file` field holds the file's id. |
 | `commands` | The ids of the [commands](#commands) the minion is built with: those picked, the target's required ones among them, in the schema's order. The minion has these and no others. |
 | `files` | The files the values name (connection parameter values included), by id, as in [Build files](#build-files). |
-| `connections` | The [connections](#connections), in the order the minion tries them: each one's settings as an endpoint [export](../minion-connection/#the-export) under `endpoint` (its `name`, channel kind, schema version, and `params` with defaults filled in), and its [connection parameter](#connection-parameters) `values`, defaults filled in. |
+| `connections` | The [connections](#connections), in the order the minion tries them: each one's settings as an endpoint [export](../minion-connection/#the-export) under `endpoint` (its `name`, channel kind, schema version, connection `kind`, and `params` with defaults filled in), and its [connection parameter](#connection-parameters) `values`, defaults filled in. |
 | `crypto` | Present when the factory declares `crypto`: its `suite` and the minion's key `material`, fresh for every build. For `aes-256-cbc-hmac-sha256`: `enc_key`, the AES-256 key, and `mac_key`, the HMAC-SHA256 key, 32 random bytes each in base64. The factory puts them in the artifact and keeps them nowhere else. |
 | `session_id` | Present for a build with a persisted session (only to a factory that declares `persisted_sessions`): the session the minion claims in its `hello`, a lowercase UUID; an existing session, or one core reserved with the build. The factory builds it in. |
 | `artifact` | Where to upload the artifact: `upload_url`, a presigned URL to `PUT` it to, valid until a minute past the deadline, and `max_size`, the largest artifact the factory may upload (a core setting, default 256 MiB). factory-core refuses to upload a larger one (`artifact_too_large`). A presigned upload cannot be capped, so core holds the factory to it by its result: see [`factory.build.result`](#factorybuildresult). |

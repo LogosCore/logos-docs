@@ -57,9 +57,9 @@ A channel reaches core three ways:
 |---|---|---|
 | The [sync call](../contracts/channel-core-sync/) (built) | message | `reverse-call` |
 | The **control link**, a WebSocket (a draft) | channel instance | `bind-call`, and opening `bind-persistent` |
-| A **connection socket**, a WebSocket (a draft) | minion connection | `reverse-persistent`, `bind-persistent` |
+| A **connection socket**, a WebSocket (built for `reverse-persistent`) | minion connection | `reverse-persistent`, `bind-persistent` |
 
-The channel opens all of them: core never connects to a channel. The draft,
+The channel opens all of them: core never connects to a channel. The design,
 with how `bind` minions are reached, how persistent connections live, how
 channels and factories declare the kinds and how operators switch a
 minion's connection, is [Channel ↔ Core: Connections](../contracts/channel-core-connections/).
@@ -76,8 +76,8 @@ contract in [Channel ↔ Core: HTTP Sync](../contracts/channel-core-sync/).
 
 - HTTP(S) and WebSocket: `logos-http-channel`, the reference channel. It
   accepts any method on any path (`reverse-call`), and WebSocket connections
-  whose binary frames are messages (`reverse-persistent` once core takes
-  connection sockets).
+  whose binary frames are messages (`reverse-persistent`, over a connection
+  socket to core). Its connection schema gives each kind its own fields.
 - DNS, SSH or GitHub channels: possible, none built yet.
 
 ### Notes
@@ -99,14 +99,13 @@ Built:
 
 - Declare what can be built in a [build schema](../contracts/minion-build/)
   at registration: targets and their platforms, the build parameters, the
-  channel kinds the minions speak with the factory's own connection parameters
-  for each, and the commands the minions can be built with.
+  channel kinds the minions speak and the [connection kinds](#connection-kinds)
+  through each, per target, with the factory's own connection parameters for
+  each kind, and the commands the minions can be built with.
 - Build minions on core's request (`factory.build`): report the build's plan
   and progress, upload the artifact to the URL core gives, and report the
   result.
 - Build in the commands the operator picked, and no others.
-- Planned, with the [connection kinds](#connection-kinds): declare which
-  kinds its minions support, per target and channel.
 
 Planned, with the factory command contract:
 
@@ -193,6 +192,7 @@ For building a module against them, see [Implementing a Module](../implementing-
 `logos-golang-module-core` for every module, with `logos-golang-channel-core`
 for a channel and `logos-golang-factory-core` for a factory.
 
-Still open: the channel's connection kinds beyond `reverse-call` (a draft:
+Still open: the `bind` connection kinds, the control link and connection
+management (a draft:
 [Channel ↔ Core: Connections](../contracts/channel-core-connections/)), and
 module packaging/lifecycle policy.

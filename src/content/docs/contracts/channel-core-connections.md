@@ -6,7 +6,8 @@ title: "Channel ↔ Core: Connections"
 Built: `reverse-persistent`, in core, channel-core (`pkg/connclient`), the
 HTTP channel and BOB's minion: the connection sockets, pushes within the
 `get_tasks` allowance, presence, and the kinds in connection and build
-schemas. The control link, the `bind` kinds, targets and connection
+schemas, each kind with its own fields on both sides, and endpoints of a
+kind. The control link, the `bind` kinds, targets and connection
 management are an agreed design, not built yet.
 :::
 
@@ -299,7 +300,6 @@ at registration says both, by kind (its `schema_version` `"2"`):
 {
   "schema_version": "2",
   "version": 3,
-  "fields": [ "…shared by every kind…" ],
   "kinds": {
     "reverse-call": { "fields": [ "base_url", "checkin_interval", "…" ] },
     "reverse-persistent": { "fields": [ "base_url", "ws_reconnect_backoff", "…" ] },
@@ -312,12 +312,13 @@ at registration says both, by kind (its `schema_version` `"2"`):
 ```
 
 - **`kinds`'s keys are the kinds the channel supports.**
-- **`fields` are built into the minion**: those at the top every kind has,
-  each kind's its own besides.
+- **`fields` are built into the minion**, **each kind's in full**: there is
+  no shared list. Kinds of one channel mostly repeat the same fields, but
+  each can change, gain or drop one on its own, and say what it means for
+  that kind.
 - **`target`**, for the `bind` kinds only: what an operator fills in for each
   target, never built into a minion.
-- **A kind's keys are unique** across the shared fields, its own and its
-  target's: `call` and `open` give the channel one map of them, under the
+- **A kind's keys are unique** across its fields and its target's: `call` and `open` give the channel one map of them, under the
   keys it declared.
 - **Every field is a field spec**, as now. A target field may be a `secret`
   (an SSH password or key): core keeps it, shows it masked, and gives it to
@@ -500,19 +501,21 @@ preference:
 ```json
 "channels": [
   {
-    "module_name": "http", "versions": [2],
-    "fields": [ "…the factory's parameters…" ],
-    "kinds": ["reverse-call", "reverse-persistent"]
+    "module_name": "http", "versions": [3],
+    "kinds": [
+      { "kind": "reverse-call", "fields": [ "method", "path_prefix" ] },
+      { "kind": "reverse-persistent", "fields": [ "path_prefix" ] }
+    ]
   }
 ]
 ```
 
 - **`kinds` are the kinds the factory's minions support** with that channel,
-  the first the one a build takes when it names none. Without `kinds`, a
-  channel entry is `reverse-call` only, as every factory's was before: no
-  new build schema version. (A list, not a map as a channel's connection
-  schema has, because its order is what picks a build's kind. A kind's own
-  factory fields, when one needs them, come as a key of their own.)
+  at least one, the first the one a build takes when it names none, **each
+  with the factory's own parameters for it in full** (BOB's minion picks a
+  request method for each call, but a WebSocket has one handshake). A list,
+  not a map as a channel's connection schema has, because its order is what
+  picks a build's kind. This is the build schema's `schema_version` `"3"`.
 - **A target narrows them**, as it narrows the channels: a PHP page's target
   keeps `bind-call`, a binary's `reverse-call` and `reverse-persistent`.
 - **A kind is usable** where both sides support it: the channel (its
@@ -525,16 +528,17 @@ their kind:
 - **`kind`**: one usable for the target; the build form asks for it, and the
   API takes the first usable one, in the factory's order, when it is left
   out. The build request gives it to the factory, which builds that in.
-- **`settings`** by the channel's fields for that kind (shared and its own);
-  **`values`** by the factory's fields.
+- **`settings`** by the channel's fields for that kind; **`values`** by the
+  factory's fields for that kind. Another kind's field is refused.
 - **Kinds mix** in one build: a WebSocket first and polling after, or a
   listening implant that also calls back. The order is the order the minion
   tries its connections, so it means something for `reverse` ones only: a
   `bind` connection is not tried, it waits to be reached.
-- **Endpoints** are not of a kind yet: they hold the channel's shared fields,
-  which are all the HTTP channel has. When a kind has fields of its own,
-  endpoints and their exports carry their kind, an export without one being
-  `reverse-call`.
+- **Endpoints are of a kind**: each holds values for one kind's fields, and
+  its export (`logos.channel-endpoint.v2`) carries the `kind`. A build
+  connection's `endpoint` is such an export, so the factory reads the kind
+  there. Filling a connection from an endpoint takes the endpoint's kind,
+  and the build form offers only endpoints of kinds the connection can use.
 - **A target belongs to one `bind` connection** of a build: adding a target
   picks the build and, when it has several, the connection, whose channel
   and built-in values the target uses with its own.
