@@ -84,15 +84,17 @@ hello = {
   1: uint,              ; pid
   2: tstr,              ; os: GOOS-style, "windows", "linux", "darwin"
   3: tstr,              ; arch: GOARCH-style, "amd64", "arm64", "386"
-  11: tstr,             ; machine_id: what tells this machine apart, see
-                        ;   Machine identity
+  11: uint,             ; machine_id's source: where its value came
+                        ;   from, see Machine identity
+  15: tstr,             ; machine_id's value
   ? 4: tstr,            ; host: the host name
   ? 5: tstr,            ; user: as the OS reports it, e.g. "CORP\\svc_backup"
   ? 6: tstr,            ; domain: the host's Windows domain or workgroup
   ? 7: tstr,            ; proc: the process's image file name
                         ;   ("svchost.exe"), no path
-  ? 8: "low" / "medium" / "high" / "system" / "root" / "user",  ; integrity
-  ? 9: [* tstr],        ; addrs: local IP addresses
+  ? 8: uint,            ; integrity: low 1, medium 2, high 3, system 4,
+                        ;   root 5, user 6
+  ? 9: [* bstr],        ; addrs: local IP addresses, raw, 4 bytes or 16
   ? 10: tstr,           ; version: the minion implementation's own version
   ? 12: { * tstr => any },  ; x: the factory's own fields, text keys
   ? 13: bstr .size 16,  ; sid: the persisted session the build claims
@@ -121,16 +123,18 @@ hello_response = {
    as long as the process runs.
 
 **The fields.** `pid`, `os`, `arch` and `machine_id` are required: a minion
-always knows them (`machine_id` falls back as far as a random id). Core still
-takes a `hello` without `machine_id` from minions built before it was asked
-for. The rest are optional: a minion cannot always learn its host or user (in
-a sandbox, say).
+always knows them (`machine_id` falls back as far as a random id); core takes
+a `hello` without a machine id all the same. The rest are optional: a minion
+cannot always learn its host or user (in a sandbox, say). Core keeps and
+shows the numbered values by name: the integrity level, the machine id as
+`"<source>:<value>"`, the addresses as text.
 
 - `os` and `arch` use the vocabulary of build platforms, so core shows them
   beside the build's platform and flags a mismatch (a 32-bit build on a
   64-bit OS).
 - `integrity` is the Windows integrity level (`low`, `medium`, `high`,
-  `system`), or elsewhere `root` or `user`.
+  `system`), or elsewhere `root` or `user`. A level core does not know shows
+  as its number.
 - A factory's own fields go under `x`, so a key core adds later never
   collides with one of them; its build schema may declare them, so the web
   app can label them.
@@ -144,35 +148,38 @@ for a new `hello`, is **planned**, not built.
 
 Host and user do not tell machines apart: two machines named `work`, each
 with a `user`, are common (cloned VMs, a naming standard). So every `hello`
-says **`machine_id`**, a string `"<source>:<value>"`: lowercase, at most 256
-characters, no spaces or control characters in the value. The source says
-where the value came from, so two sources never collide by chance and an
-operator sees what kind of identity it is. Core checks the shape only, and
-the [file browser](../../file-browser/) keys a machine's files by it; a
-factory may use a source of its own.
+says a **machine id**: a source, by number, and a value. Core keeps it as
+`"<source>:<value>"`, the source by name and the value lowercased, at most
+256 characters, no spaces or control characters. The source says where the
+value came from, so two sources never collide by chance and an operator sees
+what kind of identity it is. Core checks the shape only, and the [file
+browser](../../file-browser/) keys a machine's files by it. A source core
+does not know shows as `source-<n>`: a factory with a source of its own asks
+for a number.
 
 A minion takes the **first** of these it can read **quietly**, skipping
 placeholders:
 
-| | Source | Where | Notes |
-|---|---|---|---|
-| 1 | `smbios-uuid` | Linux `/sys/class/dmi/id/product_uuid` (root only); Windows `GetSystemFirmwareTable("RSMB")`, the SMBIOS system UUID | The hardware's or the VM's: survives reinstalls. Not through WMI on Windows: watched. |
-| 1 | `mac-platform-uuid` | macOS `IOPlatformUUID`, through IOKit | Not by running `ioreg`. |
-| 1 | `bsd-host-uuid` | FreeBSD `kern.hostuuid` | |
-| 2 | `container` | the container's id, from `/proc/self/mountinfo` or the cgroup | Inside a container only, and before 3: an image's install id is every container's. |
-| 3 | `linux-machine-id` | `/etc/machine-id`, else `/var/lib/dbus/machine-id` | Any user can read it. New with each install; shared by clones that did not regenerate it. |
-| 3 | `win-machine-guid` | `HKLM\SOFTWARE\Microsoft\Cryptography\MachineGuid` | New with each install or sysprep; shared by clones made without sysprep. |
-| 4 | `domain-sid` | a domain-joined Windows machine's computer account SID | |
-| 5 | `hostname` | the host name | Does not tell apart the machines this is for, but stays the same. |
-| 6 | `kept` | a random id the minion generates once and keeps | Names the minion's install, not the machine, and leaves a file or key on the host: only where the factory accepts that. |
-| 7 | `ephemeral` | a random id for this process | Tells nothing apart across restarts; core can tell it from the source. |
+| | Source | No. | Where | Notes |
+|---|---|---|---|---|
+| 1 | `smbios-uuid` | 1 | Linux `/sys/class/dmi/id/product_uuid` (root only); Windows `GetSystemFirmwareTable("RSMB")`, the SMBIOS system UUID | The hardware's or the VM's: survives reinstalls. Not through WMI on Windows: watched. |
+| 1 | `mac-platform-uuid` | 2 | macOS `IOPlatformUUID`, through IOKit | Not by running `ioreg`. |
+| 1 | `bsd-host-uuid` | 3 | FreeBSD `kern.hostuuid` | |
+| 2 | `container` | 6 | the container's id, from `/proc/self/mountinfo` or the cgroup | Inside a container only, and before 3: an image's install id is every container's. |
+| 3 | `linux-machine-id` | 4 | `/etc/machine-id`, else `/var/lib/dbus/machine-id` | Any user can read it. New with each install; shared by clones that did not regenerate it. |
+| 3 | `win-machine-guid` | 5 | `HKLM\SOFTWARE\Microsoft\Cryptography\MachineGuid` | New with each install or sysprep; shared by clones made without sysprep. |
+| 4 | `domain-sid` | 7 | a domain-joined Windows machine's computer account SID | |
+| 5 | `hostname` | 8 | the host name | Does not tell apart the machines this is for, but stays the same. |
+| 6 | `kept` | 9 | a random id the minion generates once and keeps | Names the minion's install, not the machine, and leaves a file or key on the host: only where the factory accepts that. |
+| 7 | `ephemeral` | 10 | a random id for this process | Tells nothing apart across restarts; core can tell it from the source. |
 
 - **Placeholders** are firmware values boards ship with instead of their own,
   shared by many machines: all zeros, all `F`s,
   `03000200-0400-0500-0006-000700080009`, or text such as "To be filled by
   O.E.M.", "Default string", "Not Settable". A minion skips them as if there
-  were none. The protocol package has the list (`PlaceholderMachineUUID`)
-  and builds the value (`MachineID`).
+  were none. The protocol package has the list (`PlaceholderMachineUUID`),
+  the sources' numbers (`MachineSMBIOSUUID`, …) and core's joined form
+  (`MachineID`).
 - **Not identities**, whatever they look like: `/proc/sys/kernel/random/boot_id`
   (new each boot), a network card's MAC address (randomized, or changed with
   the card), a volume's serial (copied with the disk image).

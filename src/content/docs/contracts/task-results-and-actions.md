@@ -110,10 +110,15 @@ its operator picked. Which one core runs:
 ## How core keeps data
 
 A result part's `data` is CBOR, as everything in a
-[message](../minion-messages/wire-format/#message) is. Core keeps it **as it came**: the
-part's `data` bytes, stored untouched beside the part, never converted to
-JSON or to Mongo's BSON. Byte strings stay bytes, integers stay exact, and
-what the minion sent can always be given back.
+[message](../minion-messages/wire-format/#message) is. Core keeps it **as CBOR**: the
+part's `data` bytes, stored beside the part, never converted to JSON or to
+Mongo's BSON. Byte strings stay bytes and integers stay exact.
+
+The results on this page travel **numbered**, as every protocol map does:
+each one's keys have numbers (given under its shape below), and core turns
+them into the names as it takes the part, so what it keeps, shows and serves
+has the names on this page. Data of a command without a result, the
+factory's own shape, comes and stays as the minion sent it.
 
 Core decodes the CBOR when it needs it:
 
@@ -122,7 +127,7 @@ Core decodes the CBOR when it needs it:
 - when the task's data is read: to join the parts and give the result to the
   web app (only the task an operator looks at; the browser keeps it a while).
 
-A **download** gives the parts' `data` exactly as the minion sent them:
+A **download** gives the parts' `data` as core keeps them (named):
 `GET /api/v1/minion-tasks/{id}/data`, a CBOR sequence
 ([RFC 8742](https://www.rfc-editor.org/rfc/rfc8742),
 `application/cbor-seq`), one item per part in `seq` order. Like the
@@ -219,8 +224,9 @@ entry = {
   ? size: uint,         ; bytes; files (a link: the link's own size)
   ? modified: int,      ; unix seconds, as a task's datetime args; negative
                         ;   before 1970
-  ? mode: tstr,         ; as the host shows it: "-rw-r--r--", "drwx------",
-                        ;   or Windows attributes "A--H-"
+  ? mode: tstr,         ; as the host shows it: "-rw-r--r--", "drwx------"
+                        ;   (ls -l), or on Windows its attributes as
+                        ;   PowerShell's Mode does, "-a-h--"
   ? owner: tstr,
   ? group: tstr,
   ? target: tstr,       ; a link's target, as the link holds it
@@ -235,6 +241,10 @@ entry = {
   a pipe). A later version may add types; a reader shows one it does not
   know as `other`.
 - The minion sends entries in any order; the view sorts them.
+- A listing carries entries numbered, with `type` as a number, `mode` as the
+  host's own bits (`st_mode`, or the Windows file attributes) and `owner` and
+  `group` named once a piece ([Listings](../minion-messages/tasks-and-results/#listings));
+  core makes the entries above of them, `mode` rendered by the session's OS.
 - A key this page does not list is ignored, so a later version can add
   optional keys (see [Changing the vocabulary](#changing-the-vocabulary)). A factory's
   own fields go under `x`, as in a `hello`.
@@ -353,7 +363,8 @@ file-download = {
 }
 ```
 
-The protocol package has it as `protocol.FileDownload`, read and checked by
+On the wire: `xfer` 1, `path` 2, `size` 3, `sha256` 4, `x` 5. The protocol
+package has it as `protocol.FileDownload`, read and checked by
 `protocol.ReadFileDownload`. A task's file shows from its first chunk, before
 the data: GraphQL gives it as the task's `file`.
 
@@ -411,7 +422,8 @@ file-upload = {
 }
 ```
 
-The protocol package has it as `protocol.FileUpload`, read and checked by
+On the wire: `xfer` 1, `path` 2, `size` 3, `sha256` 4, `x` 5. The protocol
+package has it as `protocol.FileUpload`, read and checked by
 `protocol.ReadFileUpload`. It is the data of a [stream](#upload_stream)
 too. Core checks `size` and `sha256` against the file it sent (a
 stream's: the bytes it passed on, hashed as they went): data that does not match shows as a problem, as data that does not
@@ -554,6 +566,9 @@ dir-walk = {
 }
 ```
 
+On the wire: `root` 1, `folders` 2, `entries` 3, `unread` 4, `skipped` 5,
+`current` 6, `x` 7.
+
 - **Every part says it whole**, `root` included, and core shows the latest
   (`DirWalk`, `ReadDirWalk` in the protocol package). A minion sends one as
   the walk goes (BOB's every 2 seconds) and one at its end.
@@ -598,6 +613,8 @@ file-stream = {
   ? sha256: bstr .size 32,  ; when the minion read it whole, in order
 }
 ```
+
+On the wire: `xfer` 1, `path` 2, `size` 3, `sha256` 4, `x` 5.
 
 The stream shows from the minion's announcement, before the data: GraphQL
 gives it as the task's `stream`: the file's name and size, how far the

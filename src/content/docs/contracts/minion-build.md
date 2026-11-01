@@ -37,7 +37,7 @@ Declared in `module.register` under `build`:
 
 ```json
 {
-  "schema_version": "1",
+  "schema_version": "2",
   "version": 1,
   "channels": [
     {
@@ -95,30 +95,30 @@ Declared in `module.register` under `build`:
   ],
   "commands": [
     {
-      "id": "sleep", "label": "Sleep", "required": true,
+      "id": "sleep", "op": 1, "label": "Sleep", "required": true,
       "description": "Changes how long the minion waits between check-ins.",
       "params": [
-        { "key": "interval", "type": "duration", "label": "Interval", "required": true },
-        { "key": "jitter", "type": "int", "label": "Jitter", "unit": "%", "min": 0, "max": 100, "default": 0 }
+        { "key": "interval", "num": 1, "type": "duration", "label": "Interval", "required": true },
+        { "key": "jitter", "num": 2, "type": "int", "label": "Jitter", "unit": "%", "min": 0, "max": 100, "default": 0 }
       ]
     },
-    { "id": "exit", "label": "Exit", "required": true },
+    { "id": "exit", "op": 2, "label": "Exit", "required": true },
     {
-      "id": "shell", "label": "Run a command", "default": true,
-      "params": [{ "key": "command", "type": "string", "label": "Command", "required": true }]
+      "id": "shell", "op": 3, "label": "Run a command", "default": true,
+      "params": [{ "key": "command", "num": 1, "type": "string", "label": "Command", "required": true }]
     },
     {
-      "id": "download", "label": "Download a file", "default": true,
-      "params": [{ "key": "path", "type": "string", "label": "Path", "required": true }]
+      "id": "download", "op": 4, "label": "Download a file", "default": true,
+      "params": [{ "key": "path", "num": 1, "type": "string", "label": "Path", "required": true }]
     },
-    { "id": "screenshot", "label": "Screenshot", "targets": ["windows-exe"] }
+    { "id": "screenshot", "op": 5, "label": "Screenshot", "targets": ["windows-exe"] }
   ]
 }
 ```
 
 | Field | Meaning |
 |---|---|
-| `schema_version` | Format of this structure: `"1"`. |
+| `schema_version` | Format of this structure: `"2"` (commands and their params numbered). `"1"` is no longer taken. |
 | `version` | Version of the factory's parameter set, from 1. Raised when values saved against the previous set would build something else or fail: a field or target removed, renamed or given another meaning. Adding an optional field or a target does not need it. |
 | `channels[]` | At least one: the channel kinds the minions can speak: `module_name`, the connection schema `versions` they read (1 to 16), and optional `fields`, the factory's own [connection parameters](#connection-parameters) for that kind. |
 | `crypto` | Optional. The one payload crypto suite the minions implement; core generates each minion's keys for it. Core implements only `aes-256-cbc-hmac-sha256` (AES-256-CBC, then HMAC-SHA256 over the ciphertext) for now and refuses a registration with any other suite (`validation_failed`). |
@@ -226,12 +226,13 @@ does when they build it: a minion built for one job carries nothing more.
 
 | Field | Meaning |
 |---|---|
-| `id` | Identifier, unique in the schema, `^[a-z][a-z0-9_-]{0,62}$`, and not `help`. Builds name the command by it, and so will tasks. |
+| `id` | Identifier, unique in the schema, `^[a-z][a-z0-9_-]{0,62}$`, and not `help`. Builds, core and operators name the command by it. |
+| `op` | The command's number, unique in the schema, 1 to 65 535: what a [task](../minion-messages/tasks-and-results/#tasks) names it by on the wire. |
 | `label`, `description` | Shown in the UI. |
 | `targets[]` | Optional. Narrows the command to these targets; empty means every target. |
 | `default` | Picked in a new build until the operator unpicks it, and what a build that names no commands gets. |
 | `required` | In every build of its targets: the minion cannot run without it (`sleep`, `exit`), so the operator cannot leave it out. |
-| `params[]` | What a task of the command takes: field specs as in a management action, and `file` (a [task file](../task-results-and-actions/#task-files), sent to the minion with the task): one at most, with no default. |
+| `params[]` | What a task of the command takes: field specs as in a management action, and `file` (a [task file](../task-results-and-actions/#task-files), sent to the minion with the task): one at most, with no default. Each has a `num`, unique in the command, 1 to 65 535: what a task names the arg by on the wire. Only a command's params have one. |
 | `result` | Optional. What its task's `data` is: one of core's [results](../task-results-and-actions/) (`dir_listing`), its shape and view. Without one, the `data` shows as raw JSON. A name core does not know refuses the schema. |
 | `action` | Optional. What core can ask the command to do itself: one of core's [actions](../task-results-and-actions/) (`list_dir`). The command takes the action's params, gives every other param a default, and has the result the action needs. A name core does not know refuses the schema. |
 
@@ -249,8 +250,14 @@ does when they build it: a minion built for one job carries nothing more.
   command's params. Core answers it when it is queued and keeps it as a
   finished task; it never goes to a minion. A schema that declares `help` is
   refused, and factories do not implement it.
-- `params` describe tasks, which minions do not take yet; the build form shows
-  only what each command is.
+- **A task names its command by `op` and its args by their params' `num`**
+  ([Tasks](../minion-messages/tasks-and-results/#tasks)), so a minion needs
+  no command or param names: it dispatches on numbers the factory compiled
+  in. Operators, core and the API keep using `id` and `key`; core puts the
+  numbers in when it sends the task.
+- An `op` or `num`, once given, belongs to that command or param: minions
+  already built read it. Never move one or give it to another; a command or
+  param that goes leaves its number unused.
 - A command removed or renamed needs a new `version`, like a field. Adding
   one does not, a required one included: core adds it to every build of its
   targets.

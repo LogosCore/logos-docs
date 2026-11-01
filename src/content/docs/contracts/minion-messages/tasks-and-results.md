@@ -63,8 +63,8 @@ get_tasks = {
 task = {
   0: 8,                 ; t: task
   1: task-id,           ; task
-  2: tstr,              ; cmd: a command id of the minion's build
-  ? 3: { * tstr => arg },  ; args: keyed by the command's params, text
+  2: uint,              ; cmd: the command's op in the build schema
+  ? 3: { * uint => arg },  ; args: by their params' num in the build schema
 }
 
 file-offer = {          ; a file or stream param's arg
@@ -76,10 +76,14 @@ file-offer = {          ; a file or stream param's arg
 }
 ```
 
-A task's `args` follow its command's params in the build schema
-([Commands](../../minion-build/#commands)). Core fills in defaults and checks
-them before the task is queued, so a minion gets every arg that has a value
-or a default. Their types map to CBOR like this:
+A task names its command by its **`op`** and each arg by its param's
+**`num`**, the numbers the build schema gives them
+([Commands](../../minion-build/#commands)): a minion dispatches on numbers
+its factory compiled in, and carries no command or param names. Operators,
+core and the API name commands and params by `id` and `key` as before; core
+puts the numbers in when it sends the task. Core fills in defaults and checks
+the args before the task is queued, so a minion gets every arg that has a
+value or a default. Their types map to CBOR like this:
 
 | Param type | CBOR |
 |---|---|
@@ -98,8 +102,9 @@ or a default. Their types map to CBOR like this:
   result for it arrives.
 - **The minion runs each task once**: it keeps the ids of the tasks it
   received in the last 24 hours.
-- **A task the minion cannot run** (a command its build lacks, an arg of the
-  wrong type) gets a `result` `{done: true, ok: false, err: …}`.
+- **A task the minion cannot run** (a command its build lacks, an `op` it
+  does not know, an arg of the wrong type) gets a `result` `{done: true, ok:
+  false, err: …}`.
 - `help` is core's own command: core answers it at once and it never goes
   out ([Commands](../../minion-build/#commands)).
 
@@ -143,8 +148,8 @@ result = {
   ? 4: bool,            ; ok: the minion did what the task asked
   ? 5: bstr,            ; out: output as raw bytes, in the host's own encoding
   ? 6: tstr,            ; err: what went wrong, with ok: false
-  ? 7: { * tstr => any },  ; data: structured output, its command's
-                        ;   result's shape, text keys
+  ? 7: { * any => any },  ; data: structured output, its command's
+                        ;   result's shape: numbered for core's results
   ? 8: int,             ; exit: the exit code of a process the task ran,
                         ;   done part only
   ? 9: [* listing-piece],  ; ls: what the task saw of the file system,
@@ -162,11 +167,13 @@ carry what a person reads (`out`), what a program reads (`data`), listings
   others) and binary output pass unchanged. stdout and stderr may be mixed in
   it. Core and the web app decode it by guesswork, and offer the bytes as a
   download where they do not decode. The parts' `out` join in `seq` order.
-- **`data`** is structured output, such as a directory's entries or a process
+- **`data`** is structured output, such as a walk's progress or a process
   list, in the shape of its command's [result](../../task-results-and-actions/)
-  (named in the build schema). Core checks each part against it, keeps it as
-  the CBOR it came in, and joins the parts by the result's rule. Output too
-  big for one message goes in several parts.
+  (named in the build schema). The data of core's results travels numbered,
+  and core names it as it takes the part; a factory's own shape (a command
+  without a result) keeps its text keys. Core checks each part, keeps it as
+  CBOR, and joins the parts by the result's rule. Output too big for one
+  message goes in several parts.
 - **`ok`** says whether the minion did what the task asked. **`exit`** is what
   a process the task ran reported, so a program that exits with 1 is still
   `ok: true`, and a command the minion could not start is `ok: false` without
@@ -202,18 +209,23 @@ listing-piece = {
   ? 7: [* entry],       ; entries
   ? 8: bool,            ; partial: some entries could not be read, not the
                         ;   whole
-  ? 9: tstr,            ; err: the directory could not be read at all,
-                        ;   part 0, last, no entries
+  ? 9: uint,            ; err: the directory could not be read at all
+                        ;   (denied 1, not found 2, other 3): part 0, last,
+                        ;   no entries
+  ? 10: [* tstr],       ; owners: the owner and group names its entries
+                        ;   name, each once
+  ? 11: tstr,           ; err_msg: more on err, for a person
 }
 
-entry = {               ; as a dir_listing's entry (Task Results and
-  1: tstr,              ;   Actions), numbered: name
-  2: tstr,              ; type: "dir", "file", "link", "other"
+entry = {
+  1: tstr,              ; name
+  2: uint,              ; type: dir 1, file 2, link 3, other 4
   ? 3: uint,            ; size
   ? 4: int,             ; modified: unix seconds
-  ? 5: tstr,            ; mode
-  ? 6: tstr,            ; owner
-  ? 7: tstr,            ; group
+  ? 5: uint,            ; mode: the host's own bits, st_mode (Unix) or the
+                        ;   file attributes (Windows)
+  ? 6: uint,            ; owner: its place in the piece's owners, from 1
+  ? 7: uint,            ; group: its place in the piece's owners, from 1
   ? 8: tstr,            ; target: a link's
   ? 9: bool,            ; hidden
   ? 10: { * tstr => any },  ; x: the factory's own fields, text keys
@@ -235,8 +247,16 @@ flowchart LR
 - **Whole** is a listing whose pieces 0 to `last` all came and none says
   `partial`. Only a whole listing tells core what the folder no longer has;
   one cut short adds what it has.
-- **`err`** is a directory the minion may not read (permission denied): one
-  piece, `part` 0 and `last`, no entries. Core marks the folder so.
+- **`err`** is a directory the minion could not read: one piece, `part` 0
+  and `last`, no entries, the reason as a code (permission denied, not
+  found, other) with `err_msg` for more. Core marks the folder so, by the
+  code's name.
+- **Entries as the host has them.** An entry's `mode` is the host's bits, not
+  their rendering, and its `owner` and `group` are places in the piece's
+  `owners`, so names that recur (every file `root`) travel once a piece. Core
+  names it all as it takes the piece: the type by name, the mode as the host
+  shows it (`-rw-r--r--` as `ls -l` does, or on Windows `-a-h--` as
+  PowerShell does, by the session's `os`), the owners by name.
 
 Core, as each result part comes:
 

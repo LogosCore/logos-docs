@@ -49,20 +49,21 @@ open as no reply.
 
 The plaintext is one CBOR map. There are two formats, one per direction; the
 frame's `dir` says which one to parse. Its keys are numbers, as are those of
-every item and of the structures inside them ([Registry](#registry)): these
-pages call each key by its name, and each CDDL gives the number with the name
-beside it.
+every item and of the structures inside them, and so are the closed sets of
+values (item types, err codes, integrity levels, entry types, a task's
+command and its args): see the [Registry](#registry). These pages call each
+key by its name, and each CDDL gives the number with the name beside it.
 
 ```cddl
 minion-message = {      ; minion → core
-  0: 2,                 ; v: this format
+  0: 3,                 ; v: this format
   ? 1: msg-id,          ; id: when it starts an exchange
   ? 2: msg-id,          ; re: when it answers one
   ? 3: [* minion-item], ; items: absent or empty, nothing to say
 }
 
 core-message = {        ; core → minion
-  0: 2,                 ; v
+  0: 3,                 ; v
   ? 1: msg-id,          ; id
   ? 2: msg-id,          ; re
   ? 3: [* core-item],   ; items
@@ -97,9 +98,10 @@ Who starts depends on the module in between:
 Both sides write, and accept, a subset of CBOR that maps onto JSON and back:
 
 - map keys are unsigned integers in the protocol's own maps (the message, its
-  items, and the structures the [registry](#registry) numbers), and text in
-  maps that belong to a command or a factory (a task's `args`, a result's
-  `data`, an `x`); each key once;
+  items, the structures the [registry](#registry) numbers, the data of core's
+  [results](../../task-results-and-actions/), and a task's `args`, by their
+  params' numbers), and text in maps a factory shapes itself (the data of a
+  command without a result, an `x`); each key once;
 - definite lengths only;
 - no tags, no `undefined`, no simple values other than `false`, `true` and
   `null`;
@@ -182,9 +184,10 @@ the same message's text-keyed forms for comparison:
 |---|---|---|---|---|
 | empty check-in (busy) | 21 B | 24 B | 39 B | 99 B |
 | check-in asking for one task | 28 B | 49 B | 75 B | 99 B |
-| `hello` | 164 B | 249 B | 325 B | 243 B |
-| reply with two tasks | 112 B | 152 B | 231 B | 195 B |
+| `hello` (one address) | 146 B | 255 B | 331 B | 227 B |
+| reply with two tasks | 87 B | 152 B | 231 B | 163 B |
 | ack and one result with 17 bytes of output | 91 B | 131 B | 210 B | 163 B |
+| a listing of 20 files | 776 B | 1 903 B | 2 632 B | 851 B |
 
 ## Registry
 
@@ -212,16 +215,33 @@ given in its CDDL on the page that defines it.
 **Structures inside items**, numbered from `1` each, in the CDDL where they
 are defined: a [sleep](../sessions/#hello), a [listing
 piece](../tasks-and-results/#listings) and its entries, a [file
-offer](../tasks-and-results/#tasks) (a `file` or `stream` arg), and the
-[stage keys](../sessions/#stage).
+offer](../tasks-and-results/#tasks) (a `file` or `stream` arg), the [stage
+keys](../sessions/#stage), and the data of each of core's
+[results](../../task-results-and-actions/) (given under its shape there).
 
-**Err codes**: in [Errors](#errors).
+**Values**, numbered from `1` each:
 
-What stays text: the values that are data (a host's `os`, an `integrity`
-level, an entry's `type`, paths, names), and the maps that belong to a
-command or a factory, keys and all: a task's `args` (keyed by the build
-schema's params), a result's `data` (its command's result's shape), and every
-`x`.
+| Set | Numbers | Defined in |
+|---|---|---|
+| Err codes | `bad_message` 1 … `session_replaced` 6 | [Errors](#errors) |
+| Integrity levels | `low` 1, `medium` 2, `high` 3, `system` 4, `root` 5, `user` 6 | [Sessions](../sessions/#hello) |
+| Machine id sources | `smbios-uuid` 1 … `ephemeral` 10 | [Sessions](../sessions/#machine-identity) |
+| Entry types | `dir` 1, `file` 2, `link` 3, `other` 4 | [Listings](../tasks-and-results/#listings) |
+| Listing errors | denied 1, not found 2, other 3 | [Listings](../tasks-and-results/#listings) |
+
+A value a receiver does not know is taken and shown by its number (core
+reads an entry type it does not know as `other`).
+
+**Commands and args.** A task names its command by the number the build
+schema gives it (`op`) and its args by their params' numbers (`num`): the
+factory's numbers, declared in its [schema](../../minion-build/#commands),
+so a minion carries no command or param names.
+
+What stays text: values that are data (a host's `os` and `arch`, paths,
+names, versions, messages for a person), and what a factory shapes itself:
+the data of a command without a result, and every `x`. Core keeps and shows
+everything by name: the hello's values, listings (an entry's mode rendered as
+the host shows it) and data are named as they come.
 
 ## Open questions
 
@@ -234,14 +254,17 @@ schema's params), a result's `data` (its command's result's shape), and every
 
 ## Design notes
 
-- **Why numbers for keys.** A message's text keys, item types and codes were
-  a third of its size or more (see the [example sizes](#limits)), and they
-  were the same in every message of every minion: words like
-  `stage_response` and `machine_id` in a minion's binary say what it is.
-  Numbers make messages smaller and leave the protocol's vocabulary out of
-  the minion. Names live in the docs, the protocol package and core's logs.
-  What a command or factory defines (args, data, `x`) keeps its own text
-  keys: those belong to the build, and core shows them as they are.
+- **Why numbers.** A message's text keys, item types, codes and closed
+  values were a third of its size or more, over half of a listing's (see the
+  [example sizes](#limits)), and they were the same in every message of
+  every minion: words like `stage_response`, `machine_id` or a command's
+  name in a minion's binary say what it is. Numbers make messages smaller
+  and leave the protocol's and the build's vocabulary out of the minion.
+  Names live in the docs, the protocol package, the build schema and core,
+  which names everything as it comes. A listing goes furthest: an entry's
+  mode is the host's bits rather than its rendering, and owners travel once
+  a piece. What a factory shapes itself (its own data, `x`) keeps text
+  keys: core shows it as it is.
 - **Why CBOR.** Messages are designed like JSON, but files, screenshots and
   raw command output travel as bytes: no base64 inside the encryption, and
   none outside it either, since the sync call carries the ciphertext raw. The

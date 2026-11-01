@@ -85,8 +85,10 @@ sequenceDiagram
 
 A message carries a list of **items**, each a map with its type in key `0`
 (`t`), a number. Each is defined, in [CDDL](https://www.rfc-editor.org/rfc/rfc8610),
-on the page that explains it. Keys are numbers too: the pages call them by
-name, and the CDDL gives both ([Registry](wire-format/#registry)).
+on the page that explains it. Keys are numbers too, and so are closed sets
+of values and a task's command and args: the pages call them by name, and
+the CDDL gives both ([Registry](wire-format/#registry)). Core names
+everything as it comes, so operators never see the numbers.
 
 | `t` | Item | Sent by | Carries | Defined in |
 |---|---|---|---|---|
