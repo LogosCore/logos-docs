@@ -85,7 +85,7 @@ A command names them in the [build schema](../minion-build/#commands):
 | [`upload_stream`](#upload_stream) | `path` (string), `stream` (stream), `overwrite` (bool) | `file_upload` | a listing's folder: Upload here |
 | [`delete_path`](#delete_path) | `path` (string), `recursive` (bool) | none | a listing's entry: Delete |
 | [`stream_file`](#stream_file) | `path` (string) | `file_stream` | a listing's file: Stream |
-| [`walk_dir`](#walk_dir) | `path` (string) | `dir_walk` | the file browser's folder: Walk from here |
+| [`walk_dir`](#walk_dir) | `path` (string) | `dir_walk` | a listing's or the file browser's folder: Walk from here |
 
 More come as commands need them (a process list, a screenshot); each gets
 a section here first, and a release of the protocol and core.
@@ -569,8 +569,8 @@ dir-walk = {
 
 ## walk_dir
 
-Walks a folder and those under it: what the file browser's **Walk from
-here** runs, on a folder or on the folder shown.
+Walks a folder and those under it: what **Walk from here** runs, on a
+listing's folder, and in the file browser on a folder or the folder shown.
 
 - **Core gives** `path`, a `string`: the folder to walk. How deep and how
   far are the command's own params, with defaults (BOB's `depth` 5,
