@@ -131,7 +131,8 @@ sequenceDiagram
 - A factory declares, for each target and channel of its [build
   schema](../contracts/minion-build/), the kinds its minions support: a PHP
   page only `bind-call`; BOB's minion `reverse-call` and `reverse-persistent`.
-  A build's connection names the kind it uses.
+  A build's connection names the kind it uses ([kinds in
+  builds](#kinds-in-the-build-schema-and-in-builds)).
 
 **What it changes for core:**
 
@@ -385,9 +386,54 @@ closes when:
   `unreachable since` when opens fail; while connected, the socket's pings
   say it is alive.
 
-### To decide
+### Kinds in the build schema and in builds
 
-- **Kinds in the build schema** and in a build's connections.
+A factory says which kinds its minions support in its [build
+schema](../contracts/minion-build/)'s `channels`, shaped as a channel's
+[connection schema](#the-connection-schema-by-kind) is:
+
+```json
+"channels": [
+  {
+    "module_name": "http", "versions": [2],
+    "fields": [ "…the factory's parameters, for every kind…" ],
+    "kinds": {
+      "reverse-call": {},
+      "reverse-persistent": { "fields": [ "…its own, if any…" ] },
+      "bind-call": {}
+    }
+  }
+]
+```
+
+- **`kinds`'s keys are the kinds the factory's minions support** with that
+  channel; each may add `fields` of its own to the shared ones. Without
+  `kinds`, a channel entry is `reverse-call` only, as every factory's is
+  today: no new build schema version.
+- **A target narrows them**, as it narrows the channels: a PHP page's target
+  keeps `bind-call`, a binary's `reverse-call` and `reverse-persistent`.
+- **A kind is usable** where both sides support it: the channel (its
+  connection schema) and the factory, for that target. Core checks it at
+  each build.
+
+A build's [connections](../contracts/minion-build/#connections) each name
+their kind:
+
+- **`kind`**: one usable for the target; the build form asks for it, and the
+  API takes the first usable one, in the factory's order, when it is left
+  out. The build request gives it to the factory, which builds that in.
+- **`settings`** by the channel's fields for that kind (shared and its own),
+  from scratch or from an endpoint of the same kind; **`values`** by the
+  factory's fields for that kind.
+- **Kinds mix** in one build: a WebSocket first and polling after, or a
+  listening implant that also calls back. The order is the order the minion
+  tries its connections, so it means something for `reverse` ones only: a
+  `bind` connection is not tried, it waits to be reached.
+- **Endpoints and their exports** carry their kind; an export without one is
+  `reverse-call`.
+- **A target belongs to one `bind` connection** of a build: adding a target
+  picks the build and, when it has several, the connection, whose channel
+  and built-in values the target uses with its own.
 
 ### What core requires from a channel
 
