@@ -204,10 +204,46 @@ stateDiagram-v2
     connected --> [*]: operator removes the target (the session closes)
 ```
 
+### `bind-call` minions: when core calls
+
+Every exchange with a page is a call core makes, and every call is a line in
+the server's log: core calls when there is a reason to. A page usually runs
+a task within the call that brings it and answers with its result; one that
+runs tasks in the background, keeping their output, is its factory's choice.
+
+Core calls a `bind-call` minion:
+
+1. **When it has something to send**: a task, a `cancel`, a file transfer's
+   next step. It waits about a second first, so what is queued together goes
+   in one call. This is what sending to a session means for a `bind-call`
+   minion.
+2. **Again at once while work remains**: a file transfer under way (each
+   call carries a chunk or an ack; the ack tells the page where to read
+   from, so it needs no memory), or tasks waiting that the last call had no
+   room for.
+3. **On the minion's schedule, if it has one**: the `sleep` its `hello` says
+   (and `sleep_update` changes) means, for a page, call every interval, with
+   an empty message, to collect what background tasks produced and to see it
+   is still there. Without a schedule core makes no periodic calls: the quiet
+   default for a page that finishes its tasks within the call. Late and lost
+   count from the last call that succeeded.
+4. **On Check now.**
+
+- **Tasks per call**: as with `reverse-call`, the minion says how many it
+  takes. An answer's `get_tasks` `max` is how many the next call may bring;
+  the `hello` sets the first; without one, one task a call.
+- **One call at a time per target.** What comes up meanwhile goes in the
+  next call, merged.
+- **A call that fails** (the network): what the minion did not acknowledge
+  goes again in the next call, as through any connection; calls back off as
+  a target's retries do, and the session shows unreachable.
+- **A `cancel` for a task inside a call still running** cannot reach the
+  process running it: it goes in the next call, by when the task has
+  usually ended, which the page then says.
+- **A call's deadline** is the channel's request timeout. A task meant to
+  run longer belongs in the background on the page.
+
 ### To decide
-- **When core calls a `bind-call` minion**: on a new task or `cancel`, on a
-  schedule (to collect results of long tasks), on demand; and what it does
-  when a call fails.
 - **The control link's and the connection socket's formats**: the frames,
   the request ids, `open`'s answer and its deadline, authentication (the
   [channel authentication](../contracts/channel-core-sync/) planned for the
