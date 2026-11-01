@@ -558,9 +558,9 @@ dir-walk = {
   (`DirWalk`, `ReadDirWalk` in the protocol package). A minion sends one as
   the walk goes (BOB's every 2 seconds) and one at its end.
 - **How it walks is the command's**: BOB's goes breadth first (the top
-  levels first), never follows a link, and stops at its `depth`,
-  `max_folders`, its file system and, unless asked, hidden folders, all
-  params with defaults. It reads on only while few of its pieces wait to be
+  levels first), never follows a link, and stays on its file system and
+  (unless asked not to) goes into hidden folders; `depth` and `max_folders`
+  limit it when set, none by default. It reads on only while few of its pieces wait to be
   sent, so a walk goes as fast as the channel takes it and does not crowd
   out other tasks.
 - **Its view** shows the folder walked, the folders and entries so far, how
@@ -573,8 +573,9 @@ Walks a folder and those under it: what **Walk from here** runs, on a
 listing's folder, and in the file browser on a folder or the folder shown.
 
 - **Core gives** `path`, a `string`: the folder to walk. How deep and how
-  far are the command's own params, with defaults (BOB's `depth` 0, all levels,
-  `max_folders` 10 000).
+  far are the command's own params, with defaults: BOB's `depth` and
+  `max_folders` are 0, no limit, so a walk goes until it has read
+  everything under the folder, or is stopped from its task.
 - **The result is a `dir_walk`.** The file browser shows the walk's folders
   as their listings come, the folder walked marked "walking…".
 
