@@ -431,8 +431,20 @@ leave. While a socket is open, the connection itself says the minion is
 there, better than check-ins do.
 
 - **Connected.** While a persistent connection serving it is open, a session
-  is `connected`, last seen now: the socket's pings say it is alive, and the
-  minion need not check in meanwhile.
+  is `connected`, last seen now: the socket's pings say it is alive.
+- **Check-ins are optional.** On an open persistent connection a minion
+  sends only what it has (output, acks, a new `get_tasks`): core pushes
+  tasks and cancels as they come, so no scheduled check-in is needed for
+  them. Whether a minion checks in anyway is its factory's choice; BOB's
+  does not, and pings the channel to find a link that died silently.
+- **A channel closes the minion's connection when its socket to core
+  closes** (core restarted, or closed it), and when a send to core fails.
+  Core ties a socket to a session only through a message the minion
+  sealed, which the channel cannot make: the minion, connecting again,
+  sends one (its first message, a check-in with its `get_tasks`), and core
+  can reach it at once. A channel never reopens the socket to core on its
+  own and keeps the minion's connection: that would leave core unable to
+  push until the minion happened to send something.
 - **Between connections.** When its last one closes, last seen is when it
   closed, and late and lost run from then by the minion's `sleep`, as they
   run from a check-in: for a persistent minion `sleep` says how soon it will

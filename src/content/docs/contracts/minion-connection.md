@@ -232,7 +232,7 @@ not a request).
 | `user_agent` | string (`format: user_agent`) | — | Empty: the minion's built-in one. The UI offers a generator for realistic browser User-Agents. At most 512 characters. |
 | `headers` | string_map | — | Extra headers on every request and WebSocket handshake, name → value (names are header tokens, values have no line breaks and at most 4096 characters; at most 32). |
 | `request_timeout` | duration | `40s` | 1s to 10m. How long to wait for a reply. Keep it above the channel's `CORE_SYNC_TIMEOUT` (30s by default): a minion giving up sooner than the channel waits for core drops replies still on their way. |
-| `checkin_interval` | duration | `60s` | 1s to 168h. How often to check in with nothing to send (over a WebSocket, core pushes tasks at once anyway). |
+| `checkin_interval` | duration | `60s` | 1s to 168h. `reverse-call`: how often to check in with nothing to send. `reverse-persistent`: how soon core expects the minion back after the WebSocket closed (late, then lost, run by it); while it is open no check-in is needed (core pushes tasks, and the channel closes the WebSocket when its link to core breaks, so the minion reconnects by `ws_reconnect_backoff`). |
 | `checkin_jitter` | int (%) | `20` | 0 to 100. Random spread around the interval. |
 | `ws_reconnect_backoff` | duration | `60s` | `reverse-persistent` only. 1s to 1h. Longest wait between WebSocket reconnects (from 1s, doubling). |
 
