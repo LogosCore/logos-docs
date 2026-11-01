@@ -99,6 +99,8 @@ hello = {
   ? 12: { * tstr => any },  ; x: the factory's own fields, text keys
   ? 13: bstr .size 16,  ; sid: the persisted session the build claims
   ? 14: { sleep },      ; sleep: the check-in schedule it starts with
+  ? 16: uint,           ; conn: the connection it says hello through,
+                        ;   its place in the build's connections, from 1
 }
 
 sleep = (
@@ -135,6 +137,10 @@ shows the numbered values by name: the integrity level, the machine id as
 - `integrity` is the Windows integrity level (`low`, `medium`, `high`,
   `system`), or elsewhere `root` or `user`. A level core does not know shows
   as its number.
+- `conn` names the connection the minion uses by its place in the build's
+  connections (1 for the first): a minion carries no connection names, and
+  core knows each one's name, kind and channel from the build. When it
+  moves to another, it says so with a [`conn_update`](#connections).
 - A factory's own fields go under `x`, so a key core adds later never
   collides with one of them; its build schema may declare them, so the web
   app can label them.
@@ -287,6 +293,34 @@ Late and lost only describe a session: it stays open, nothing is sent to its
 minion, and a lost minion that checks in again is on time at once. In the
 Sessions page, "Last seen" is green while a session is on time, yellow once
 it is late and red once it is lost, and its filter picks any of the three.
+
+## Connections
+
+A minion built with several connections uses one at a time, and says which:
+in its `hello` (`conn`), and with a `conn_update` whenever it moves to
+another, whatever moved it: an operator's [`switch_connection`](../../task-results-and-actions/#switch_connection),
+a fallback after failures, its own logic.
+
+```cddl
+conn_update = {
+  0: 14,                ; t: conn_update
+  1: uint,              ; conn: the connection it uses now, its place in
+                        ;   the build's connections, from 1
+  ? 2: tstr,            ; reason: why, at most 256 bytes
+                        ;   ("operator", "fell back after 5 failures")
+}
+```
+
+- The message carrying it goes **over the new connection**: core learns of
+  the move from a message that came through it.
+- Core keeps the connection in use on the session, and the moves it
+  reported, the latest 32, with when, from which, to which and why. The
+  session's view lists the build's connections with the one in use, and a
+  **Switch to** button on each other one when the minion has a command for
+  `switch_connection`.
+- The session, its keys and its schedule stay the same whichever connection
+  carries it. A rehello through another connection moves `conn` too, without
+  a change recorded.
 
 ## When an exchange fails
 

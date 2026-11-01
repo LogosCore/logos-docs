@@ -86,10 +86,11 @@ A command names them in the [build schema](../minion-build/#commands):
 | [`delete_path`](#delete_path) | `path` (string), `recursive` (bool) | none | a listing's entry: Delete |
 | [`stream_file`](#stream_file) | `path` (string) | `file_stream` | a listing's file: Stream |
 | [`walk_dir`](#walk_dir) | `path` (string) | `dir_walk` | a listing's or the file browser's folder: Walk from here |
+| [`switch_connection`](#switch_connection) | `conn` (int) | none | a session's connection: Switch to |
 
 More come as commands need them (a process list, a screenshot); each gets
 a section here first, and a release of the protocol and core. Planned:
-`switch_connection` and `add_connection`, with the connection kinds
+`add_connection`, with the connection kinds
 ([Channel ↔ Core: Connections](../channel-core-connections/#connection-management)).
 
 ## Running an action
@@ -668,6 +669,24 @@ runs.
 - The command's minion [streams](../minion-messages/file-transfers/#streaming-a-file) the
   file for the task, and ends the task with the `file_stream` data once its
   downloader has every byte.
+
+## switch_connection
+
+Moves the minion to another of its build's connections: what a session's
+**Switch to** runs ([Channel ↔ Core: Connections](../channel-core-connections/#connection-management)).
+
+- **Core gives** `conn`, an `int`: the connection's place in the build's
+  connections, from 1, as a [`hello`](../minion-messages/sessions/#connections)
+  names it.
+- **No result.** The task's output says how it went ("switched to connection
+  2"), and it fails when the minion stays where it is ("connection 2 did not
+  answer, staying on 1", "already on connection 2"). A minion that moved
+  tells core with a `conn_update` over the new connection, which the session
+  shows.
+- A command may take more, each with a default: BOB's `connect` takes `for`,
+  a duration after which it moves back (`0s`, its default, stays).
+- It goes as tasks go, within the minion's `get_tasks` allowance: a minion
+  that takes no tasks takes no switch.
 
 ## Changing the vocabulary
 

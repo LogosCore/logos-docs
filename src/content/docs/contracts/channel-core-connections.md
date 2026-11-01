@@ -7,8 +7,10 @@ Built: `reverse-persistent`, in core, channel-core (`pkg/connclient`), the
 HTTP channel and BOB's minion: the connection sockets, pushes within the
 `get_tasks` allowance, presence, and the kinds in connection and build
 schemas, each kind with its own fields on both sides, and endpoints of a
-kind. The control link, the `bind` kinds, targets and connection
-management are an agreed design, not built yet.
+kind. Connection management is built too: the `hello`'s connection,
+`conn_update`, and `switch_connection` (BOB's `connect`). The control link,
+the `bind` kinds, targets, fallback after failures and `add_connection` are
+an agreed design, not built yet.
 :::
 
 How a channel carries the [connection kinds](../../module-types/#connection-kinds)
@@ -460,20 +462,21 @@ operator **changes** it with a command.
 
 **Reporting**, new in the protocol:
 
-- The `hello` says **the connection in use**: its place in the build's
-  connections, a number, so a minion carries no connection names; core knows
-  each one's name, kind, channel and endpoint from the build.
-- **`conn_update`** (minion → core) says when it changes, whatever changed
-  it: an operator's command, a fallback after failures, the minion's own
-  logic; and, optionally, why ("fell back after 5 failures").
+- The `hello` says **the connection in use** (`conn`, key 16): its place in
+  the build's connections, from 1, so a minion carries no connection names;
+  core knows each one's name, kind, channel and endpoint from the build.
+- **`conn_update`** (item 14, minion → core) says when it changes, whatever
+  changed it: an operator's command, a fallback after failures, the
+  minion's own logic; and, optionally, why ("fell back after 5 failures").
+  It goes over the new connection ([Sessions](../minion-messages/sessions/#connections)).
 
 The session's view lists the build's connections with the one in use, and
 the changes it reported.
 
-**Switching** is an [action](../task-results-and-actions/):
-**`switch_connection`**, core giving the connection's place and, optionally,
-a duration after which the minion goes back. A factory maps it to a command
-of its own (BOB's might be `connect`), so:
+**Switching** is an [action](../task-results-and-actions/#switch_connection):
+**`switch_connection`**, core giving the connection's place (`conn`). A
+factory maps it to a command of its own, which may take more: BOB's
+`connect` takes `for`, a duration after which the minion goes back. So:
 
 - the session's connection list has a **Switch to** button on each
   connection, which runs the action, and the console has the factory's
@@ -481,8 +484,13 @@ of its own (BOB's might be `connect`), so:
 - it is a task: it ends with a result, "switched to 2" or "failed: TLS
   handshake, staying on 1", a switch to an unreachable endpoint being
   something to report, and who switched what stays on record;
-- it is the factory's to offer: a minion built with one connection has no
-  such command, and no button shows;
+- it is the factory's to offer: a minion built without such a command shows
+  no button, and one built with a single connection has nothing to switch to;
+- BOB's minion moves only once a check-in through the new connection
+  worked, carrying the `conn_update` (on a WebSocket, that check-in also
+  sets the allowance, so pushes start at once); one that does not answer
+  leaves it where it was, and the task fails saying so. With `for`, it moves
+  back when the time is up, with a `conn_update` saying "back after 10m";
 - it goes as tasks go, within the [allowance](#get_tasks-on-a-persistent-connection):
   a minion that takes no tasks takes no switch. `cancel` is the one thing that
   always reaches a minion.

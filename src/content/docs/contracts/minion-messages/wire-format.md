@@ -69,7 +69,7 @@ core-message = {        ; core → minion
   ? 3: [* core-item],   ; items
 }
 
-minion-item = stage / hello / sleep_update / get_tasks / result / chunk / ack / err
+minion-item = stage / hello / sleep_update / conn_update / get_tasks / result / chunk / ack / err
 core-item   = stage_response / hello_response / task / cancel / chunk / ack / err
 
 msg-id  = bstr .size 16
@@ -212,7 +212,7 @@ given in its CDDL on the page that defines it.
 | 4 | [`hello_response`](../sessions/#hello) | 11 | [`ack`](../tasks-and-results/#acknowledging) |
 | 5 | [`sleep_update`](../sessions/#late-and-lost-sessions) | 12 | [`chunk`](../file-transfers/#chunks) |
 | 6 | `rehello` (planned) | 13 | [`err`](#errors) |
-| 7 | [`get_tasks`](../tasks-and-results/#asking-for-tasks) | | |
+| 7 | [`get_tasks`](../tasks-and-results/#asking-for-tasks) | 14 | [`conn_update`](../sessions/#connections) |
 
 **The message**: `v` 0, `id` 1, `re` 2, `items` 3, as [above](#message).
 
