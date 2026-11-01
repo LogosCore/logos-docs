@@ -557,6 +557,11 @@ dir-walk = {
 - **Every part says it whole**, `root` included, and core shows the latest
   (`DirWalk`, `ReadDirWalk` in the protocol package). A minion sends one as
   the walk goes (BOB's every 2 seconds) and one at its end.
+- **Core keeps only the newest**, by `seq`, on the task itself rather than
+  on each part: reading a walk's data is one row however many parts came,
+  and it takes the task's 4 MiB once (its size), so a long walk's progress
+  is never cut off. A part resent late does not take an older progress
+  back.
 - **How it walks is the command's**: BOB's goes breadth first (the top
   levels first), never follows a link, and stays on its file system and
   (unless asked not to) goes into hidden folders; `depth` and `max_folders`
