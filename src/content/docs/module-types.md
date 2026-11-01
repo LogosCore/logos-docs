@@ -347,10 +347,46 @@ at registration says both, by kind (its `schema_version` `"2"`):
   built from them. A target that lacks a value a new target field requires
   shows **needs editing** until an operator fills it in.
 
+### `bind-persistent` connections: opening and closing
+
+A `bind-persistent` minion is a running process (an implant listening on a
+port, or reached over SSH), and every dial is a connection its network sees.
+Being a process, it stages as any minion does, speaking first once the
+channel has dialed, and keeps its session's keys between connections: a
+later dial carries on in the same session. Its target links to the session
+at the first `hello`, as a [`bind-call`](#bind-call-minions-targets-and-sessions)
+target's does.
+
+**Who opens it** is the target's policy:
+
+| Policy | Opens it | Closes it, idle | For |
+|---|---|---|---|
+| `on-demand` (the default) | core, when the session has something to send (as it calls a `bind-call` page) | after 10 minutes without an exchange | queued tasks go out, and the connection is there only while there is work |
+| `manual` | an operator: Connect, Disconnect | after an hour without an exchange, as a safety net | targets where every connection counts; tasks queued meanwhile wait, shown waiting for a connection |
+| `always` | core, and again whenever it drops, backing off | never | a minion meant to be reachable at any moment |
+
+The idle times are the target's, these their defaults. Besides, a connection
+closes when:
+
+- an operator disconnects it, whatever the policy;
+- the network or the minion drops it, or the channel stops or drains: core
+  opens it again for `always`, for `on-demand` only while work waits, and
+  never for `manual`;
+- the target is removed or the session closes;
+- core closes its connection socket, which is how any connection is closed.
+
+- **The connection is the session's**, not the operator's who opened it:
+  everyone in the operation sees it open and can use it.
+- **An open that fails** puts its failure (unreachable, timeout, TLS, other)
+  on the target; `on-demand` and `always` retry with a target's backoff,
+  `manual` does not.
+- **The session shows its connection**, not late or lost: a closed connection
+  is closed on purpose. It is `connected`, `connecting`, `not connected`, or
+  `unreachable since` when opens fail; while connected, the socket's pings
+  say it is alive.
+
 ### To decide
 
-- **Who opens `bind-persistent` and when**: an operator for the session, core
-  on a new task, or both; and what closes it (the operator, an idle timeout).
 - **Kinds in the build schema** and in a build's connections.
 
 ### What core requires from a channel
