@@ -438,6 +438,34 @@ its own, each sent under its own id.
   `get_tasks`. The [allowance](#get_tasks-on-a-persistent-connection) is a
   connection's, the unfinished tasks it counts the session's.
 
+### `reverse-persistent` connections: lifetime and presence
+
+A minion decides when it connects: some keep a WebSocket open and reconnect
+at once when it drops, others connect on their schedule, stay a while and
+leave. While a socket is open, the connection itself says the minion is
+there, better than check-ins do.
+
+- **Connected.** While a persistent connection serving it is open, a session
+  is `connected`, last seen now: the socket's pings say it is alive, and the
+  minion need not check in meanwhile.
+- **Between connections.** When its last one closes, last seen is when it
+  closed, and late and lost run from then by the minion's `sleep`, as they
+  run from a check-in: for a persistent minion `sleep` says how soon it will
+  be back. One that keeps its socket open says a short one, and shows late,
+  then lost, when it does not come back; one that comes every hour says an
+  hour.
+- **Quiet is not idle.** A channel's idle timeout counts answered pings on a
+  connection that carries sessions, so a minion waiting for tasks is not cut
+  off. (The HTTP channel's `ws_idle_timeout` counts messages only today.)
+- **Disconnect** closes the connection's socket; the minion may connect
+  again, as its build does. Closing the session is what stops it: every
+  message after gets `session_closed`.
+
+| | Open | Closed |
+|---|---|---|
+| `reverse-persistent` | `connected` | late and lost from when it closed, by the minion's `sleep` |
+| `bind-persistent` | `connected` | `not connected`, on purpose; `unreachable since` when opens fail |
+
 ### Kinds in the build schema and in builds
 
 A factory says which kinds its minions support in its [build
