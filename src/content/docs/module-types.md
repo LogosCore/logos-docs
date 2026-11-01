@@ -140,9 +140,9 @@ sequenceDiagram
   session), whatever holds it; core runs as [one
   instance](../architecture/#one-core-instance).
 - **Tasks unasked.** Through a call a minion takes tasks only with
-  `get_tasks`. On a persistent connection `get_tasks` with `max` becomes an
-  allowance: core sends tasks as they are queued, while fewer than `max` it
-  sent are unfinished.
+  `get_tasks`. On a persistent connection `get_tasks` becomes a standing
+  allowance: core sends tasks as they are queued, within it ([`get_tasks`
+  on a persistent connection](#get_tasks-on-a-persistent-connection)).
 - **Presence.** A persistent connection shows when it opens and closes; a
   `bind-call` minion is reached when core calls, so "lost" means calls fail,
   not that check-ins stopped.
@@ -385,6 +385,34 @@ closes when:
   is closed on purpose. It is `connected`, `connecting`, `not connected`, or
   `unreachable since` when opens fail; while connected, the socket's pings
   say it is alive.
+
+### `get_tasks` on a persistent connection
+
+Through a call, a minion keeps its load in hand by when it asks: a
+`get_tasks` brings tasks in that reply only. On a persistent connection core
+sends tasks as they are queued, so the minion says once how many it takes:
+
+- **`max N` is a standing allowance**: core keeps up to N of the session's
+  tasks unfinished (sent, without their `done` part yet), sending one the
+  moment it is queued while there is room, and the next waiting one when a
+  task ends. The count is the session's, over all its connections: the
+  minion's capacity is its process's.
+- **It lasts** until the minion sends another `get_tasks`, which replaces it,
+  or the connection closes: a minion that reconnects says it again.
+- **Without `max`**: no limit, as through a call.
+- **`max 0`** takes none for now: a minion pauses with it. It becomes valid
+  through every kind (through a call it changes nothing).
+- **No `get_tasks` on a connection**: core sends no tasks on it. A minion
+  opts in, so one that only checks in works as before.
+- **`cancel`, acks and chunks** go at once, whatever the allowance; tasks are
+  acknowledged on receipt, and those not acknowledged go again first, as
+  through any connection.
+
+| Kind | `get_tasks` `max N` |
+|---|---|
+| `reverse-call` | this reply may bring up to N tasks |
+| `bind-call` | the next call may bring up to N tasks |
+| `reverse-persistent`, `bind-persistent` | up to N unfinished, sent as they are queued, until said otherwise |
 
 ### Kinds in the build schema and in builds
 
