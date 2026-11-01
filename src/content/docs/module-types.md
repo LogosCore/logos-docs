@@ -414,6 +414,30 @@ sends tasks as they are queued, so the minion says once how many it takes:
 | `bind-call` | the next call may bring up to N tasks |
 | `reverse-persistent`, `bind-persistent` | up to N unfinished, sent as they are queued, until said otherwise |
 
+### One session, several connections
+
+A session can have more than one connection open: a minion reconnects while
+core's end of its old socket has not timed out yet, polls beside a
+WebSocket, or listens and calls back. And one connection can serve several
+sessions: a minion that relays others' messages (a pivot) carries them over
+its own, each sent under its own id.
+
+- **Core keeps, for each session, the open connections that carried its
+  messages**; a connection serves every session it carried a message of.
+- **A push goes on the one that carried the session's latest message**; if
+  that send fails (its socket is gone), on the one before; if none is left,
+  what was to go waits for the next exchange: a check-in's reply, or a call.
+- **Sending twice is safe**: tasks run once by their id, results are kept
+  once by `(task, seq)`, chunks once by `(xfer, off)`; a task not
+  acknowledged goes again on whichever connection comes next.
+- **Core does not close a session's older connections**: a dead one goes when
+  its pings stop, a live one may be a second path. A session keeps 8 at
+  most; a ninth closes the oldest.
+- **Calls go on alongside**: a `reverse-call` request is answered as always
+  while persistent connections are open, tasks in its reply only with
+  `get_tasks`. The [allowance](#get_tasks-on-a-persistent-connection) is a
+  connection's, the unfinished tasks it counts the session's.
+
 ### Kinds in the build schema and in builds
 
 A factory says which kinds its minions support in its [build
