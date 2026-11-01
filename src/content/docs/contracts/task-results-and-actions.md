@@ -573,7 +573,7 @@ Walks a folder and those under it: what **Walk from here** runs, on a
 listing's folder, and in the file browser on a folder or the folder shown.
 
 - **Core gives** `path`, a `string`: the folder to walk. How deep and how
-  far are the command's own params, with defaults (BOB's `depth` 5,
+  far are the command's own params, with defaults (BOB's `depth` 0, all levels,
   `max_folders` 10 000).
 - **The result is a `dir_walk`.** The file browser shows the walk's folders
   as their listings come, the folder walked marked "walking…".
