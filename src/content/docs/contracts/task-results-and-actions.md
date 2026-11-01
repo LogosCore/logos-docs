@@ -90,7 +90,7 @@ A command names them in the [build schema](../minion-build/#commands):
 More come as commands need them (a process list, a screenshot); each gets
 a section here first, and a release of the protocol and core. Planned:
 `switch_connection` and `add_connection`, with the connection kinds
-([Module Types](../../module-types/#connection-management)).
+([Channel ↔ Core: Connections](../channel-core-connections/#connection-management)).
 
 ## Running an action
 

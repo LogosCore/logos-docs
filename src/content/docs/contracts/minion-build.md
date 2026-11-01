@@ -300,7 +300,7 @@ tries them. Each one is:
 | Property | Meaning |
 |---|---|
 | `module_name` | The channel kind, one the target speaks. |
-| `kind` | *Planned, a draft*: the connection kind, one the channel and the target both support ([Module Types](../../module-types/#kinds-in-the-build-schema-and-in-builds)). Today every connection is `reverse-call`. |
+| `kind` | *Planned, a draft*: the connection kind, one the channel and the target both support ([Channel ↔ Core: Connections](../channel-core-connections/#kinds-in-the-build-schema-and-in-builds)). Today every connection is `reverse-call`. |
 | `name` | Optional. What the minion calls the connection, a slug like an endpoint name, unique among the build's connections. Without one, it is `<channel>-<position>`, e.g. `http-1`. |
 | `description` | Optional. The operators' note on what the connection is for, at most 500 characters. Core keeps it with the build record; it is never part of a build request. |
 | `settings` | By the channel's [connection schema](../minion-connection/) field key, validated like an endpoint's values. A field without a value takes the schema's default. |

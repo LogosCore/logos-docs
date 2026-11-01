@@ -97,7 +97,7 @@ everything as it comes, so operators never see the numbers.
 | 3 | `hello` | minion | the host and process: opens a session, or updates it | [Sessions](sessions/#hello) |
 | 4 | `hello_response` | core | the session id | [Sessions](sessions/#hello) |
 | 5 | `sleep_update` | minion | its check-in schedule changed | [Sessions](sessions/#late-and-lost-sessions) |
-| — | `conn_update` | minion | *planned*: the connection it uses changed | [Module Types](../../module-types/#connection-management) |
+| — | `conn_update` | minion | *planned*: the connection it uses changed | [Connections](../channel-core-connections/#connection-management) |
 | 6 | `rehello` | core | *planned*: send a `hello` again | [Sessions](sessions/#hello) |
 | 7 | `get_tasks` | minion | it takes new tasks, and how many at most | [Tasks and results](tasks-and-results/#asking-for-tasks) |
 | 8 | `task` | core | a command to run, with its arguments | [Tasks and results](tasks-and-results/#tasks) |

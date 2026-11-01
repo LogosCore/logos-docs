@@ -89,6 +89,7 @@ export default defineConfig({
             { slug: "contracts/amqp-conventions" },
             { slug: "contracts/module-lifecycle" },
             { slug: "contracts/channel-core-sync" },
+            { slug: "contracts/channel-core-connections" },
             { slug: "contracts/module-management" },
             { slug: "contracts/module-logs" },
             { slug: "contracts/minion-connection" },
