@@ -93,6 +93,8 @@ snapshot of the session's machine.
   entries reads as one of 100.
 - **Freshness**: "listed 3 h ago by #46 (root)", or "never listed: only what
   other tasks put here", on every folder.
+- **Listed or not**: a folder listed shows amber, in the table and the tree;
+  one never listed (known only as the way to another entry) grey and dashed.
 - **Marks**: downloaded (opens the kept file's view; a stream keeps none),
   uploaded (when, its SHA-256), deleted (struck through, with when and how).
   **Show deleted** hides them; it is on.
