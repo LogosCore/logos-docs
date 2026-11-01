@@ -83,7 +83,9 @@ Browser**: a work pane tab, beside the session's console tabs, of the
 snapshot of the session's machine.
 
 - **Its header**: the session its actions run through (**Act as**), the
-  machine's search, and **Show deleted**.
+  machine's search, **Show deleted**, and **Auto-list**: with it on,
+  entering a folder never listed lists it (its `list_dir`, once while the
+  tab shows it). Off by default.
 - **Its path** as crumbs (from the machine's roots), and a folder tree beside
   the table: folders open as they are expanded, from core; opening a folder
   opens the tree on the way to it.
@@ -104,7 +106,7 @@ snapshot of the session's machine.
   their way into it.
 
 The tab keeps, in the operator's browser as the tabs are, the folder it
-shows, the sort, Show deleted and the tree's open
+shows, the sort, Show deleted, Auto-list and the tree's open
 folders; closing it forgets them. The divider between the tree and the
 folder is the operator's, kept in core with their sessions layout
 (`filesSplit`, as the console's `consoleSplit`): every file browser opens
