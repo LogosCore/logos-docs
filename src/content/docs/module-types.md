@@ -146,13 +146,65 @@ sequenceDiagram
   captured core message sent to it again would run its tasks again. It may,
   by remembering recent message ids.
 
-### To decide
+### `bind-call` minions: targets and sessions
 
-- **Sessions for `bind-call` minions.** A page that keeps nothing between
-  requests cannot stage (it would have to keep the keys staging gives it), so
-  core creates its session ahead of time, under the build's own keys, when an
-  operator enters its target: a **premade session**. How its `hello` reaches
-  core, when core starts every exchange.
+A page on a web server (a PHP script) only answers, and keeps nothing
+between requests: it cannot stage, which needs the minion to speak first and
+to keep the keys it is given. It [skips
+staging](../contracts/minion-messages/sessions/#staging) instead, as any build
+may: its session keeps the build's own keys, with the trade-off that comes
+with it (anyone with the artifact can read the session). What is new is that
+core speaks first, and that core has to be told where the page is:
+
+1. **Build.** The build's connection names the channel and its settings,
+   which for `bind-call` say how the channel calls the page (the method, the
+   parameter or cookie the message travels in): the page is built to read
+   them. The build succeeds when the file is made; nothing is called yet, so
+   whether the page is reachable never fails a build.
+2. **Deploy.** The operator puts the page on a server, outside Logos.
+3. **Add a target.** On the build, or on the Sessions page picking the build,
+   the operator fills in the channel's target fields (the URL; a host header
+   or a proxy, as the channel offers). Core keeps a **target**: the build, the
+   channel, the fields and a state. It is a record, not a session; it can be
+   added before the page is deployed.
+4. **First call**, at once when the target is added and on **Check now**:
+   core seals `rehello` under the build id with the build's keys and asks an
+   instance of the channel, over the control link, to call the target.
+5. **What came back** decides the target's state:
+
+   | What came back | Core | Target |
+   |---|---|---|
+   | a sealed `hello` | opens the session, as for any `hello` under a build id, and links the target to it | `connected` |
+   | nothing: DNS, refused, timed out, TLS | retries | `unreachable`, with why |
+   | something that does not open: an HTTP 404, a WAF's page | does not retry: it rarely helps | `not the minion`, with what answered |
+   | a sealed `err` | records it | `refused`, with the code |
+
+   The channel never reads what came back: core tells these apart by opening
+   it. **Retries**, on `unreachable` only: 1 minute, 5, 30, then hourly, for
+   24 hours, then they stop; Check now any time, and a target can turn
+   retries off where every request in the server's log counts.
+6. **After.** Calls go under the session id; the page takes the id from what
+   the channel delivers, checks the tag with its build keys, and answers
+   under the same id, so it needs to remember nothing. `hello_response` is
+   not needed. Failed calls leave the session open and show it unreachable
+   since then, as missed check-ins show other sessions late.
+7. **The end.** Removing the target stops the calls and closes the session
+   (its tombstone as for any closed session).
+
+```mermaid
+stateDiagram-v2
+    [*] --> new: operator adds a target
+    new --> connected: hello answered (the session opens)
+    new --> unreachable: nothing reached it
+    new --> not_the_minion: something else answered
+    unreachable --> connected: a retry or Check now succeeds
+    unreachable --> stopped: 24 hours of retries
+    stopped --> connected: Check now succeeds
+    connected --> unreachable: later calls fail (the session stays)
+    connected --> [*]: operator removes the target (the session closes)
+```
+
+### To decide
 - **When core calls a `bind-call` minion**: on a new task or `cancel`, on a
   schedule (to collect results of long tasks), on demand; and what it does
   when a call fails.
@@ -160,8 +212,7 @@ sequenceDiagram
   the request ids, `open`'s answer and its deadline, authentication (the
   [channel authentication](../contracts/channel-core-sync/) planned for the
   sync call).
-- **Target fields**: how the connection schema declares them, and where
-  operators enter them for a session.
+- **Target fields**: how the connection schema declares them.
 - **Who opens `bind-persistent` and when**: an operator for the session, core
   on a new task, or both; and what closes it (the operator, an idle timeout).
 - **Kinds in the build schema** and in a build's connections.
