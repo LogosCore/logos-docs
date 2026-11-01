@@ -77,7 +77,7 @@ and separates what is built from what is still a plan.
 | Payload crypto | Built: `aes-256-cbc-hmac-sha256`. Core generates each build's keys, gives each minion process keys of its own when it stages, and seals and opens every frame ([Wire Format](../contracts/minion-messages/wire-format/)). |
 | Tasking | Built: sessions, tasks and results, listings into the file browser, and file transfers both ways ([Minion Messages](../contracts/minion-messages/), [Task Results and Actions](../contracts/task-results-and-actions/)). |
 | Observability | Planned: central audit logging and tracing. Core publishes lifecycle events that nothing consumes yet. |
-| Dialers | An idea for later: a module type that opens the connection to a minion (one HTTP call to a page on a web server, or a lasting SSH or TCP connection), when core asks it to ([Module Types](../module-types/#3-dialer-modules-planned)). Not designed. |
+| [Connection kinds](../module-types/#connection-kinds) | Built: `reverse-call` (the minion dials, one exchange at a time). Designed, a draft: `reverse-persistent`, `bind-call` and `bind-persistent`, where core starts exchanges too, over a control link and a WebSocket per connection between channel and core. |
 
 ## Deployment Shape
 

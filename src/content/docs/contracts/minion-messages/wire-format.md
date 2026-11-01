@@ -86,12 +86,14 @@ xfer-id = bstr .size 16
 - **Any number of items**, up to 256, so one check-in can bring several
   results and one reply several tasks.
 
-Who starts depends on the module in between:
+Who starts depends on the channel's [connection
+kind](../../../module-types/#connection-kinds):
 
-| Through | Starts the exchange | Its message has | The answer has |
+| Connection | Starts the exchange | Its message has | The answer has |
 |---|---|---|---|
-| a channel (today) | the minion | `id` | `re` |
-| a [dialer](../../../module-types/#3-dialer-modules-planned) (planned) | core; on a lasting connection, either side | `id` | `re` |
+| `reverse-call` (today) | the minion | `id` | `re` |
+| `bind-call` (planned) | core | `id` | `re` |
+| `reverse-persistent`, `bind-persistent` (planned) | either side | `id` | `re` |
 
 ## CBOR rules
 
@@ -127,7 +129,8 @@ Messages carry no time: core stamps each with its own receive time.
   still waiting on. An old reply, replayed, matches nothing and is dropped.
 - **The direction byte** stops a frame from being turned around: both sides
   hold the same keys, and a core message sent back to core fails `dir`.
-- **A minion answering core's requests** (through a dialer) needs no replay
+- **A minion answering core's requests** (a `bind` or persistent
+  connection) needs no replay
   protection of its own: core does not rely on it. Without it, a captured
   core message sent to the minion again runs its tasks again; a minion may
   guard against that by remembering recent `id`s.
@@ -281,8 +284,8 @@ the host shows it) and data are named as they come.
   invalid: a frame turned around fails to parse even before `dir` is checked.
   A minion writes only minion messages and reads only core messages, so its
   codec covers half the items. Who starts an exchange (`id` or `re`) is kept
-  apart from direction, so the same formats serve a channel, where the minion
-  starts, and a dialer, where core does.
+  apart from direction, so the same formats serve every [connection
+  kind](../../../module-types/#connection-kinds): the minion starting, core starting, or both.
 - **Why no time in messages.** Core trusts only its own clock, so it stamps
   messages as they arrive. The sync call is request and response, so a
   minion needs no clock either to know a reply is fresh: it matches `re`.

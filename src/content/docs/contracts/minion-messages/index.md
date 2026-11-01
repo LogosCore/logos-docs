@@ -11,9 +11,9 @@ every factory.
 
 :::note[Status]
 Built, in the protocol package (`logos-golang-protocol`), core and BOB's
-minion. Planned: exchanges through a
-[dialer](../../module-types/#3-dialer-modules-planned), and the `rehello`
-item (core asking a minion for a new `hello`).
+minion, through `reverse-call` connections. Planned: the other [connection
+kinds](../../module-types/#connection-kinds), where core starts exchanges
+too, and the `rehello` item (core asking a minion for a new `hello`).
 :::
 
 ## The layers
@@ -119,9 +119,11 @@ everything as it comes, so operators never see the numbers.
 
 ## Open questions
 
-- **Exchanges through a dialer.** What a premade session looks like (one core
-  creates ahead of time, under the build's own keys, so a minion that only
-  answers needs no staging), and how `get_tasks` and `hello` work when core
-  starts the exchange. On a lasting connection (SSH, TCP) both sides start
-  exchanges; `id` and `re` keep them apart ([Wire format](wire-format/#message)).
-  See [Module Types](../../module-types/#3-dialer-modules-planned).
+- **Exchanges core starts** ([connection kinds](../../module-types/#connection-kinds)
+  other than `reverse-call`). What a premade session looks like (one core
+  creates ahead of time, under the build's own keys, so a `bind-call` minion
+  that only answers needs no staging); how `hello` works when core starts
+  every exchange; and `get_tasks` on a persistent connection, where its `max`
+  becomes an allowance core pushes tasks within. Both sides starting
+  exchanges on one connection is already in the format: `id` and `re` keep
+  them apart ([Wire format](wire-format/#message)).
