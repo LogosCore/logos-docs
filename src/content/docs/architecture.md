@@ -73,9 +73,9 @@ and separates what is built from what is still a plan.
 | [Live log tail](../contracts/module-logs/) | Built (prototype): streamed to the operator's browser, never stored. |
 | [Channel endpoints](../contracts/minion-connection/) | Built: an operation's saved connection settings, with export and import. |
 | [Minion builds](../contracts/minion-build/) | Built: build schemas, builds offered to factory instances, progress, artifacts checked, the minion recorded. |
-| Data plane | Built: the sync endpoint (the ciphertext as the raw body) with a registration gate, a size limit and de-duplication. Core answers every message with 204, nothing for the minion. |
-| Payload crypto | Partly built: core implements `aes-256-cbc-hmac-sha256`, generates and holds each minion's keys. Decrypting inbound and encrypting outbound are planned; no contract yet. |
-| Tasking | Planned: what core sends a minion, and how it maps to the commands a factory builds in (the factory command contract). |
+| Data plane | Built: the [sync endpoint](../contracts/channel-core-sync/) (the ciphertext as the raw body) with a registration gate, a size limit and de-duplication; core answers each message with a sealed reply, or 204 when it has nothing. |
+| Payload crypto | Built: `aes-256-cbc-hmac-sha256`. Core generates each build's keys, gives each minion process keys of its own when it stages, and seals and opens every frame ([Wire Format](../contracts/minion-messages/wire-format/)). |
+| Tasking | Built: sessions, tasks and results, listings into the file browser, and file transfers both ways ([Minion Messages](../contracts/minion-messages/), [Task Results and Actions](../contracts/task-results-and-actions/)). |
 | Observability | Planned: central audit logging and tracing. Core publishes lifecycle events that nothing consumes yet. |
 | Dialers | An idea for later: a module type that opens the connection to a minion (one HTTP call to a page on a web server, or a lasting SSH or TCP connection), when core asks it to ([Module Types](../module-types/#3-dialer-modules-planned)). Not designed. |
 
@@ -89,8 +89,48 @@ and separates what is built from what is still a plan.
   (`logos-core_logos`) and registers with core when it starts.
 - nginx is the operators' entrypoint, terminates TLS, and routes `/api/` to
   core.
-- A Helm chart (`logos-core/deploy/helm/logos`) deploys core to Kubernetes. It
-  does not deploy RabbitMQ yet, which core needs to start.
+- A Helm chart (`logos-core/deploy/helm/logos`) deploys core to Kubernetes,
+  RabbitMQ included. Modules are not in it yet.
+- Core runs as **one instance**: see below.
+
+## One core instance
+
+Core runs as a single process. Its data is shared (MongoDB, Redis, the
+object store), so most of it would work from several, but not all of it:
+
+- **The event bus is in the process.** It feeds the web app's live views
+  (GraphQL subscriptions). With two instances, a change one handles (a
+  minion's result, a new session) never reaches browsers connected to the
+  other.
+- **Background jobs run in every process**: the lifecycle reaper, the build
+  scheduler, the sweeps of minion files and streams, the wiki's auto-backup.
+  Only the build scheduler is guarded against a second instance (a lease on
+  each build it offers).
+- **Open connections belong to a process.** A minion's persistent connection,
+  once channels keep them open to core, is held by one instance, and only
+  that one can send on it.
+
+So the Helm chart runs one core replica. A rollout runs the new pod beside
+the old one for a few seconds; that is harmless. A deploy or a crash leaves
+core unreachable for a moment, which minions take as a failed check-in and
+retry.
+
+Scaling out is not built, and three rules keep it a contained change when it
+is:
+
+1. **Mongo and Redis decide.** A process may cache what it reads, never hold
+   the only copy of something another instance would need.
+2. **Every push to a minion connection goes through one interface** (send to
+   a session). With one instance it finds the connection in memory; with
+   several it learns which instance holds it and hands the message over, and
+   no caller changes.
+3. **A periodic job is safe to run twice at once**: a conditional update, or
+   a lease like the build scheduler's.
+
+Adding instances then means: an event bus shared between them (a RabbitMQ
+fanout exchange, one queue per instance, behind the bus interface core
+already has), handing pushes to the instance that holds a connection, and
+guards on the background jobs that lack them.
 
 ## Trust Boundaries
 
@@ -130,5 +170,6 @@ Planned:
 2. ~~Message contract format and versioning policy.~~  Resolved — see [AMQP Message Envelope](../contracts/amqp-envelope/).
 3. ~~Database engine and schema partitioning strategy.~~ Resolved — see [Core Infrastructure](../core-infrastructure/) (MongoDB).
 4. Module packaging and lifecycle policy (enable/disable/version compatibility). Partly settled: operators block, unblock and delete instances ([Module Lifecycle](../contracts/module-lifecycle/)), and build and connection schemas carry versions. Packaging is open.
-5. The payload crypto contract: the message format of each suite, where core encrypts and decrypts.
-6. The factory command contract: tasks, how they reach the commands a minion was built with, and their results.
+5. ~~The payload crypto contract.~~ Resolved — see [Wire Format](../contracts/minion-messages/wire-format/).
+6. ~~The factory command contract.~~ Resolved — see [Minion Messages](../contracts/minion-messages/) and [Task Results and Actions](../contracts/task-results-and-actions/).
+7. Several core instances: see [One core instance](#one-core-instance).
