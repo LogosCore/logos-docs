@@ -132,12 +132,16 @@ resumed from any offset is the minion reading from there again.
 1. The minion opens the file and sends a first chunk with no `data`: `off` 0,
    `total`, `task` and `name`. Core answers `ack {xfer, next: 0, hold: true}`:
    the stream waits for a downloader.
-2. While held, the minion sends nothing of the transfer. It checks in on its
-   own schedule until the stream first runs; after that, about every second,
-   so a paused download starts again quickly.
+2. While held, the minion sends nothing of the transfer. Through calls it
+   checks in on its own schedule until the stream first runs; after that,
+   about every second, so a paused download starts again quickly. Over a
+   persistent connection it need not check in: core pushes the ack (step 3).
 3. A downloader attaches (`GET /api/v1/minion-streams/{task}`, with a `Range`
-   to resume). At the minion's next check-in core answers `ack {xfer, next}`
-   without `hold`, `next` where the downloader wants the bytes from. The
+   to resume). Core sends `ack {xfer, next}` without `hold`, `next` where the
+   downloader wants the bytes from: at once, pushed over a persistent
+   connection serving the session (the minion holds, sending nothing, so the
+   ack crosses no chunk of its); through calls, in the reply to its next
+   check-in. The
    minion sends the chunk from `next`, at once and again with each ack; an
    ack may set `next` back (a download resumed from earlier), and the minion
    reads from there. Its chunk from 0 says `total`, `task` and `name` again,
@@ -173,7 +177,9 @@ file](#core-sending-a-file), the minion pulling it, with three differences:
    `ack {xfer, next, hold: true}`, and the minion asks no more until an ack
    without `hold`: before the first chunk, on its own schedule; after, about
    every second. Every reply carries the stream's ack, so the minion hears
-   when bytes are there.
+   when bytes are there; over a persistent connection core pushes it as
+   soon as the uploader's bytes reach a minion that holds, so the minion
+   need not check in for it.
 3. The last chunk says `sha256` of the bytes core passed on, hashed in order
    as they went. The minion checks it, as it checks a file core sends, and
    ends the task with the
