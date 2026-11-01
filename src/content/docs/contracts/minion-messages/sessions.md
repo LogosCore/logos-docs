@@ -152,26 +152,36 @@ says a **machine id**: a source, by number, and a value. Core keeps it as
 `"<source>:<value>"`, the source by name and the value lowercased, at most
 256 characters, no spaces or control characters. The source says where the
 value came from, so two sources never collide by chance and an operator sees
-what kind of identity it is. Core checks the shape only, and the [file
-browser](../../file-browser/) keys a machine's files by it. A source core
-does not know shows as `source-<n>`: a factory with a source of its own asks
-for a number.
+what kind of identity it is. The [file browser](../../file-browser/) keys a
+machine's files by it.
 
-A minion takes the **first** of these it can read **quietly**, skipping
-placeholders:
+Which sources a minion reads, and in which order, is **its factory's
+choice**: core checks only the shape. What follows is a recommendation. A
+factory that reads a source not listed asks for a number in the registry,
+and core shows one it does not know as `source-<n>`.
+
+The recommendation rests on two rules:
+
+- **The same machine, the same id, whoever runs the minion.** Every source
+  is one **any user** can read: none needs root or an administrator. Two
+  minions on one host, one as root and one as a user, must not look like two
+  machines: the file browser keys a machine's files by its id.
+- **Quietly**: read a file, a registry value or a system call, nothing run,
+  nothing that a monitor watches or that reaches the network.
+
+A minion takes the **first** of these it can read, skipping placeholders:
 
 | | Source | No. | Where | Notes |
 |---|---|---|---|---|
-| 1 | `smbios-uuid` | 1 | Linux `/sys/class/dmi/id/product_uuid` (root only); Windows `GetSystemFirmwareTable("RSMB")`, the SMBIOS system UUID | The hardware's or the VM's: survives reinstalls. Not through WMI on Windows: watched. |
+| 1 | `smbios-uuid` | 1 | Windows `GetSystemFirmwareTable("RSMB")`: the SMBIOS system UUID | The hardware's or the VM's: survives reinstalls. Not through WMI: watched. Not on Linux, where the firmware's UUID (`/sys/class/dmi/id/product_uuid`) is root's only. |
 | 1 | `mac-platform-uuid` | 2 | macOS `IOPlatformUUID`, through IOKit | Not by running `ioreg`. |
 | 1 | `bsd-host-uuid` | 3 | FreeBSD `kern.hostuuid` | |
 | 2 | `container` | 6 | the container's id, from `/proc/self/mountinfo` or the cgroup | Inside a container only, and before 3: an image's install id is every container's. |
-| 3 | `linux-machine-id` | 4 | `/etc/machine-id`, else `/var/lib/dbus/machine-id` | Any user can read it. New with each install; shared by clones that did not regenerate it. |
-| 3 | `win-machine-guid` | 5 | `HKLM\SOFTWARE\Microsoft\Cryptography\MachineGuid` | New with each install or sysprep; shared by clones made without sysprep. |
-| 4 | `domain-sid` | 7 | a domain-joined Windows machine's computer account SID | |
-| 5 | `hostname` | 8 | the host name | Does not tell apart the machines this is for, but stays the same. |
-| 6 | `kept` | 9 | a random id the minion generates once and keeps | Names the minion's install, not the machine, and leaves a file or key on the host: only where the factory accepts that. |
-| 7 | `ephemeral` | 10 | a random id for this process | Tells nothing apart across restarts; core can tell it from the source. |
+| 3 | `linux-machine-id` | 4 | `/etc/machine-id`, else `/var/lib/dbus/machine-id` | New with each install; shared by clones that did not regenerate it. |
+| 3 | `win-machine-guid` | 5 | `HKLM\SOFTWARE\Microsoft\Cryptography\MachineGuid`, from the 64-bit view | New with each install or sysprep; shared by clones made without sysprep. A 32-bit process reads it with `KEY_WOW64_64KEY`. |
+| 4 | `hostname` | 8 | the host name | Does not tell apart the machines this is for, but stays the same. |
+| 5 | `kept` | 9 | a random id the minion generates once and keeps, in a place every user shares and can read (`/var/tmp`, `C:\ProgramData`) | Names the minion's install, not the machine, and leaves a file or key on the host: only where the factory accepts that. Never under a user's home: each user's minion would make its own. |
+| 6 | `ephemeral` | 10 | a random id for this process | Tells nothing apart across restarts; core can tell it from the source. |
 
 - **Placeholders** are firmware values boards ship with instead of their own,
   shared by many machines: all zeros, all `F`s,
@@ -180,14 +190,18 @@ placeholders:
   were none. The protocol package has the list (`PlaceholderMachineUUID`),
   the sources' numbers (`MachineSMBIOSUUID`, …) and core's joined form
   (`MachineID`).
+- **Not recommended**: sources only a privileged process reads (Linux's
+  firmware UUID and serials, `/sys/firmware/dmi`), and a domain machine's
+  computer account SID (`domain-sid`, number 7): reading it means asking LSA
+  or a domain controller, and on Windows `win-machine-guid` always comes
+  first. Their numbers stay in the registry.
 - **Not identities**, whatever they look like: `/proc/sys/kernel/random/boot_id`
   (new each boot), a network card's MAC address (randomized, or changed with
   the card), a volume's serial (copied with the disk image).
 
-BOB's minion, on Linux: the firmware's UUID when it runs as root, else the
-container's id when in one, else the machine id, else the host name, else a
-random id for the process. It keeps none of its own: it leaves nothing on
-the host.
+BOB's minion, on Linux: the container's id when in one, else the machine
+id, else the host name, else a random id for the process; the same as any
+user. It keeps none of its own: it leaves nothing on the host.
 
 ## Session lifetime
 
