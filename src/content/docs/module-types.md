@@ -61,7 +61,7 @@ A channel reaches core three ways, each for what it suits:
 | Path | One per | Carries | For |
 |---|---|---|---|
 | The [sync call](../contracts/channel-core-sync/) (built) | message | one minion message and core's reply, over HTTP | `reverse-call` |
-| The **control link**, a WebSocket | channel instance | core's requests to the channel: call a target, open a connection, close one | `bind-call`, and opening `bind-persistent` |
+| The **control link**, a WebSocket | channel instance | core's requests to the channel: call a target, open a connection | `bind-call`, and opening `bind-persistent` |
 | A **connection socket**, a WebSocket | minion connection | the connection's messages, both ways | `reverse-persistent`, `bind-persistent` |
 
 The channel opens all of them: core never connects to a channel, which may
@@ -76,7 +76,9 @@ each request by its id:
 - **`open`**: open a `bind-persistent` connection to a target, for a session.
   The channel dials, then opens the connection's socket (below), naming the
   request; or it answers why it could not.
-- **`close`**: close a connection.
+
+A connection is closed by closing its socket, from either side: no request
+needed.
 
 It carries requests, not a minion's traffic: one link per instance is enough,
 and nothing waits behind a large transfer.
@@ -115,7 +117,7 @@ sequenceDiagram
     CH->>M: task
     M->>CH: result
     CH->>C: result
-    C->>CH: close {connection}
+    C->>CH: closes the connection socket
     CH->>M: hang up
 ```
 
@@ -243,11 +245,63 @@ Core calls a `bind-call` minion:
 - **A call's deadline** is the channel's request timeout. A task meant to
   run longer belongs in the background on the page.
 
+### The control link and connection sockets: formats
+
+Both are WebSockets the channel opens to core, beside the sync call, behind
+the same registration gate: an instance that is not registered, or is dead
+or blocked, gets **403** at the handshake. An optional `traceparent` passes as
+on the sync call. When [channel
+authentication](../contracts/channel-core-sync/) comes (mTLS or a shared
+secret), it applies to the handshakes: a socket authenticates once, when it
+opens.
+
+| Endpoint | Handshake headers |
+|---|---|
+| `GET /api/channel/link`: the control link | `Logos-Channel-Instance` |
+| `GET /api/channel/connection`: a connection socket | `Logos-Channel-Instance`; `Logos-Connection-Kind` (`reverse-persistent` or `bind-persistent`); `Logos-Open-Request` (`bind-persistent`: the `open` it answers) or `Logos-Peer-Address` (`reverse-persistent`, as on the sync call) |
+
+**Frames** are binary messages, each one CBOR map with numbered keys, as the
+[minion protocol](../contracts/minion-messages/wire-format/#registry) has
+them; the ciphertext stays raw bytes. A text frame closes the socket, and so
+does one over the message limit (with the overhead of a frame; code 1009).
+
+On a **connection socket**, both ways:
+
+| Key | Value |
+|---|---|
+| 1 | the id the message is sent under: build id, temporary id or session id, 16 bytes (on a `reverse-persistent` connection it changes as the minion stages and says `hello`) |
+| 2 | the ciphertext |
+
+No message id: the sync call's `Logos-Message-Id` lets core drop a request
+the channel retried, and a socket sends a frame once.
+
+On the **control link**, key 0 says what the frame is:
+
+| Frame | Direction | Keys |
+|---|---|---|
+| `call` (1) | core → channel | 1 request id; 2 the target (the channel's target fields, text keys); 3 the id the message is sent under; 4 the ciphertext; 5 deadline in milliseconds, optional (the channel keeps to the shorter of it and its own request timeout) |
+| `open` (2) | core → channel | 1 request id; 2 the target; 5 deadline, 30 seconds unless core says otherwise |
+| `answer` (3) | channel → core | 1 request id; then either 4 the body that came back and 6 the transport's status (the HTTP status, say), or 7 a failure: `{1: kind, 2: message}`, the kind unreachable 1 (DNS, refused), timeout 2, TLS 3, other 4 |
+
+- **Every request gets exactly one `answer`.** An `open` that worked is
+  answered once its connection socket is up, the socket naming the request,
+  so core knows the session it serves.
+- **Request ids** are core's, unique among its requests waiting on that
+  link. Answers come in any order: many targets are called at once.
+- **The channel never reads the body**: core opens it, and tells the target's
+  states apart by the status and by whether it opens.
+- **Liveness**: both sides ping every 30 seconds and drop a socket silent for
+  90. The proxy in front of core keeps these sockets open past its own idle
+  timeouts.
+- **The link drops**: its waiting requests fail, and core's rules for a
+  failed call apply; the channel opens it again, backing off. Connection
+  sockets do not depend on it and stay.
+- **An answer lost** (the link dropped after the channel called) leaves core
+  resending what the minion did not acknowledge: a page that cannot remember
+  task ids runs those tasks again. Only a lost answer does that; it comes
+  with a minion that keeps nothing.
+
 ### To decide
-- **The control link's and the connection socket's formats**: the frames,
-  the request ids, `open`'s answer and its deadline, authentication (the
-  [channel authentication](../contracts/channel-core-sync/) planned for the
-  sync call).
 - **Target fields**: how the connection schema declares them.
 - **Who opens `bind-persistent` and when**: an operator for the session, core
   on a new task, or both; and what closes it (the operator, an idle timeout).
