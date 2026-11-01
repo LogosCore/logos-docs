@@ -2,9 +2,12 @@
 title: "Channel ↔ Core: Connections"
 ---
 
-:::caution[Draft]
-An agreed design, not built. Today a channel reaches core through the [sync
-call](../channel-core-sync/) only, and every connection is `reverse-call`.
+:::caution[Partly built]
+Built: `reverse-persistent`, in core, channel-core (`pkg/connclient`), the
+HTTP channel and BOB's minion: the connection sockets, pushes within the
+`get_tasks` allowance, presence, and the kinds in connection and build
+schemas. The control link, the `bind` kinds, targets and connection
+management are an agreed design, not built yet.
 :::
 
 How a channel carries the [connection kinds](../../module-types/#connection-kinds)
@@ -64,6 +67,19 @@ connection: while it is open, core shows the session **connected**; when
 either side closes it, the connection is gone. If only the socket drops (core
 restarts), the channel opens a new one for the minion's connection, which
 does not notice.
+
+- **A request over a socket always gets its reply**, empty when core has
+  nothing to say (through the sync call that is the 204): the minion knows
+  its message arrived. A minion may answer what core starts (`re`), or
+  acknowledge in its next message, as BOB's does: core takes either.
+- **Pushes** follow every change to a session's tasks (queued, cancelled, a
+  part taken), coalesced over a tenth of a second: core sends cancels, and
+  tasks within the allowance, on the connection that carried the session's
+  latest message.
+- **BOB's minion** checks in at once over a new socket, which links the
+  connection to its session and sets its allowance, then on its schedule;
+  a WebSocket that closes it opens again after a second, doubling up to the
+  endpoint's `ws_reconnect_backoff`.
 
 One socket per connection rather than one for everything: each gets TCP's own
 flow control, a slow minion or a large transfer holds up nobody else, and a
@@ -366,7 +382,7 @@ sends tasks as they are queued, so the minion says once how many it takes:
 - **It lasts** until the minion sends another `get_tasks`, which replaces it,
   or the connection closes: a minion that reconnects says it again.
 - **Without `max`**: no limit, as through a call.
-- **`max 0`** takes none for now: a minion pauses with it. It becomes valid
+- **`max 0`** takes none for now: a minion pauses with it. It is valid
   through every kind (through a call it changes nothing).
 - **No `get_tasks` on a connection**: core sends no tasks on it. A minion
   opts in, so one that only checks in works as before.
@@ -478,27 +494,25 @@ factory's fields as a build's connection.
 ## Kinds in the build schema and in builds
 
 A factory says which kinds its minions support in its [build
-schema](../minion-build/)'s `channels`, shaped as a channel's
-[connection schema](#the-connection-schema-by-kind) is:
+schema](../minion-build/)'s `channels`, as a list, in its order of
+preference:
 
 ```json
 "channels": [
   {
     "module_name": "http", "versions": [2],
-    "fields": [ "…the factory's parameters, for every kind…" ],
-    "kinds": {
-      "reverse-call": {},
-      "reverse-persistent": { "fields": [ "…its own, if any…" ] },
-      "bind-call": {}
-    }
+    "fields": [ "…the factory's parameters…" ],
+    "kinds": ["reverse-call", "reverse-persistent"]
   }
 ]
 ```
 
-- **`kinds`'s keys are the kinds the factory's minions support** with that
-  channel; each may add `fields` of its own to the shared ones. Without
-  `kinds`, a channel entry is `reverse-call` only, as every factory's is
-  today: no new build schema version.
+- **`kinds` are the kinds the factory's minions support** with that channel,
+  the first the one a build takes when it names none. Without `kinds`, a
+  channel entry is `reverse-call` only, as every factory's was before: no
+  new build schema version. (A list, not a map as a channel's connection
+  schema has, because its order is what picks a build's kind. A kind's own
+  factory fields, when one needs them, come as a key of their own.)
 - **A target narrows them**, as it narrows the channels: a PHP page's target
   keeps `bind-call`, a binary's `reverse-call` and `reverse-persistent`.
 - **A kind is usable** where both sides support it: the channel (its
@@ -511,14 +525,15 @@ their kind:
 - **`kind`**: one usable for the target; the build form asks for it, and the
   API takes the first usable one, in the factory's order, when it is left
   out. The build request gives it to the factory, which builds that in.
-- **`settings`** by the channel's fields for that kind (shared and its own),
-  from scratch or from an endpoint of the same kind; **`values`** by the
-  factory's fields for that kind.
+- **`settings`** by the channel's fields for that kind (shared and its own);
+  **`values`** by the factory's fields.
 - **Kinds mix** in one build: a WebSocket first and polling after, or a
   listening implant that also calls back. The order is the order the minion
   tries its connections, so it means something for `reverse` ones only: a
   `bind` connection is not tried, it waits to be reached.
-- **Endpoints and their exports** carry their kind; an export without one is
+- **Endpoints** are not of a kind yet: they hold the channel's shared fields,
+  which are all the HTTP channel has. When a kind has fields of its own,
+  endpoints and their exports carry their kind, an export without one being
   `reverse-call`.
 - **A target belongs to one `bind` connection** of a build: adding a target
   picks the build and, when it has several, the connection, whose channel

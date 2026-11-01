@@ -56,9 +56,9 @@ get_tasks = {
   `stage_response` and `hello_response` come whenever core has them, so a
   minion busy with a long task can still be told to stop it.
 - **One `get_tasks` per request.** A second is a `bad_message`.
-- *Planned, with the [connection kinds](../../channel-core-connections/#get_tasks-on-a-persistent-connection)*:
-  on a persistent connection `get_tasks` becomes a standing allowance of
-  unfinished tasks, and `max 0` (taking none for now) becomes valid.
+- **On a persistent connection** `get_tasks` is a standing allowance of
+  unfinished tasks ([Connections](../../channel-core-connections/#get_tasks-on-a-persistent-connection)),
+  and `max 0` takes none for now: a minion pauses with it.
 
 ## Tasks
 

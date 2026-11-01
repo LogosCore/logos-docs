@@ -45,9 +45,9 @@ decide who can start an exchange, and when core can reach the minion:
 | `bind-call` | the channel, when core asks | core; the minion only answers | whenever core calls |
 | `bind-persistent` | the channel, when core asks | both | while the connection is open, which core can ask for |
 
-Built today: `reverse-call`. The HTTP channel's WebSocket is persistent for
-the minion, but the channel relays each of its frames to core as one sync
-call, so to core it is still `reverse-call`: core answers, never starts.
+Built: `reverse-call`, and `reverse-persistent` (the HTTP channel's
+WebSocket, over a connection socket to core). The `bind` kinds are a
+draft.
 
 ### Channel ↔ core
 

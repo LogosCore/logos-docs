@@ -91,9 +91,10 @@ kind](../../../module-types/#connection-kinds):
 
 | Connection | Starts the exchange | Its message has | The answer has |
 |---|---|---|---|
-| `reverse-call` (today) | the minion | `id` | `re` |
+| `reverse-call` | the minion | `id` | `re` |
+| `reverse-persistent` | either side | `id` | `re` |
 | `bind-call` (planned) | core | `id` | `re` |
-| `reverse-persistent`, `bind-persistent` (planned) | either side | `id` | `re` |
+| `bind-persistent` (planned) | either side | `id` | `re` |
 
 ## CBOR rules
 
