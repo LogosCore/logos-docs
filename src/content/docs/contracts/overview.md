@@ -94,13 +94,13 @@ Every contract in this section, regardless of surface, follows the same baseline
 | Contract | Surface | Parties | Status |
 |---|---|---|---|
 | [HTTP Sync](../channel-core-sync/) | Data plane | Channel ↔ Core | Implemented; the channel is not authenticated yet |
-| [Connections](../channel-core-connections/) | Data plane: the connection kinds where core starts exchanges, the control link and connection sockets | Channel ↔ Core | `reverse-persistent` implemented; the control link and the `bind` kinds a draft |
+| [Connections](../channel-core-connections/) | Data plane: the connection kinds where core starts exchanges, the control link and connection sockets | Channel ↔ Core | `reverse-persistent` and `bind-call` (the control link's `call`, targets) implemented; `bind-persistent` and the control link's `open` a draft |
 | [Module Lifecycle](../module-lifecycle/) | Control plane | Module (client) → Core (server) | Implemented |
 | [Module Management](../module-management/) | Control plane | Core (client) → Module (server) | Prototype |
 | [Module Logs](../module-logs/) | Control plane | Core ↔ Module | Prototype |
 | [Minion Connection Schema](../minion-connection/) | Control plane | Channel → Core | Implemented |
 | [Minion Build](../minion-build/) | Control plane | Core ↔ Factory | Implemented; payload crypto pending |
-| [Minion Messages](../minion-messages/) | Data plane, inside the ciphertext | Minion ↔ Core | Implemented (`v` 3: numbered keys, values and commands); the other connection kinds and the `rehello` item planned |
+| [Minion Messages](../minion-messages/) | Data plane, inside the ciphertext | Minion ↔ Core | Implemented (`v` 3: numbered keys, values and commands, `rehello`) |
 | [Task Results and Actions](../task-results-and-actions/) | Data plane: a task's `data`; what core runs a command for | Minion → Core, named in the build schema | Implemented: results `dir_listing`, `dir_walk`, `file_download`, `file_upload`, `file_stream`; actions `list_dir`, `walk_dir`, `download_file`, `upload_file`, `upload_stream`, `stream_file`, `delete_path` |
 | [File Browser](../file-browser/) | A machine's file system, as tasks saw it | Core, from tasks' results | Implemented |
 

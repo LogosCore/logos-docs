@@ -60,7 +60,7 @@ Declared in `module.register` under `connection`:
 | `version` | Version of the channel's parameter set, from 1. Raised when minions built against the previous set would read the new one wrongly: a field removed, renamed or given another meaning, in any kind. Adding an optional field does not need it. |
 | `kinds` | The connection kinds the channel carries (`reverse-call`, `reverse-persistent`, `bind-call`, `bind-persistent`), at least one, each with its own `fields`. |
 | `kinds.<kind>.fields[]` | Up to 32, with unique keys within the kind, each a field spec exactly as in a [management manifest](../module-management/#fields): `key`, `type`, label, description, group, order, required, default, bounds, pattern, options. `file` is not allowed. |
-| `kinds.<kind>.target[]` | Bind kinds only: what core needs to reach a minion ([bind-call targets](../channel-core-connections/#bind-call-targets-and-sessions)). Not built. |
+| `kinds.<kind>.target[]` | Bind kinds only: what core needs to reach a minion ([bind-call targets](../channel-core-connections/#bind-call-minions-targets-and-sessions)). Built for `bind-call`. |
 
 **Each kind spells out its fields in full**, even where kinds share most of
 them: nothing is inherited from another kind or from a shared list. A field

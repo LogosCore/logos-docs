@@ -8,9 +8,12 @@ HTTP channel and BOB's minion: the connection sockets, pushes within the
 `get_tasks` allowance, presence, and the kinds in connection and build
 schemas, each kind with its own fields on both sides, and endpoints of a
 kind. Connection management is built too: the `hello`'s connection,
-`conn_update`, and `switch_connection` (BOB's `connect`). The control link,
-the `bind` kinds, targets, fallback after failures and `add_connection` are
-an agreed design, not built yet.
+`conn_update`, and `switch_connection` (BOB's `connect`). And `bind-call`:
+the control link's `call` (channel-core `pkg/linkclient`), targets with
+their states, retries and needs editing, calls when there is something to
+send, and the `rehello`, in core, the Dumbo channel and the Dumbo
+factory's PHP pages. `bind-persistent` (the link's `open`), fallback after
+failures and `add_connection` are an agreed design, not built yet.
 :::
 
 How a channel carries the [connection kinds](../../module-types/#connection-kinds)
@@ -177,8 +180,26 @@ core speaks first, and that core has to be told where the page is:
    under the same id, so it needs to remember nothing. `hello_response` is
    not needed. Failed calls leave the session open and show it unreachable
    since then, as missed check-ins show other sessions late.
-7. **The end.** Removing the target stops the calls and closes the session
-   (its tombstone as for any closed session).
+7. **The end.** Removing the target stops the calls, nothing more: the
+   target is an address, not the minion. The session stays with its
+   history, shown with no target, until an operator archives or deletes it
+   as any other. A page never checks in, so a tombstone would tell it
+   nothing.
+   - **New tasks are refused** while the session has no target: nothing
+     would call the page, so a task would wait for good. Queuing one
+     answers why ("session #12 has no target: core cannot reach its page.
+     Add a target first"), and no task is kept.
+   - **Tasks queued before** stay queued: they go out with the first call
+     of a target added to the session (below). Until then each shows why it
+     waits: no target.
+   - **A target that is there but unreachable** (or stopped, or not the
+     minion) takes tasks: core retries it, and Check now may reach it. They
+     wait, showing the target's state and since when.
+8. **Moving.** A target added to that session takes it over: the page
+   keeps nothing and answers anything its build's keys open, so core calls
+   it under the session's id, and the session goes on. The target must be
+   of the session's build and connection, the session open and without a
+   target. Editing a target's URL does the same in place.
 
 ```mermaid
 stateDiagram-v2
@@ -190,7 +211,7 @@ stateDiagram-v2
     unreachable --> stopped: 24 hours of retries
     stopped --> connected: Check now succeeds
     connected --> unreachable: later calls fail (the session stays)
-    connected --> [*]: operator removes the target (the session closes)
+    connected --> [*]: operator removes the target (the session stays, with no target)
 ```
 
 ## `bind-call` minions: when core calls
@@ -268,15 +289,18 @@ On the **control link**, key 0 says what the frame is:
 |---|---|---|
 | `call` (1) | core → channel | 1 request id; 2 the values: the build connection's and the target's, in one map by the keys the channel [declared](#the-connection-schema-by-kind); 3 the id the message is sent under; 4 the ciphertext; 5 deadline in milliseconds, optional (the channel keeps to the shorter of it and its own request timeout) |
 | `open` (2) | core → channel | 1 request id; 2 the values, as for `call`; 5 deadline, 30 seconds unless core says otherwise |
-| `answer` (3) | channel → core | 1 request id; then either 4 the body that came back and 6 the transport's status (the HTTP status, say), or 7 a failure: `{1: kind, 2: message}`, the kind unreachable 1 (DNS, refused), timeout 2, TLS 3, other 4 |
+| `answer` (3) | channel → core | 1 request id; then one of: 3 the id and 4 the sealed message that came back, unpacked from the channel's transport format, with 6 the transport's status (the HTTP status, say); 6 the status and 8 the first 512 bytes of what answered, when it is not a minion message (a 404, a WAF's page); or 7 a failure: `{1: kind, 2: message}`, the kind unreachable 1 (DNS, refused), timeout 2, TLS 3, other 4 |
 
 - **Every request gets exactly one `answer`.** An `open` that worked is
   answered once its connection socket is up, the socket naming the request,
   so core knows the session it serves.
 - **Request ids** are core's, unique among its requests waiting on that
   link. Answers come in any order: many targets are called at once.
-- **The channel never reads the body**: core opens it, and tells the target's
-  states apart by the status and by whether it opens.
+- **The channel never opens the message**: it only takes it out of its
+  transport format (for the Dumbo channel: the id's 16 bytes, then the
+  sealed message), as it does a reverse minion's. Core opens it, and tells
+  the target's states apart by the status, and by whether it opens under
+  the id the call went under and answers that call.
 - **Liveness**: both sides ping every 30 seconds and drop a socket silent for
   90. The proxy in front of core keeps these sockets open past its own idle
   timeouts.
@@ -330,8 +354,14 @@ at registration says both, by kind (its `schema_version` `"2"`):
   kind, reused across builds. **Targets** stay apart: one per deployment.
 - **`version`** covers the built-in fields, as now: changing those changes
   what built minions read. Target fields can change without it: nothing is
-  built from them. A target that lacks a value a new target field requires
-  shows **needs editing** until an operator fills it in.
+  built from them. Core checks a target's values against the channel's
+  target fields as they are now, whenever it shows the target and before
+  each call. A target they no longer fit (a field now required that it
+  lacks, a field the channel dropped, a value a field no longer takes, or
+  no channel declaring the kind) shows **needs editing**, with what does
+  not fit, and is not called: core never sends a channel values it no
+  longer reads. Retries stop; tasks for its session wait, saying so. An
+  edit that fits calls it again (a dropped field's value goes with it).
 
 ## `bind-persistent` connections: opening and closing
 

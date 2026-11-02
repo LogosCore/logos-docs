@@ -45,9 +45,10 @@ decide who can start an exchange, and when core can reach the minion:
 | `bind-call` | the channel, when core asks | core; the minion only answers | whenever core calls |
 | `bind-persistent` | the channel, when core asks | both | while the connection is open, which core can ask for |
 
-Built: `reverse-call`, and `reverse-persistent` (the HTTP channel's
-WebSocket, over a connection socket to core). The `bind` kinds are a
-draft.
+Built: `reverse-call`, `reverse-persistent` (the HTTP channel's
+WebSocket, over a connection socket to core), and `bind-call` (the Dumbo
+channel calling PHP pages the Dumbo factory builds, over the control link).
+`bind-persistent` is a draft.
 
 ### Channel ↔ core
 
@@ -56,7 +57,7 @@ A channel reaches core three ways:
 | Path | One per | For |
 |---|---|---|
 | The [sync call](../contracts/channel-core-sync/) (built) | message | `reverse-call` |
-| The **control link**, a WebSocket (a draft) | channel instance | `bind-call`, and opening `bind-persistent` |
+| The **control link**, a WebSocket (built for `bind-call`) | channel instance | `bind-call`, and opening `bind-persistent` |
 | A **connection socket**, a WebSocket (built for `reverse-persistent`) | minion connection | `reverse-persistent`, `bind-persistent` |
 
 The channel opens all of them: core never connects to a channel. The design,
@@ -117,6 +118,9 @@ Planned, with the factory command contract:
 
 - BOB (`logos-bob-factory`), the reference factory: it builds dummy minions, a
   JSON description of what the minion would be built with.
+- Dumbo (`logos-dumbo-factory`): PHP pages, `bind-call` minions core reaches
+  through the Dumbo channel (`logos-dumbo-channel`); a proof of concept with
+  one command, `hello`.
 - Go, .NET or Python factories: possible, none built yet.
 
 ### Optional Translator Hooks
@@ -192,7 +196,7 @@ For building a module against them, see [Implementing a Module](../implementing-
 `logos-golang-module-core` for every module, with `logos-golang-channel-core`
 for a channel and `logos-golang-factory-core` for a factory.
 
-Still open: the `bind` connection kinds, the control link, and giving a
-running minion a new connection (a draft:
+Still open: `bind-persistent` (opening connections over the control link),
+and giving a running minion a new connection (a draft:
 [Channel ↔ Core: Connections](../contracts/channel-core-connections/)), and
 module packaging/lifecycle policy.

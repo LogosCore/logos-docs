@@ -211,7 +211,7 @@ given in its CDDL on the page that defines it.
 | 3 | [`hello`](../sessions/#hello) | 10 | [`result`](../tasks-and-results/#results) |
 | 4 | [`hello_response`](../sessions/#hello) | 11 | [`ack`](../tasks-and-results/#acknowledging) |
 | 5 | [`sleep_update`](../sessions/#late-and-lost-sessions) | 12 | [`chunk`](../file-transfers/#chunks) |
-| 6 | `rehello` (planned) | 13 | [`err`](#errors) |
+| 6 | `rehello` | 13 | [`err`](#errors) |
 | 7 | [`get_tasks`](../tasks-and-results/#asking-for-tasks) | 14 | [`conn_update`](../sessions/#connections) |
 
 **The message**: `v` 0, `id` 1, `re` 2, `items` 3, as [above](#message).

@@ -147,8 +147,11 @@ shows the numbered values by name: the integrity level, the machine id as
 
 **A `hello` under the session id** (a *rehello*) replaces what core recorded
 of the host and process, and gets `hello_response` with the same session id.
-A minion may send one whenever they change (BOB's does not). A `rehello` item, core asking a minion
-for a new `hello`, is **planned**, not built.
+A minion may send one whenever they change (BOB's does not). The **`rehello`
+item** (6, `{0: 6}`, core → minion) asks a minion for a `hello`: core sends
+it as a `bind-call` minion's first call, under the build id, and the page's
+`hello`, sealed with the build's keys, opens its session ([bind-call
+targets](../../channel-core-connections/#bind-call-minions-targets-and-sessions)).
 
 ## Machine identity
 
