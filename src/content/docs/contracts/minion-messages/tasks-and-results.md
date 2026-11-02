@@ -131,14 +131,48 @@ stops sending them. `xfer`, `next` and `hold` move a file transfer along
 ## Cancelling a task
 
 ```cddl
-cancel = { 0: 9, 1: task-id }   ; t: cancel, task
+cancel = {
+  0: 9,                 ; t: cancel
+  1: task-id,           ; task
+  ? 2: bstr,            ; ctx: the ctx of the task's newest part that said
+                        ;   one (Resuming a task)
+}
 ```
 
 When an operator stops a task, core sends `cancel` with **every reply** until
 the task ends; a task not sent yet is cancelled in core at once and never
 goes out. The minion stops the task and still sends a final `result`
 (`done`). A `cancel` for a task the minion does not have gets an `err`
-`unknown_task`.
+`unknown_task`. A task whose parts said a `ctx` gets it on its `cancel`: a
+minion that keeps nothing ends the task from there (its next `seq`).
+
+## Resuming a task
+
+```cddl
+resume = {
+  0: 15,                ; t: resume
+  1: task-id,           ; task
+  2: bstr,              ; ctx: as the task's newest part said it, 1024
+                        ;   bytes at most
+}
+```
+
+A minion that keeps nothing between messages (a
+[`bind-call`](../../channel-core-connections/#bind-call-minions-when-core-calls)
+page) cannot carry a long task (a walk) through one exchange: one answer is
+768 KiB at most, a call ends with its channel's timeout. It hands the task
+over instead: a part that is not done says where the minion stands
+(`ctx`, its own bytes: core never reads them), and core answers it with
+`resume`, giving them back. The minion goes on from there, and its next
+part says the next `ctx`, until a part says `done`.
+
+- **Core keeps the newest part's `ctx`** on the task: a call that fails
+  loses no walk, as the next call core makes to the page carries the
+  `resume` again; and a `cancel` carries it, so the minion can end the task
+  where it stood.
+- **Sent once a part asks**: a part without `ctx` gets no `resume`; a
+  minion that keeps its own state never sees one. Once an operator stops
+  the task, no `resume` goes: the `cancel` does.
 
 ## Results
 
@@ -157,6 +191,8 @@ result = {
                         ;   done part only
   ? 9: [* listing-piece],  ; ls: what the task saw of the file system,
                         ;   Listings
+  ? 10: bstr,           ; ctx: where the minion stands with the task, on a
+                        ;   part that is not done (Resuming a task)
 }
 ```
 

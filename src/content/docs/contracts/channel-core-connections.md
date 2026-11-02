@@ -228,16 +228,35 @@ Core calls a `bind-call` minion:
    in one call. This is what sending to a session means for a `bind-call`
    minion.
 2. **Again at once while work remains**: a file transfer under way (each
-   call carries a chunk or an ack; the ack tells the page where to read
-   from, so it needs no memory), or tasks waiting that the last call had no
-   room for.
-3. **On the minion's schedule, if it has one**: the `sleep` its `hello` says
+   call carries a chunk or an ack, and the transfer's
+   [`ctx`](../minion-messages/file-transfers/#chunks), which core echoes,
+   tells the page where the file is: it needs no memory), or tasks waiting
+   that the last call had no room for. **No count bounds these calls**: a
+   file takes a call a chunk, 512 KiB, however many that is. What ends an
+   exchange is having nothing to say back, or making no progress: two calls
+   in a row that would carry the same items (a page answering the same
+   thing over and over) stop it. A `cancel` goes with every call, so
+   stopping a transfer takes effect at its next chunk.
+3. **When a stream may go on**: a downloader came for a file the page
+   streams, or took a chunk and left room for the next; an uploader's bytes
+   came for a file streamed to the page. Core calls about a tenth of a
+   second later with the stream's ack (and its kept ctx); while every
+   stream holds, nothing calls. A page that cannot keep up is held by
+   core's buffer as any minion is, and called again as the downloader
+   takes what it sent.
+4. **While a long task goes on**: a part that says where the page stands
+   (a walk's) is answered with a
+   [`resume`](../minion-messages/tasks-and-results/#resuming-a-task), at
+   once, until a part says done. Each call takes what fits its answer and
+   timeout (the Dumbo page: listings up to 600 KB, or 10 seconds); a call
+   that fails leaves the walk where it stood, and the next call goes on.
+5. **On the minion's schedule, if it has one**: the `sleep` its `hello` says
    (and `sleep_update` changes) means, for a page, call every interval, with
    an empty message, to collect what background tasks produced and to see it
    is still there. Without a schedule core makes no periodic calls: the quiet
    default for a page that finishes its tasks within the call. Late and lost
    count from the last call that succeeded.
-4. **On Check now.**
+6. **On Check now.**
 
 - **Tasks per call**: as with `reverse-call`, the minion says how many it
   takes. An answer's `get_tasks` `max` is how many the next call may bring;

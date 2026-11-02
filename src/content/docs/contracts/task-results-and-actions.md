@@ -580,8 +580,10 @@ On the wire: `root` 1, `folders` 2, `entries` 3, `unread` 4, `skipped` 5,
   and it takes the task's 4 MiB once (its size), so a long walk's progress
   is never cut off. A part resent late does not take an older progress
   back.
-- **How it walks is the command's**: BOB's goes breadth first (the top
-  levels first), never follows a link, and stays on its file system and
+- **How it walks is the command's**: Dumbo's page goes depth first, folders
+  in name order, so where it stands fits a `resume`'s ctx (the last folder
+  it listed), across as many calls as it takes; BOB's goes breadth first
+  (the top levels first), never follows a link, and stays on its file system and
   (unless asked not to) goes into hidden folders; `depth` and `max_folders`
   limit it. It reads on only while few of its pieces wait to be
   sent, so a walk goes as fast as the channel takes it and does not crowd

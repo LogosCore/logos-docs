@@ -106,6 +106,7 @@ everything as it comes, so operators never see the numbers.
 | 12 | `chunk` | both | one piece of a file | [File transfers](file-transfers/#chunks) |
 | 13 | `err` | both | a problem with a message or one of its items | [Wire format](wire-format/#errors) |
 | 14 | `conn_update` | minion | the connection it uses changed | [Sessions](sessions/#connections) |
+| 15 | `resume` | core | go on with a task from where its last part said | [Tasks and Results](tasks-and-results/#resuming-a-task) |
 
 ## Changing these formats
 
