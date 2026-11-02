@@ -93,8 +93,8 @@ kind](../../../module-types/#connection-kinds):
 |---|---|---|---|
 | `reverse-call` | the minion | `id` | `re` |
 | `reverse-persistent` | either side | `id` | `re` |
-| `bind-call` (planned) | core | `id` | `re` |
-| `bind-persistent` (planned) | either side | `id` | `re` |
+| `bind-call` | core | `id` | `re` |
+| `bind-persistent` | either side | `id` | `re` |
 
 ## CBOR rules
 
@@ -144,6 +144,7 @@ err = {
   1: uint,              ; code: one of the codes below
   ? 2: tstr,            ; msg: for a person
   ? 3: uint,            ; item: which item of the message it is about (0-based)
+  ? 4: bstr .size 16,   ; task: the task an unknown_task names
 }
 ```
 
@@ -151,7 +152,7 @@ err = {
 |---|---|---|---|---|
 | 1 | `bad_message` | both | the message, or an item in it, is not valid | logs it; a task or transfer the item was about ends failed |
 | 2 | `unknown_item` | both | an item type the receiver does not know (`item` says which) | logs it |
-| 3 | `unknown_task` | both | a `cancel`, `chunk` or `ack` for a task or transfer the receiver does not have | ends that task or transfer failed |
+| 3 | `unknown_task` | both | a `cancel`, `chunk` or `ack` for a task or transfer the receiver does not have | ends that task or transfer: core ends a task the minion names (`task`) cancelled when it had asked to stop it, failed otherwise |
 | 4 | `too_large` | both | a message, chunk or file over the [limits](#limits) | ends the task or transfer it was about failed |
 | 5 | `session_closed` | core | the session the message was sent under is [closed](../sessions/#session-lifetime) | starts over |
 | 6 | `session_replaced` | core | another process claimed the [persisted session](../sessions/#persisted-sessions) | starts over, without claiming it |

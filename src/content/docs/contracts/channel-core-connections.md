@@ -8,11 +8,14 @@ HTTP channel and BOB's minion: the connection sockets, pushes within the
 `get_tasks` allowance, presence, and the kinds in connection and build
 schemas, each kind with its own fields on both sides, and endpoints of a
 kind. Connection management is built too: the `hello`'s connection,
-`conn_update`, and `switch_connection` (BOB's `connect`). And `bind-call`:
+`conn_update`, and `switch_connection` (BOB's `switch`). And `bind-call`:
 the control link's `call` (channel-core `pkg/linkclient`), targets with
 their states, retries and needs editing, calls when there is something to
 send, and the `rehello`, in core, the Dumbo channel and the Dumbo
-factory's PHP pages. `bind-persistent` (the link's `open`), fallback after
+factory's PHP pages. And `bind-persistent`: the link's `open`, the
+targets' policies (on demand, manual, always), Connect and Disconnect, idle
+closes, in core, channel-core (`linkclient`'s opener, `connclient`'s open
+request), the TCP channel and BOB's minion (a listener). Fallback after
 failures and `add_connection` are an agreed design, not built yet.
 :::
 
@@ -285,7 +288,7 @@ opens.
 | Endpoint | Handshake headers |
 |---|---|
 | `GET /api/channel/link`: the control link | `Logos-Channel-Instance` |
-| `GET /api/channel/connection`: a connection socket | `Logos-Channel-Instance`; `Logos-Connection-Kind` (`reverse-persistent` or `bind-persistent`); `Logos-Open-Request` (`bind-persistent`: the `open` it answers) or `Logos-Peer-Address` (`reverse-persistent`, as on the sync call) |
+| `GET /api/channel/connection`: a connection socket | `Logos-Channel-Instance`; `Logos-Connection-Kind` (`reverse-persistent` or `bind-persistent`); `Logos-Open-Request` (`bind-persistent`: the `open` it answers); `Logos-Peer-Address` (the minion's address: as on the sync call for `reverse-persistent`, the one dialed for `bind-persistent`) |
 
 **Frames** are binary messages, each one CBOR map with numbered keys, as the
 [minion protocol](../minion-messages/wire-format/#registry) has
@@ -308,11 +311,18 @@ On the **control link**, key 0 says what the frame is:
 |---|---|---|
 | `call` (1) | core → channel | 1 request id; 2 the values: the build connection's and the target's, in one map by the keys the channel [declared](#the-connection-schema-by-kind); 3 the id the message is sent under; 4 the ciphertext; 5 deadline in milliseconds, optional (the channel keeps to the shorter of it and its own request timeout) |
 | `open` (2) | core → channel | 1 request id; 2 the values, as for `call`; 5 deadline, 30 seconds unless core says otherwise |
-| `answer` (3) | channel → core | 1 request id; then one of: 3 the id and 4 the sealed message that came back, unpacked from the channel's transport format, with 6 the transport's status (the HTTP status, say); 6 the status and 8 the first 512 bytes of what answered, when it is not a minion message (a 404, a WAF's page); or 7 a failure: `{1: kind, 2: message}`, the kind unreachable 1 (DNS, refused), timeout 2, TLS 3, other 4 |
+| `answer` (3) | channel → core | 1 request id; then one of: 3 the id and 4 the sealed message that came back, unpacked from the channel's transport format, with 6 the transport's status (the HTTP status, say); 6 the status and 8 the first 512 bytes of what answered, when it is not a minion message (a 404, a WAF's page); or 7 a failure: `{1: kind, 2: message}`, the kind unreachable 1 (DNS, refused), timeout 2, TLS 3, other 4. An answer that reached something may carry 9 the peer: the IP address the channel connected to, which core keeps as the session's external address |
 
 - **Every request gets exactly one `answer`.** An `open` that worked is
   answered once its connection socket is up, the socket naming the request,
   so core knows the session it serves.
+- **The peer** (key 9) is the address the channel knows it reached without
+  a lookup of its own: the one it connected to when it dials directly; the
+  target's host through a proxy when that is an IP address; none for a
+  host name a proxy resolves (SOCKS5 in Go's client sends names too). A
+  `bind-persistent` socket says the same in `Logos-Peer-Address`. Core
+  keeps it as a reverse minion's: the session's external address and its
+  list of addresses seen.
 - **Request ids** are core's, unique among its requests waiting on that
   link. Answers come in any order: many targets are called at once.
 - **The channel never opens the message**: it only takes it out of its
@@ -400,25 +410,64 @@ target's does.
 | `manual` | an operator: Connect, Disconnect | after an hour without an exchange, as a safety net | targets where every connection counts; tasks queued meanwhile wait, shown waiting for a connection |
 | `always` | core, and again whenever it drops, backing off | never | a minion meant to be reachable at any moment |
 
-The idle times are the target's, these their defaults. Besides, a connection
-closes when:
+The idle times are the policy's (core's `models.IdleClose`): a connection
+idle past them is closed by core's target loop, which looks every few
+seconds. Besides, a connection closes when:
 
-- an operator disconnects it, whatever the policy;
-- the network or the minion drops it, or the channel stops or drains: core
-  opens it again for `always`, for `on-demand` only while work waits, and
-  never for `manual`;
-- the target is removed or the session closes;
+- an operator disconnects it, whatever the policy (Disconnect closes every
+  connection the target has open; one of policy `always` is opened again);
+- the network or the minion drops it, or the channel stops: core opens it
+  again for `always` (5 seconds later), for `on-demand` only while work waits
+  (tasks not sent, or sent and not acknowledged), and never for `manual`;
+- the target is removed;
 - core closes its connection socket, which is how any connection is closed.
+
+**`connect` and `disconnect`** are core's own commands in the console of a
+session whose connection is `bind-persistent` (reserved, as `help` is: a
+build schema may not declare them). They open and close the session's
+target's connection, as the target's Connect and Disconnect do, and are kept
+as tasks: running while the open waits for the channel, then done
+("connected", "disconnected", "already connected") or failed with the
+target's state ("unreachable: …"). Nothing goes to the minion, and they
+cannot be cancelled. A session with no target refuses them.
+
+A session that closes does not close the connection: the minion hears
+`session_closed` over it and stages again, as any minion does, and the
+target links to the new session.
 
 - **The connection is the session's**, not the operator's who opened it:
   everyone in the operation sees it open and can use it.
 - **An open that fails** puts its failure (unreachable, timeout, TLS, other)
   on the target; `on-demand` and `always` retry with a target's backoff,
-  `manual` does not.
+  `manual` does not. An open the channel says worked, whose socket closed
+  before the answer (the minion hung up at once), fails too.
+- **Correlation**: core records the open before its frame goes out; the
+  socket that names it (`Logos-Open-Request`) takes it, and a second socket
+  naming it, or one naming an open core is not waiting for, is refused
+  (409). The socket comes before the answer, so the connection is the
+  target's from its first frame.
 - **The session shows its connection**, not late or lost: a closed connection
   is closed on purpose. It is `connected`, `connecting`, `not connected`, or
   `unreachable since` when opens fail; while connected, the socket's pings
   say it is alive.
+
+### The TCP channel
+
+The built `bind-persistent` channel (`logos-tcp-channel`, module `tcp`):
+the minion listens on a TCP port, the channel dials it on `open`.
+
+| Built into the minion (`fields`) | Per target (`target`) |
+|---|---|
+| `listen_port` (required), `listen_address` (`0.0.0.0`), `max_connections` (1, up to 16: a new dial may come in while an old one has not timed out), `keepalive` (30s) | `host` (required), `port` (the listen port when empty: a port forward), `proxy` (`socks5://`, `socks5h://` or `http://`, CONNECT), `connect_timeout` (10s) |
+
+On the TCP connection each message is one frame, both ways:
+`[length: 4 bytes, big-endian][id: 16 bytes][sealed message]`, the length
+counting the id and the message. The minion speaks first once a dial is in
+(its stage, its `hello`, or a check-in under its session); the channel
+relays frames between the TCP connection and the connection socket without
+reading them, and closes one when the other closes. BOB's minion takes the
+newest connection when another comes in (the older is likely stale), and
+a minion built to listen is not switched to or from another connection.
 
 ## `get_tasks` on a persistent connection
 
@@ -537,7 +586,7 @@ the changes it reported.
 **Switching** is an [action](../task-results-and-actions/#switch_connection):
 **`switch_connection`**, core giving the connection's place (`conn`). A
 factory maps it to a command of its own, which may take more: BOB's
-`connect` takes `for`, a duration after which the minion goes back. So:
+`switch` takes `for`, a duration after which the minion goes back. So:
 
 - the session's connection list has a **Switch to** button on each
   connection, which runs the action, and the console has the factory's

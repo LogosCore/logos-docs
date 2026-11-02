@@ -108,8 +108,8 @@ value or a default. Their types map to CBOR like this:
 - **A task the minion cannot run** (a command its build lacks, an `op` it
   does not know, an arg of the wrong type) gets a `result` `{done: true, ok:
   false, err: …}`.
-- `help` is core's own command: core answers it at once and it never goes
-  out ([Commands](../../minion-build/#commands)).
+- `help`, `connect` and `disconnect` are core's own commands: core runs
+  them and they never go out ([Commands](../../minion-build/#commands)).
 
 ## Acknowledging
 
@@ -143,8 +143,12 @@ When an operator stops a task, core sends `cancel` with **every reply** until
 the task ends; a task not sent yet is cancelled in core at once and never
 goes out. The minion stops the task and still sends a final `result`
 (`done`). A `cancel` for a task the minion does not have gets an `err`
-`unknown_task`. A task whose parts said a `ctx` gets it on its `cancel`: a
-minion that keeps nothing ends the task from there (its next `seq`).
+`unknown_task` naming it (`task`), and core ends it cancelled: a minion that
+lost a task (it restarted) does not leave it stopping for good. A task whose
+parts said a `ctx` gets it on its `cancel`, and one whose parts did not gets
+its transfer's (a file going either way, or a stream): a minion that keeps
+nothing ends the task from there (its next `seq`), a page removing a
+partial upload.
 
 ## Resuming a task
 

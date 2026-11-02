@@ -244,7 +244,7 @@ does when they build it: a minion built for one job carries nothing more.
 
 | Field | Meaning |
 |---|---|
-| `id` | Identifier, unique in the schema, `^[a-z][a-z0-9_-]{0,62}$`, and not `help`. Builds, core and operators name the command by it. |
+| `id` | Identifier, unique in the schema, `^[a-z][a-z0-9_-]{0,62}$`, and not `help`, `connect` or `disconnect`. Builds, core and operators name the command by it. |
 | `op` | The command's number, unique in the schema, 1 to 65 535: what a [task](../minion-messages/tasks-and-results/#tasks) names it by on the wire. |
 | `label`, `description` | Shown in the UI. |
 | `targets[]` | Optional. Narrows the command to these targets; empty means every target. |
@@ -266,8 +266,12 @@ does when they build it: a minion built for one job carries nothing more.
 - `help` is core's own command, in every session's console: it lists the
   session's commands with how each is typed, or (`help <command>`) one
   command's params. Core answers it when it is queued and keeps it as a
-  finished task; it never goes to a minion. A schema that declares `help` is
-  refused, and factories do not implement it.
+  finished task; it never goes to a minion. `connect` and `disconnect` are
+  core's too, in the console of a session whose connection is
+  `bind-persistent`: they open and close its target's connection
+  ([Connections](../channel-core-connections/#bind-persistent-connections-opening-and-closing)),
+  kept as tasks. A schema that declares any of the three is refused
+  (`protocol.IsCoreCommand`), and factories do not implement them.
 - **A task names its command by `op` and its args by their params' `num`**
   ([Tasks](../minion-messages/tasks-and-results/#tasks)), so a minion needs
   no command or param names: it dispatches on numbers the factory compiled

@@ -689,7 +689,7 @@ Moves the minion to another of its build's connections: what a session's
   answer, staying on 1", "already on connection 2"). A minion that moved
   tells core with a `conn_update` over the new connection, which the session
   shows.
-- A command may take more, each with a default: BOB's `connect` takes `for`,
+- A command may take more, each with a default: BOB's `switch` takes `for`,
   a duration after which it moves back (`0s`, its default, stays).
 - It goes as tasks go, within the minion's `get_tasks` allowance: a minion
   that takes no tasks takes no switch.

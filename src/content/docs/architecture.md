@@ -77,7 +77,7 @@ and separates what is built from what is still a plan.
 | Payload crypto | Built: `aes-256-cbc-hmac-sha256`. Core generates each build's keys, gives each minion process keys of its own when it stages, and seals and opens every frame ([Wire Format](../contracts/minion-messages/wire-format/)). |
 | Tasking | Built: sessions, tasks and results, listings into the file browser, and file transfers both ways ([Minion Messages](../contracts/minion-messages/), [Task Results and Actions](../contracts/task-results-and-actions/)). |
 | Observability | Planned: central audit logging and tracing. Core publishes lifecycle events that nothing consumes yet. |
-| [Connection kinds](../module-types/#connection-kinds) | Built: `reverse-call`, and `reverse-persistent` over a connection socket per minion connection, core pushing tasks as they are queued ([Connections](../contracts/channel-core-connections/)). `bind-call` over the control link, with targets (the Dumbo channel and factory). A draft: `bind-persistent`. |
+| [Connection kinds](../module-types/#connection-kinds) | Built: `reverse-call`, and `reverse-persistent` over a connection socket per minion connection, core pushing tasks as they are queued ([Connections](../contracts/channel-core-connections/)). `bind-call` over the control link, with targets (the Dumbo channel and factory), and `bind-persistent`: opened over the control link, then a connection socket, by the target's policy (the TCP channel, BOB's listening minion). |
 
 ## Deployment Shape
 

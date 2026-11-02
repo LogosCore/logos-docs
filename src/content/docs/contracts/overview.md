@@ -94,7 +94,7 @@ Every contract in this section, regardless of surface, follows the same baseline
 | Contract | Surface | Parties | Status |
 |---|---|---|---|
 | [HTTP Sync](../channel-core-sync/) | Data plane | Channel ↔ Core | Implemented; the channel is not authenticated yet |
-| [Connections](../channel-core-connections/) | Data plane: the connection kinds where core starts exchanges, the control link and connection sockets | Channel ↔ Core | `reverse-persistent` and `bind-call` (the control link's `call`, targets) implemented; `bind-persistent` and the control link's `open` a draft |
+| [Connections](../channel-core-connections/) | Data plane: the connection kinds where core starts exchanges, the control link and connection sockets | Channel ↔ Core | `reverse-persistent`, `bind-call` (the control link's `call`, targets) and `bind-persistent` (the link's `open`, policies) implemented; fallback and `add_connection` a draft |
 | [Module Lifecycle](../module-lifecycle/) | Control plane | Module (client) → Core (server) | Implemented |
 | [Module Management](../module-management/) | Control plane | Core (client) → Module (server) | Prototype |
 | [Module Logs](../module-logs/) | Control plane | Core ↔ Module | Prototype |

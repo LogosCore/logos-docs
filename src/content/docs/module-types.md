@@ -46,9 +46,10 @@ decide who can start an exchange, and when core can reach the minion:
 | `bind-persistent` | the channel, when core asks | both | while the connection is open, which core can ask for |
 
 Built: `reverse-call`, `reverse-persistent` (the HTTP channel's
-WebSocket, over a connection socket to core), and `bind-call` (the Dumbo
-channel calling PHP pages the Dumbo factory builds, over the control link).
-`bind-persistent` is a draft.
+WebSocket, over a connection socket to core), `bind-call` (the Dumbo
+channel calling PHP pages the Dumbo factory builds, over the control link),
+and `bind-persistent` (the TCP channel dialing a BOB minion that listens,
+opened over the control link, then a connection socket).
 
 ### Channel ↔ core
 
@@ -57,8 +58,8 @@ A channel reaches core three ways:
 | Path | One per | For |
 |---|---|---|
 | The [sync call](../contracts/channel-core-sync/) (built) | message | `reverse-call` |
-| The **control link**, a WebSocket (built for `bind-call`) | channel instance | `bind-call`, and opening `bind-persistent` |
-| A **connection socket**, a WebSocket (built for `reverse-persistent`) | minion connection | `reverse-persistent`, `bind-persistent` |
+| The **control link**, a WebSocket (built) | channel instance | `bind-call`, and opening `bind-persistent` |
+| A **connection socket**, a WebSocket (built) | minion connection | `reverse-persistent`, `bind-persistent` |
 
 The channel opens all of them: core never connects to a channel. The design,
 with how `bind` minions are reached, how persistent connections live, how
@@ -196,7 +197,6 @@ For building a module against them, see [Implementing a Module](../implementing-
 `logos-golang-module-core` for every module, with `logos-golang-channel-core`
 for a channel and `logos-golang-factory-core` for a factory.
 
-Still open: `bind-persistent` (opening connections over the control link),
-and giving a running minion a new connection (a draft:
+Still open: fallback after failures, giving a running minion a new connection (a draft:
 [Channel ↔ Core: Connections](../contracts/channel-core-connections/)), and
 module packaging/lifecycle policy.
