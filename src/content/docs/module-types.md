@@ -197,6 +197,6 @@ For building a module against them, see [Implementing a Module](../implementing-
 `logos-golang-module-core` for every module, with `logos-golang-channel-core`
 for a channel and `logos-golang-factory-core` for a factory.
 
-Still open: fallback after failures, giving a running minion a new connection (a draft:
+Still open: giving a running minion a new connection (a draft:
 [Channel ↔ Core: Connections](../contracts/channel-core-connections/)), and
 module packaging/lifecycle policy.

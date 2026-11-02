@@ -15,8 +15,9 @@ send, and the `rehello`, in core, the Dumbo channel and the Dumbo
 factory's PHP pages. And `bind-persistent`: the link's `open`, the
 targets' policies (on demand, manual, always), Connect and Disconnect, idle
 closes, in core, channel-core (`linkclient`'s opener, `connclient`'s open
-request), the TCP channel and BOB's minion (a listener). Fallback after
-failures and `add_connection` are an agreed design, not built yet.
+request), the TCP channel and BOB's minion (a listener). Failover (the build's
+policy, BOB's minion) is built too. `add_connection` is an agreed design,
+not built yet.
 :::
 
 How a channel carries the [connection kinds](../../module-types/#connection-kinds)
@@ -422,6 +423,18 @@ seconds. Besides, a connection closes when:
 - the target is removed;
 - core closes its connection socket, which is how any connection is closed.
 
+**A minion with other connections** (BOB built with reverse ones and a
+listening one) is on one at a time. Core opens a target's connection on its
+own (on demand, always, and their retries) only when the session uses that
+connection, is switching to it (a `switch_connection` task naming it is
+under way), or has gone late where it is; otherwise the target shows *not
+connected*, saying which connection the minion uses. Check now and Connect
+dial whatever the minion is on. A target may be added from a session that
+uses another connection: it takes the session over, and a switch then gets
+its dial. BOB's switch to a listening connection opens the port, says so in
+the task (core's cue), and moves through the dial; with no dial in 10
+minutes it closes the port and fails.
+
 **`connect` and `disconnect`** are core's own commands in the console of a
 session whose connection is `bind-persistent` (reserved, as `help` is: a
 build schema may not declare them). They open and close the session's
@@ -604,6 +617,42 @@ factory maps it to a command of its own, which may take more: BOB's
 - it goes as tasks go, within the [allowance](#get_tasks-on-a-persistent-connection):
   a minion that takes no tasks takes no switch. `cancel` is the one thing that
   always reaches a minion.
+
+### Failover
+
+A minion built with several connections can move between them **on its own**
+when the one in use keeps failing, as its build's **failover policy** says.
+The policy is the build's (one for the list), with a few settings per
+connection; a factory that declares `failover` in its [build
+schema](../minion-build/#the-build-schema) builds them in, and any other may
+ignore them (the build form says so). Every move goes as a switch does: a
+check-in through the new connection, carrying a `conn_update` with why
+("failover after 5 failures", "failback after 1h"), taken only when it
+answers, so the session's connection history shows each one.
+
+| Setting | Default | Meaning |
+|---|---|---|
+| `enabled` | `true` | The minion moves on its own. Off: only an operator's switch moves it. |
+| `fail_after` | `5` | Failed exchanges in a row on a connection before the minion moves to the next. |
+| `fail_for` | `0s` | How long the connection must also have been failing, from the first of those failures: a quick burst of retries (a WebSocket reconnecting after 1s, 2s, 4s…) does not move the minion on a short blip. `0s`: the count alone. |
+| `wrap` | `true` | After the last connection, the first again. Off: the minion stays on the last and keeps trying it. |
+| `cycle_pause` | `5m` | When a round comes back to the connection in use, every connection having failed in a row, the minion waits this long there before the next round. |
+| `failback_after` | `1h` | Away from its first connection because of failover, the minion tries that one again after this long, once: back to it when it answers, another `failback_after` where it is when not. `0s`: never on its own. An operator's switch is not failover's to undo. |
+
+Each connection may set:
+
+| Setting | Default | Meaning |
+|---|---|---|
+| `auto` | `true`; `false` for `bind-persistent` | Failover may move the minion here. Off keeps a connection for an operator's switch (a reserve not to burn on its own). A listening connection is off by default: core has to dial it. |
+| `fail_after` | the build's | Failures in a row before the minion moves off this connection. |
+
+A **failure** is an exchange with no usable reply: none, a timeout, a TLS or
+HTTP error, a WebSocket that does not open, a reply that does not open. A
+reply that says the session is closed is core's answer, not a failure.
+
+BOB fails over only between connections it reaches out through: a listening
+one waits for core's dial, which a switch asks for, so failover passes it by
+whatever its `auto` says.
 
 **Giving a running minion a new connection** (a fresh redirector when one is
 burned) is planned the same way: an action, `add_connection`, with the kind,
