@@ -198,7 +198,7 @@ depends on what a module *is* belongs in the module:
 | Actions | `drain` (high risk), `resume`, `check_core` (probes core's sync endpoint) |
 | Status values | request / success / failure / core-error / rejected / too-large counters, last core error and its time, `draining` |
 | Capabilities | `logs` |
-| Connection schema | `base_url`, TLS, headers and timing parameters for minions (see [Minion Connection Schema](../contracts/minion-connection/#http-channel-version-2)), declared through `channel.Config.Connection` |
+| Connection schema | `base_url`, TLS, headers and timing parameters for minions (see [Minion Connection Schema](../contracts/minion-connection/#http-channel-version-3)), declared through `channel.Config.Connection` |
 
 Minions speak to it in a packed binary format, described in its README's
 [Wire format](https://github.com/LogosCore/logos-http-channel#wire-format)

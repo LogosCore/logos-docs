@@ -16,8 +16,9 @@ factory's PHP pages. And `bind-persistent`: the link's `open`, the
 targets' policies (on demand, manual, always), Connect and Disconnect, idle
 closes, in core, channel-core (`linkclient`'s opener, `connclient`'s open
 request), the TCP channel and BOB's minion (a listener). Failover (the build's
-policy, BOB's minion) is built too. `add_connection` is an agreed design,
-not built yet.
+policy, BOB's minion) is built too, and so are a kind's `max_message`, core's
+`poll`, the `at` a page checks, and commands' `kinds`. `add_connection` is an
+agreed design, not built yet.
 :::
 
 How a channel carries the [connection kinds](../../module-types/#connection-kinds)
@@ -85,7 +86,10 @@ does not notice.
 - **Pushes** follow every change to a session's tasks (queued, cancelled, a
   part taken), coalesced over a tenth of a second: core sends cancels, and
   tasks within the allowance, on the connection that carried the session's
-  latest message.
+  latest message; and a stream's ack when a stream the minion holds may go
+  on ([Streaming a file](../minion-messages/file-transfers/#streaming-a-file)).
+  What a push carries is what every message core sends a minion carries
+  ([Mechanics by connection kind](../minion-messages/#mechanics-by-connection-kind)).
 - **BOB's minion** checks in at once over a new socket, which links the
   connection to its session and sets its allowance, then on its schedule;
   a WebSocket that closes it opens again after a second, doubling up to the
@@ -122,7 +126,8 @@ sequenceDiagram
   minion is in place, not when it is built.
 - A factory declares, for each target and channel of its [build
   schema](../minion-build/), the kinds its minions support: a PHP
-  page only `bind-call`; BOB's minion `reverse-call` and `reverse-persistent`.
+  page only `bind-call`; BOB's minion `reverse-call` and `reverse-persistent`
+  through the HTTP channel, and `bind-persistent` through the TCP channel.
   A build's connection names the kind it uses ([kinds in
   builds](#kinds-in-the-build-schema-and-in-builds)).
 
@@ -140,7 +145,9 @@ sequenceDiagram
   not that check-ins stopped.
 - **Replays.** A minion need not guard against core's exchanges replayed: a
   captured core message sent to it again would run its tasks again. It may,
-  by remembering recent message ids.
+  by remembering recent message ids, or, when it keeps nothing (a page), by
+  the `at` every message core starts says: it refuses one too far from its
+  own clock ([Freshness and replay](../minion-messages/wire-format/#freshness-and-replay)).
 
 ## `bind-call` minions: targets and sessions
 
@@ -182,7 +189,8 @@ core speaks first, and that core has to be told where the page is:
 6. **After.** Calls go under the session id; the page takes the id from what
    the channel delivers, checks the tag with its build keys, and answers
    under the same id, so it needs to remember nothing. `hello_response` is
-   not needed. Failed calls leave the session open and show it unreachable
+   not needed, and the `hello` is the session's first check-in: core holds
+   the id. Failed calls leave the session open and show it unreachable
    since then, as missed check-ins show other sessions late.
 7. **The end.** Removing the target stops the calls, nothing more: the
    target is an address, not the minion. The session stays with its
@@ -275,6 +283,14 @@ Core calls a `bind-call` minion:
   usually ended, which the page then says.
 - **A call's deadline** is the channel's request timeout. A task meant to
   run longer belongs in the background on the page.
+- **Every call says core's time** (`at`). A page, which cannot remember
+  message ids, refuses a call further than 10 minutes from its own clock (a
+  replay, or a clock that is off) with an `err` `stale`, running nothing; the
+  target shows *refused*, the page's time in the detail, until the clocks
+  agree. The Dumbo page does.
+- **What a call carries** is what every message core sends a minion carries
+  ([Mechanics by connection kind](../minion-messages/#mechanics-by-connection-kind)),
+  with the resumes of every task under way, as the page keeps nothing.
 
 ## The control link and connection sockets: formats
 
@@ -361,7 +377,8 @@ at registration says both, by kind (its `schema_version` `"2"`):
     "reverse-persistent": { "fields": [ "base_url", "ws_reconnect_backoff", "…" ] },
     "bind-call": {
       "fields": [ "method", "carrier" ],
-      "target": [ "url", "host_header", "proxy", "tls_verify" ]
+      "target": [ "url", "host_header", "proxy", "tls_verify" ],
+      "max_message": 65536
     }
   }
 }
@@ -374,6 +391,14 @@ at registration says both, by kind (its `schema_version` `"2"`):
   that kind.
 - **`target`**, for the `bind` kinds only: what an operator fills in for each
   target, never built into a minion.
+- **`max_message`**, optional: the largest minion message (its CBOR
+  plaintext, before sealing) the channel carries each way on a connection
+  of the kind, 1 KiB to 768 KiB; left out, 768 KiB. A channel whose
+  transport carries little says so here (a DNS channel, a page called with
+  a cookie). Core gives it to each build's connection of the kind, and keeps
+  what it sends within it; the minion keeps its own messages within it
+  ([Limits](../minion-messages/wire-format/#limits)). The built channels
+  declare none.
 - **A kind's keys are unique** across its fields and its target's: `call` and `open` give the channel one map of them, under the
   keys it declared.
 - **Every field is a field spec**, as now. A target field may be a `secret`
@@ -479,8 +504,9 @@ counting the id and the message. The minion speaks first once a dial is in
 (its stage, its `hello`, or a check-in under its session); the channel
 relays frames between the TCP connection and the connection socket without
 reading them, and closes one when the other closes. BOB's minion takes the
-newest connection when another comes in (the older is likely stale), and
-a minion built to listen is not switched to or from another connection.
+newest connection when another comes in (the older is likely stale). It
+listens from the start when its listening connection comes first in its
+build, and otherwise once a switch moves it there (above).
 
 ## `get_tasks` on a persistent connection
 
@@ -697,10 +723,14 @@ their kind:
   out. The build request gives it to the factory, which builds that in.
 - **`settings`** by the channel's fields for that kind; **`values`** by the
   factory's fields for that kind. Another kind's field is refused.
+- **`max_message`**: set by core from the channel's kind, the largest
+  message the connection carries; in the build request, so the factory
+  builds it into the minion.
 - **Kinds mix** in one build: a WebSocket first and polling after, or a
   listening implant that also calls back. The order is the order the minion
-  tries its connections, so it means something for `reverse` ones only: a
-  `bind` connection is not tried, it waits to be reached.
+  tries its connections and the one failover goes round: a `bind`
+  connection is not tried, it waits to be reached, but one that comes first
+  is where the minion starts (BOB's listens).
 - **Endpoints are of a kind**: each holds values for one kind's fields, and
   its export (`logos.channel-endpoint.v2`) carries the `kind`. A build
   connection's `endpoint` is such an export, so the factory reads the kind

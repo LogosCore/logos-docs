@@ -147,11 +147,19 @@ shows the numbered values by name: the integrity level, the machine id as
 
 **A `hello` under the session id** (a *rehello*) replaces what core recorded
 of the host and process, and gets `hello_response` with the same session id.
-A minion may send one whenever they change (BOB's does not). The **`rehello`
-item** (6, `{0: 6}`, core → minion) asks a minion for a `hello`: core sends
-it as a `bind-call` minion's first call, under the build id, and the page's
+A minion may send one whenever they change (BOB's does not on its own).
+
+```cddl
+rehello = { 0: 6 }      ; t: rehello (core → minion)
+```
+
+The **`rehello` item** asks a minion for a `hello`. Core sends it as a
+`bind-call` minion's first call, under the build id, and the page's
 `hello`, sealed with the build's keys, opens its session ([bind-call
 targets](../../channel-core-connections/#bind-call-minions-targets-and-sessions)).
+Under a session it asks for the host and process again: a minion that
+starts its exchanges says its `hello` in its next message (BOB's does,
+through the connection in use).
 
 ## Machine identity
 
@@ -214,9 +222,13 @@ user. It keeps none of its own: it leaves nothing on the host.
 
 ## Session lifetime
 
-- A session waits **one day** for its **first check-in** (its first request
-  under the session id). One nobody checks in to within the day is
-  **closed**.
+- A session waits **one day** for its **first check-in**: its first request
+  under the session id, the proof that the minion got its session id. One
+  nobody checks in to within the day is **closed** (its `hello_response` was
+  lost, say, and the minion staged again). A `bind-call` page's session is
+  checked in by the `hello` that opens it: the page answered core's own
+  call, so core holds the session's id and nothing can lose it, and a page
+  given nothing to do for a day stays open.
 - After its first check-in, a session lives **as long as core keeps it**: it
   does not expire.
 - Core **closes** a session that expired waiting, and every session of an
@@ -272,7 +284,19 @@ How a claim works:
 ## Late and lost sessions
 
 Core marks a session **late** when it missed a check-in, and **lost** when it
-missed three, by the schedule the minion says it keeps.
+missed three, by the schedule the minion says it keeps. What a check-in is
+depends on the minion's connection:
+
+| Connection | A check-in | Late and lost |
+|---|---|---|
+| `reverse-call` | each message the minion sends | by its schedule |
+| `reverse-persistent` | each message, and the open connection itself (its pings) | while connected, never; after, from when it closed, by its schedule: how soon it will be back |
+| `bind-call` | each call that reaches the page | by its schedule, when the page says one (core then calls on it); never without one |
+| `bind-persistent` | each message, and the open connection itself | never: the connection says whether the minion is there (connected, not connected on purpose, unreachable since) |
+
+A minion that moves to a `bind-persistent` connection stops being late;
+one that moves off it is late again by its schedule from its next
+check-in.
 
 ```cddl
 sleep_update = { 0: 5, sleep }   ; t: sleep_update
@@ -294,8 +318,12 @@ sleep_update = { 0: 5, sleep }   ; t: sleep_update
 
 Late and lost only describe a session: it stays open, nothing is sent to its
 minion, and a lost minion that checks in again is on time at once. In the
-Sessions page, "Last seen" is green while a session is on time, yellow once
-it is late and red once it is lost, and its filter picks any of the three.
+Sessions page, "Last seen" is green while a session is on time or connected
+(a persistent connection serving it open), yellow once it is late and red
+once it is lost, and its filter picks any of the three: "on time or
+connected", "late", "lost". Core records a session connected when its first
+persistent connection opens and clears it when its last closes, and as core
+starts, since the connections went with the process before.
 
 ## Connections
 
@@ -329,7 +357,13 @@ conn_update = {
 
 A session's keys live only in the process that staged it, so starting over
 never mends a failure on the way: it only leaves a dead session behind. A
-minion keeps its session through everything but a word from core:
+minion that starts its exchanges (every kind but `bind-call`) keeps its
+session through everything but a word from core. A `bind-call` page starts
+nothing: a call that fails is core's to retry ([bind-call
+minions](../../channel-core-connections/#bind-call-minions-when-core-calls)).
+Over a persistent connection, a failure is the connection dropping: the
+minion connects again (`reverse-persistent`) or waits for core's next dial
+(`bind-persistent`), in the same session.
 
 | The minion gets | It means | The minion |
 |---|---|---|

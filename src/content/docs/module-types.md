@@ -51,6 +51,13 @@ channel calling PHP pages the Dumbo factory builds, over the control link),
 and `bind-persistent` (the TCP channel dialing a BOB minion that listens,
 opened over the control link, then a connection socket).
 
+The [minion messages](../contracts/minion-messages/) are the same on every
+kind; how each of their mechanics (staging, tasks, cancels, files, streams,
+presence, replays) goes on each kind, and what a new mechanic needs to fit
+all four, is [Mechanics by connection kind](../contracts/minion-messages/#mechanics-by-connection-kind).
+A kind may also say how large a message it carries (`max_message`): core
+and the minion keep within it.
+
 ### Channel ↔ core
 
 A channel reaches core three ways:
@@ -68,11 +75,13 @@ minion's connection, is [Channel ↔ Core: Connections](../contracts/channel-cor
 
 ### What core requires from a channel
 
-A well-formed sync request from an instance that is registered and not
-blocked: core answers an unregistered, dead or blocked instance with 403. How
-a channel receives traffic, what transport it uses, and how it extracts the
+Well-formed requests from an instance that is registered and not blocked:
+sync calls, and the handshakes of its control link and connection sockets.
+Core answers an unregistered, dead or blocked instance with 403. How a
+channel receives traffic, what transport it uses, and how it extracts the
 canonical fields is the channel's implementation detail. Core defines the
-contract in [Channel ↔ Core: HTTP Sync](../contracts/channel-core-sync/).
+contracts in [Channel ↔ Core: HTTP Sync](../contracts/channel-core-sync/)
+and [Channel ↔ Core: Connections](../contracts/channel-core-connections/).
 
 ### Examples
 
@@ -80,7 +89,13 @@ contract in [Channel ↔ Core: HTTP Sync](../contracts/channel-core-sync/).
   accepts any method on any path (`reverse-call`), and WebSocket connections
   whose binary frames are messages (`reverse-persistent`, over a connection
   socket to core). Its connection schema gives each kind its own fields.
-- DNS, SSH or GitHub channels: possible, none built yet.
+- PHP pages: `logos-dumbo-channel` calls the pages the Dumbo factory builds
+  (`bind-call`), over its control link to core.
+- Listening minions: `logos-tcp-channel` dials a minion that listens on a
+  TCP port, directly or through a proxy (`bind-persistent`), and relays its
+  length-prefixed frames over a connection socket.
+- DNS, SSH or GitHub channels: possible, none built yet. A DNS channel
+  would say a small `max_message` for its kinds.
 
 ### Notes
 

@@ -67,10 +67,12 @@ core-message = {        ; core → minion
   ? 1: msg-id,          ; id
   ? 2: msg-id,          ; re
   ? 3: [* core-item],   ; items
+  ? 4: uint,            ; at: core's clock when it starts the exchange,
+                        ;   unix seconds; on every message with id
 }
 
 minion-item = stage / hello / sleep_update / conn_update / get_tasks / result / chunk / ack / err
-core-item   = stage_response / hello_response / rehello / task / cancel / resume / chunk / ack / err
+core-item   = stage_response / hello_response / rehello / task / cancel / resume / poll / chunk / ack / err
 
 msg-id  = bstr .size 16
 task-id = bstr .size 16
@@ -93,8 +95,12 @@ kind](../../../module-types/#connection-kinds):
 |---|---|---|---|
 | `reverse-call` | the minion | `id` | `re` |
 | `reverse-persistent` | either side | `id` | `re` |
-| `bind-call` | core | `id` | `re` |
+| `bind-call` | core | `id` (and `at`) | `re` |
 | `bind-persistent` | either side | `id` | `re` |
+
+A minion message with `re` answers one core sent: core takes it only over
+the connection socket where it waits for that answer, and never through
+the sync call, where a minion only starts exchanges.
 
 ## CBOR rules
 
@@ -119,22 +125,29 @@ seconds, so a minion parses integers only.
 
 ## Freshness and replay
 
-Messages carry no time: core stamps each with its own receive time.
+A minion's messages carry no time: core stamps each with its own receive time. Core's messages that start an exchange say its clock (`at`), for a minion that cannot remember ids (below).
 
 - **Core refuses a message whose `id` it has seen** in the last 24 hours:
   the sync call answers **409**, and the channel answers its client as for
-  any failure (the HTTP channel's 404). A minion never sends an `id` twice,
-  so only a captured message sent again meets this, and it learns nothing
-  from the answer.
+  any failure (the HTTP channel's 404); over a connection socket core drops
+  it and answers nothing. A minion never sends an `id` twice, so only a
+  captured message sent again meets this, and it learns nothing from the
+  answer.
 - **A reply is fresh** when its `re` is the `id` of a request the receiver is
   still waiting on. An old reply, replayed, matches nothing and is dropped.
 - **The direction byte** stops a frame from being turned around: both sides
   hold the same keys, and a core message sent back to core fails `dir`.
 - **A minion answering core's requests** (a `bind` or persistent
-  connection) needs no replay
-  protection of its own: core does not rely on it. Without it, a captured
-  core message sent to the minion again runs its tasks again; a minion may
-  guard against that by remembering recent `id`s.
+  connection) needs no replay protection of its own: core does not rely on
+  it. Without it, a captured core message sent to the minion again runs its
+  tasks again. A minion guards against that by remembering recent `id`s
+  (BOB's remembers task ids for a day), or, when it can remember nothing
+  (a `bind-call` page), by **`at`**: every message core starts says core's
+  clock, and a minion refuses one further than 10 minutes from its own
+  (`protocol.StaleWindow`) with an `err` `stale`, saying its time. Within
+  that window a replay still runs again; past it, it does not. Core shows
+  a page that refuses calls as stale on its target: the two clocks
+  disagree.
 
 ## Errors
 
@@ -145,6 +158,7 @@ err = {
   ? 2: tstr,            ; msg: for a person
   ? 3: uint,            ; item: which item of the message it is about (0-based)
   ? 4: bstr .size 16,   ; task: the task an unknown_task names
+  ? 5: bstr,            ; ctx: the ctx the item it is about said, echoed
 }
 ```
 
@@ -156,8 +170,14 @@ err = {
 | 4 | `too_large` | both | a message, chunk or file over the [limits](#limits) | ends the task or transfer it was about failed |
 | 5 | `session_closed` | core | the session the message was sent under is [closed](../sessions/#session-lifetime) | starts over |
 | 6 | `session_replaced` | core | another process claimed the [persisted session](../sessions/#persisted-sessions) | starts over, without claiming it |
+| 7 | `stale` | minion | a core message whose `at` is too far from the minion's clock, or says none: a replay, or clocks that disagree (`msg` says the minion's time) | nothing in it ran; core shows it on the target |
 
 These pages call a code by its name; on the wire it is the number.
+
+**An `err` about an item that said a `ctx`** (a chunk, an ack, a result)
+carries that `ctx` back: a minion that keeps nothing between messages finds
+there what to end or clean up (a page removes the partial file a refused
+upload left).
 
 Only `session_closed` and `session_replaced` end a session; every other code
 is about one message or item, and the session goes on. A frame that fails to
@@ -168,7 +188,7 @@ when an exchange fails is in [Sessions](../sessions/#when-an-exchange-fails).
 
 | | |
 |---|---|
-| A message (plaintext) | 768 KiB: sealed and packed, it fits the HTTP channel's 1 MiB default `max_body_bytes` |
+| A message (plaintext) | 768 KiB: sealed and packed, it fits the HTTP channel's 1 MiB default `max_body_bytes`. Less on a connection whose channel says it carries less (`max_message`, below) |
 | Items in a message | 256 |
 | Elements of an array or map inside an item (a result's `data`) | 65 536 |
 | Nesting | 16 levels |
@@ -178,6 +198,17 @@ when an exchange fails is in [Sessions](../sessions/#when-an-exchange-fails).
 | A task's output and data kept | 4 MiB together; its listings go to the [file browser](../../file-browser/) apart |
 | Core's memory of message ids | 24 hours |
 | Task ids a minion remembers | 24 hours |
+
+**A connection's own limit.** A channel whose transport carries little (a
+DNS query, a small form field) says per kind how large a message it carries
+each way, `max_message` in its [connection
+schema](../../channel-core-connections/#the-connection-schema-by-kind), 1 KiB
+to 768 KiB. A build's connection takes it (`max_message`), so the minion
+knows it, and core keeps every message it sends a minion within the
+connection in use: what does not fit (tasks, a chunk) waits for the next
+message, and a task no message of the connection could carry ends failed,
+saying so. A minion keeps its own messages within it too: smaller chunks,
+listing pieces and result parts.
 
 Session timings (the first check-in, tombstones, replaced keys, the
 backstop) are in [Sessions](../sessions/).
@@ -212,11 +243,12 @@ given in its CDDL on the page that defines it.
 | 3 | [`hello`](../sessions/#hello) | 10 | [`result`](../tasks-and-results/#results) |
 | 4 | [`hello_response`](../sessions/#hello) | 11 | [`ack`](../tasks-and-results/#acknowledging) |
 | 5 | [`sleep_update`](../sessions/#late-and-lost-sessions) | 12 | [`chunk`](../file-transfers/#chunks) |
-| 6 | `rehello` | 13 | [`err`](#errors) |
+| 6 | [`rehello`](../sessions/#hello) | 13 | [`err`](#errors) |
 | 7 | [`get_tasks`](../tasks-and-results/#asking-for-tasks) | 14 | [`conn_update`](../sessions/#connections) |
 | | | 15 | [`resume`](../tasks-and-results/#resuming-a-task) |
+| | | 16 | [`poll`](../tasks-and-results/#coming-back-sooner) |
 
-**The message**: `v` 0, `id` 1, `re` 2, `items` 3, as [above](#message).
+**The message**: `v` 0, `id` 1, `re` 2, `items` 3, and core's `at` 4, as [above](#message).
 
 **Structures inside items**, numbered from `1` each, in the CDDL where they
 are defined: a [sleep](../sessions/#hello), a [listing
@@ -229,7 +261,7 @@ keys](../sessions/#stage), and the data of each of core's
 
 | Set | Numbers | Defined in |
 |---|---|---|
-| Err codes | `bad_message` 1 … `session_replaced` 6 | [Errors](#errors) |
+| Err codes | `bad_message` 1 … `stale` 7 | [Errors](#errors) |
 | Integrity levels | `low` 1, `medium` 2, `high` 3, `system` 4, `root` 5, `user` 6 | [Sessions](../sessions/#hello) |
 | Machine id sources | `smbios-uuid` 1 … `ephemeral` 10 | [Sessions](../sessions/#machine-identity) |
 | Entry types | `dir` 1, `file` 2, `link` 3, `other` 4 | [Listings](../tasks-and-results/#listings) |
@@ -289,6 +321,9 @@ the host shows it) and data are named as they come.
   codec covers half the items. Who starts an exchange (`id` or `re`) is kept
   apart from direction, so the same formats serve every [connection
   kind](../../../module-types/#connection-kinds): the minion starting, core starting, or both.
-- **Why no time in messages.** Core trusts only its own clock, so it stamps
-  messages as they arrive. The sync call is request and response, so a
-  minion needs no clock either to know a reply is fresh: it matches `re`.
+- **Why so little time in messages.** Core trusts only its own clock, so
+  it stamps messages as they arrive. The sync call is request and
+  response, so a minion needs no clock either to know a reply is fresh: it
+  matches `re`. Only the messages core starts say `at`, for a minion that
+  cannot remember ids: a page's server keeps its clock, where it keeps
+  nothing else.

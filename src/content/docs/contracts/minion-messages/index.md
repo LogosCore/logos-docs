@@ -10,21 +10,25 @@ Build](../minion-build/#commands)); everything here is core's, the same for
 every factory.
 
 :::note[Status]
-Built, in the protocol package (`logos-golang-protocol`), core and BOB's
-minion, through `reverse-call` connections. Planned: the other [connection
-kinds](../../module-types/#connection-kinds), where core starts exchanges
-too, and the `rehello` item (core asking a minion for a new `hello`).
+Built, in the protocol package (`logos-golang-protocol`), core, BOB's minion
+and the Dumbo factory's PHP page, through all four [connection
+kinds](../../module-types/#connection-kinds): `reverse-call`,
+`reverse-persistent`, `bind-call` and `bind-persistent`. How each mechanic
+goes on each kind is [below](#mechanics-by-connection-kind).
 :::
 
 ## The layers
 
-The [sync call](../channel-core-sync/) carries one sealed message per request
-and at most one per reply.
+Between a channel and core a sealed message travels one of three ways, by
+the connection's kind ([Channel ↔ Core: Connections](../channel-core-connections/#three-paths)):
+the [sync call](../channel-core-sync/) (one message per request, at most one
+per reply), the control link's `call` (core's message to a page, the page's
+answer back), or a connection socket (one message per frame, both ways).
 
 | Layer | Defined by | Seen by |
 |---|---|---|
-| Transport (e.g. the HTTP channel's [packed format](https://github.com/LogosCore/logos-http-channel#wire-format)) | each channel | the channel |
-| Sync call: the ciphertext as the body, the id in a header | [HTTP Sync](../channel-core-sync/) | channel and core |
+| Transport (e.g. the HTTP channel's [packed format](https://github.com/LogosCore/logos-http-channel#wire-format), the TCP channel's length-prefixed frames) | each channel | the channel |
+| Channel ↔ core: the sync call, the control link or a connection socket, each carrying the ciphertext and the id it is sent under | [HTTP Sync](../channel-core-sync/), [Connections](../channel-core-connections/#the-control-link-and-connection-sockets-formats) | channel and core |
 | **Sealed frame**: version, direction, IV, ciphertext, tag | [Wire format](wire-format/#sealed-frame) | core and the minion |
 | **Message**: one CBOR map of items | [Wire format](wire-format/#message) | core and the minion |
 
@@ -38,6 +42,8 @@ and at most one per reply.
 | [File transfers](file-transfers/) | Files both ways, kept in core or streamed through it: chunks, acks, resuming, and what core keeps. |
 
 ## A minion's life at a glance
+
+A minion that starts its exchanges (`reverse-call` here):
 
 ```mermaid
 sequenceDiagram
@@ -81,6 +87,15 @@ sequenceDiagram
    alongside. Core answers each message. See [Tasks and
    results](tasks-and-results/) and [File transfers](file-transfers/).
 
+On the other kinds the same items go other ways. Over a persistent
+connection (`reverse-persistent`, `bind-persistent`, once the channel has
+dialed) the minion stages and says hello as above, and core also sends on
+its own: tasks within the `get_tasks` allowance, cancels, a stream's go.
+A `bind-call` page speaks only when called: core's first call is a
+`rehello` under the build id, the page's `hello`, sealed with the build's
+keys, opens the session ([Sessions](sessions/#hello)), and every exchange
+after is a call core makes under the session id.
+
 ## Items
 
 A message carries a list of **items**, each a map with its type in key `0`
@@ -107,6 +122,50 @@ everything as it comes, so operators never see the numbers.
 | 13 | `err` | both | a problem with a message or one of its items | [Wire format](wire-format/#errors) |
 | 14 | `conn_update` | minion | the connection it uses changed | [Sessions](sessions/#connections) |
 | 15 | `resume` | core | go on with a task from where its last part said | [Tasks and Results](tasks-and-results/#resuming-a-task) |
+| 16 | `poll` | core | come back sooner than the schedule: something may go on any moment | [Tasks and Results](tasks-and-results/#coming-back-sooner) |
+
+## Mechanics by connection kind
+
+The format is the same on every kind: `id` and `re` keep apart who starts
+an exchange, every item keeps its direction, and every item can be sent
+again safely. What differs is who can speak next, and so how what core has
+for a minion reaches it.
+
+**How core's messages reach a minion.** Everything core sends a minion on
+its own comes from one place, whatever the kind: the session's cancels,
+the resumes of tasks under way (on a call), its streams' acks, and its
+tasks within what the minion takes, most urgent first, within the
+connection's message size. When core has something new (a task queued or
+stopped, a part taken, a stream that may go on) it **nudges** the session,
+and the nudge goes the way the minion's connection allows:
+
+| Kind | Core's messages go | When |
+|---|---|---|
+| `reverse-call` | in the reply to the minion's request | when it checks in; sooner when core asks with a [`poll`](tasks-and-results/#coming-back-sooner) |
+| `reverse-persistent` | in the reply to the minion's request, or pushed over the connection | at once (within a tenth of a second) |
+| `bind-call` | in a call core makes to the page | at once (within a second), on the page's schedule if it says one, on Check now |
+| `bind-persistent` | as `reverse-persistent`, once the connection is open | at once while connected; core opens it as the target's [policy](../channel-core-connections/#bind-persistent-connections-opening-and-closing) says |
+
+What answers the minion's own items (an ack for its chunk, the chunk it
+pulls, the resume for its part, an `err` about one) goes in the reply to
+them, first.
+
+**Each mechanic on each kind:**
+
+| Mechanic | `reverse-call` | `reverse-persistent` | `bind-call` | `bind-persistent` |
+|---|---|---|---|---|
+| [Staging](sessions/#staging) | the minion stages | the minion stages | skipped: the session keeps the build's keys | the minion stages, once dialed |
+| [`hello`](sessions/#hello) | the minion's | the minion's | the page's, answering core's `rehello` | the minion's |
+| [Presence](sessions/#late-and-lost-sessions) | late and lost by its schedule | connected; between connections by its schedule | from the last call that worked, by its schedule if it says one | the connection: connected, not connected (on purpose), unreachable since |
+| [`get_tasks`](tasks-and-results/#asking-for-tasks) `max` | per reply | a standing allowance | per next call | a standing allowance |
+| [`cancel`](tasks-and-results/#cancelling-a-task) | at the next check-in | pushed | in the next call (a task inside a running call ends first) | pushed |
+| [Long tasks](tasks-and-results/#resuming-a-task) (`resume`) | answers a part | answers a part | every call carries it | answers a part |
+| [Files](file-transfers/) either way | the minion checks in at once while one moves | as it goes | a chunk a call, core calling again at once | as it goes |
+| [Streams](file-transfers/#streaming-a-file) that hold | core's `poll`: back within a second | pushed when they may go on | called when they may go on | pushed when they may go on |
+| [Switching](sessions/#connections) | the minion moves | the minion moves | a page has one connection | core dials, the minion moves through the dial |
+| [Failover](../channel-core-connections/#failover) | the minion's | the minion's | none | none: core has to dial it |
+| [Replays](wire-format/#freshness-and-replay) of core's messages | none: replies match `re` | the minion may remember ids | the page refuses an `at` out of its window | the minion may remember ids |
+| Message size | the connection's `max_message` | the same | the same | the same |
 
 ## Changing these formats
 
@@ -119,13 +178,27 @@ everything as it comes, so operators never see the numbers.
 - A change that breaks either rule needs a new `v`, and a protocol release
   both sides adopt.
 
-## Open questions
+**A new mechanic** (an interactive shell, a tunnel, an `event` stream)
+fits every kind when it answers these, and adds its row to the table above:
 
-- **Exchanges core starts** ([connection kinds](../../module-types/#connection-kinds)
-  other than `reverse-call`). What a premade session looks like (one core
-  creates ahead of time, under the build's own keys, so a `bind-call` minion
-  that only answers needs no staging); how `hello` works when core starts
-  every exchange; and `get_tasks` on a persistent connection, where its `max`
-  becomes an allowance core pushes tasks within. Both sides starting
-  exchanges on one connection is already in the format: `id` and `re` keep
-  them apart ([Wire format](wire-format/#message)).
+1. **Items that can go twice.** Each step is an item, numbered, that does
+   no harm sent again: keyed like results by `(task, seq)` and chunks by
+   `(xfer, off)`. Exchanges fail and get resent on every kind.
+2. **Driven by whoever can speak next.** The minion moves it on by
+   asking (and checks in at once while work remains); core moves it on by
+   putting what it has where every message it sends a minion is made, and
+   nudging the session, which pushes, calls or opens as the kind allows.
+   Nothing may wait for the minion to speak (a page never does) or for
+   core to (a polling minion hears only replies): what a polling minion
+   must hear soon, core asks for with a `poll`.
+3. **State in a `ctx`.** Whatever the minion needs between messages it may
+   put in a `ctx` of its own bytes, which core keeps and echoes on every
+   item it sends about that task or transfer, an `err` included: a minion
+   that keeps nothing (a page) can then take part.
+4. **Within the connection's size.** Every message keeps within the
+   connection's `max_message` ([Wire format](wire-format/#limits)): what is
+   larger goes in parts, sized by the connection, not by a constant.
+5. **Kinds it needs.** A mechanic that cannot work, or work well, over
+   some kinds (an interactive shell needs both sides speaking at once)
+   says so in its command's [`kinds`](../minion-build/#commands): core
+   refuses its task on a session on another kind, and `help` says so.

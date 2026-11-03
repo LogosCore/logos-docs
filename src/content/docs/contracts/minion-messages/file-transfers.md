@@ -25,7 +25,8 @@ chunk = {
   0: 12,                ; t: chunk
   1: xfer-id,           ; xfer: the transfer, 16 random bytes
   2: uint,              ; off: where data starts in the whole
-  3: bstr,              ; data: at most 512 KiB
+  3: bstr,              ; data: at most 512 KiB, and within the
+                        ;   connection's max_message
   ? 4: uint,            ; total: the whole's size, in the first chunk (off 0)
   ? 5: bstr .size 32,   ; sha256: of the whole, in the last chunk
   ? 6: task-id,         ; task: the task the transfer belongs to, in the
@@ -47,8 +48,8 @@ naming the transfer:
 | `ctx` (key 5, with `xfer`) | the transfer's ctx (below) |
 
 **The transfer's ctx.** A minion may put its own bytes, at most 1024, on
-its chunks and acks (`ctx`): core never reads them, and the chunk or ack
-core sends to answer that item carries them back. A minion that keeps
+its chunks and acks (`ctx`): core never reads them, and the chunk, ack or
+`err` core sends to answer that item carries them back. A minion that keeps
 nothing between messages (a [`bind-call`](../../channel-core-connections/#bind-call-minions-when-core-calls)
 page) keeps there what it needs to go on: the file's path, where it writes
 it, the SHA-256 it expects. Being inside the sealed message, it is as
@@ -58,7 +59,12 @@ uploader's bytes came), so core keeps a stream's ctx: a stream to core
 keeps its announcement's, a stream to the minion its latest ask's, and
 every ack of the stream carries it.
 
-These rules hold for every flow:
+These rules hold for every flow, on every [connection
+kind](../#mechanics-by-connection-kind):
+
+- **Sized by the connection.** Chunks are 512 KiB at most, smaller where
+  the connection carries less (its `max_message`): core sizes those it
+  sends to the room its message has, and a minion sizes its own.
 
 - **In order only.** The receiver keeps a chunk only when it starts where it
   has the file (`off` = its `next`); one sent again, or out of order, is not
@@ -100,9 +106,10 @@ A transfer with no chunk for a day is given up, its chunks dropped.
 ## Core sending a file
 
 A file an operator uploaded to core for the task (a **task file**), sent to
-the minion (an `upload_file` task). Core cannot start an exchange through a
-channel, so the minion **pulls** it: each ack asks for the next chunk, and
-core's reply brings it.
+the minion (an `upload_file` task). The minion **pulls** it: each ack asks
+for the next chunk, and core's reply brings it. Pulling works the same on
+every kind (through the sync call core can only answer, and a page keeps
+no file open between calls) and lets the minion set the pace.
 
 1. The task names the file in an arg of type `file`, a
    [`file-offer`](../tasks-and-results/#tasks): `{xfer, name, size, sha256}`. Core picks `xfer` per task, so the same file sent to two tasks is
@@ -147,14 +154,16 @@ resumed from any offset is the minion reading from there again.
 1. The minion opens the file and sends a first chunk with no `data`: `off` 0,
    `total`, `task` and `name`. Core answers `ack {xfer, next: 0, hold: true}`:
    the stream waits for a downloader.
-2. While held, the minion sends nothing of the transfer. Through calls it
-   checks in on its own schedule until the stream first runs; after that,
-   about every second, so a paused download starts again quickly. Over a
-   persistent connection it need not check in: core pushes the ack (step 3).
-   A [`bind-call`](../../channel-core-connections/#bind-call-minions-when-core-calls)
-   minion cannot check in: core calls it when the stream may go on (a
-   downloader came, or took a chunk and left room), with the stream's ack
-   and ctx.
+2. While held, the minion sends nothing of the transfer. When the stream
+   may go on (a downloader came; it took a chunk from a full window; it has
+   every byte, which ends the task), core tells the minion the way its
+   connection allows: over a persistent connection it pushes the stream's
+   ack; a [`bind-call`](../../channel-core-connections/#bind-call-minions-when-core-calls)
+   page is called with it, and its ctx. A minion that polls hears it in a
+   reply: it checks in on its own schedule while no downloader is there,
+   and while one is, core's replies ask it to come back within a second
+   ([`poll`](../tasks-and-results/#coming-back-sooner)). The minion holds,
+   so an ack core sends on its own never crosses a chunk of its.
 3. A downloader attaches (`GET /api/v1/minion-streams/{task}`, with a `Range`
    to resume). Core sends `ack {xfer, next}` without `hold`, `next` where the
    downloader wants the bytes from: at once, pushed over a persistent
@@ -194,11 +203,11 @@ file](#core-sending-a-file), the minion pulling it, with three differences:
    `next` when the buffer has it, and drops the chunks before `next`. With
    nothing to send yet (no uploader, or the uploader behind), it answers
    `ack {xfer, next, hold: true}`, and the minion asks no more until an ack
-   without `hold`: before the first chunk, on its own schedule; after, about
-   every second. Every reply carries the stream's ack, so the minion hears
-   when bytes are there; over a persistent connection core pushes it as
-   soon as the uploader's bytes reach a minion that holds, so the minion
-   need not check in for it, and a `bind-call` minion is called with it.
+   without `hold`. Every reply carries the stream's ack, so the minion hears
+   when bytes are there; as soon as the uploader's bytes reach a minion that
+   holds, core pushes it over a persistent connection, calls a `bind-call`
+   page with it, and asks a minion that polls to come back within a second
+   while the uploader is there.
 3. The last chunk says `sha256` of the bytes core passed on, hashed in order
    as they went. The minion checks it, as it checks a file core sends, and
    ends the task with the

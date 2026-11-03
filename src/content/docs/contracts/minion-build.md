@@ -254,6 +254,7 @@ does when they build it: a minion built for one job carries nothing more.
 | `params[]` | What a task of the command takes: field specs as in a management action, and `file` (a [task file](../task-results-and-actions/#task-files), sent to the minion with the task): one at most, with no default. Each has a `num`, unique in the command, 1 to 65 535: what a task names the arg by on the wire. Only a command's params have one. |
 | `result` | Optional. What its task's `data` is: one of core's [results](../task-results-and-actions/) (`dir_listing`), its shape and view. Without one, the `data` shows as raw JSON. A name core does not know refuses the schema. |
 | `action` | Optional. What core can ask the command to do itself: one of core's [actions](../task-results-and-actions/) (`list_dir`). The command takes the action's params, gives every other param a default, and has the result the action needs. A name core does not know refuses the schema. |
+| `kinds[]` | Optional. The [connection kinds](../../module-types/#connection-kinds) the command works over, each one the factory's minions use with some channel; empty means every kind. For a command that does not work, or not well, over the others (an interactive shell needs both sides speaking at once): core refuses its task on a session whose minion uses another kind, saying which. The build form's command list, the factory's page and `help` say where it works; the console's command line marks one the session's minion cannot take where it is ("switch first"). |
 
 - A build's commands are the ones picked, the target's required ones among
   them, in the schema's order. Among commands with one
@@ -329,6 +330,7 @@ tries them. Each one is:
 | `settings` | By the field key of the kind in the channel's [connection schema](../minion-connection/), validated like an endpoint's values. A field without a value takes its default. |
 | `values` | The factory's [connection parameters](#connection-parameters) for that channel kind and connection kind. |
 | `failover` | Optional. The connection's own [failover](../channel-core-connections/#failover) settings: `auto` (failover may move the minion here; `true` by default, `false` for `bind-persistent`) and `fail_after` (failures in a row before it moves off this one; the build's by default). |
+| `max_message` | Set by core, never by the operator: the largest message the connection carries, its channel's [`max_message`](../channel-core-connections/#the-connection-schema-by-kind) for the kind (left out: 768 KiB). The build request carries it; the factory builds it in, and the minion keeps its messages within it. |
 
 A build also has a **failover policy**, `failover`: how its minion moves
 between those connections on its own ([Failover](../channel-core-connections/#failover)).

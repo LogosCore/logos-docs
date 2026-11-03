@@ -11,21 +11,52 @@ and Actions](../../task-results-and-actions/).
 
 ## How an exchange goes
 
-Through a channel, the minion starts every exchange:
+Who starts an exchange is the connection's kind's ([Mechanics by
+connection kind](../#mechanics-by-connection-kind)):
 
-- **The minion checks in.** It sends a message every check-in interval
-  (`checkin_interval` with `checkin_jitter`, from its connection), or sooner
-  when it has something to send. Core answers.
+- **Through the sync call (`reverse-call`) the minion checks in.** It sends
+  a message every check-in interval (`checkin_interval` with
+  `checkin_jitter`, from its connection), or sooner when it has something to
+  send, or when core asked with a [`poll`](#coming-back-sooner). Core answers.
+- **Over a persistent connection** the minion sends what it has when it has
+  it, and core sends too: tasks within the minion's allowance, cancels, a
+  held stream's go. The minion acknowledges what core sent, with `re` or in
+  its next message.
+- **A `bind-call` page answers calls**: core starts every exchange, and the
+  page's answer carries `re`.
 - **Core answers every message that carries items** with a sealed reply whose
-  `re` is the request's `id`, even when it has nothing of its own. Only an
-  empty check-in, when core has nothing either, gets **204**.
+  `re` is the request's `id`, even when it has nothing of its own. Through
+  the sync call an empty check-in, when core has nothing either, gets
+  **204**; over a socket every request gets a reply, empty or not, so the
+  minion knows it arrived.
 - **Items count as delivered only on a sealed reply with the matching `re`.**
   On a 404, a timeout, or a 204 to a message with items, the minion sends
-  them again in a later message, under a new `id`.
+  them again in a later message, under a new `id`. Core does the same with
+  what it sends: what the minion did not acknowledge goes again.
 - **Every item can be sent again safely.** Results are taken once by
   `(task, seq)`, chunks by `(xfer, off)`; acks and hellos are the same each
   time. So nothing needs exactly-once delivery: both sides resend until the
   other confirms.
+
+## Coming back sooner
+
+```cddl
+poll = {
+  0: 16,                ; t: poll (core → minion)
+  1: uint,              ; within: milliseconds, a day at most
+}
+```
+
+A minion that starts its exchanges checks in on its schedule, which may
+be an hour; core cannot reach it before then. When core expects something
+of the minion's to go on any moment, it says so in its reply: **`poll`**,
+come back within `within`, sooner than the schedule. It holds for that one
+wait; the next reply says it again while it still applies. Core sends it
+through the sync call only (over a persistent connection it pushes
+instead) and today when a [stream](../file-transfers/#streaming-a-file) the
+minion holds has its downloader or uploader there: within a second. A
+minion that does not know `poll` answers `unknown_item` and keeps its
+schedule.
 
 ## Asking for tasks
 
@@ -108,6 +139,13 @@ value or a default. Their types map to CBOR like this:
 - **A task the minion cannot run** (a command its build lacks, an `op` it
   does not know, an arg of the wrong type) gets a `result` `{done: true, ok:
   false, err: …}`.
+- **A task too large for the connection** (its item more than the
+  connection's `max_message` takes, [Limits](../wire-format/#limits)) never
+  goes: core ends it failed, saying the sizes. Tasks that fit go in the
+  messages after, as many as each holds.
+- **A command that works over some kinds only** (its build schema's
+  [`kinds`](../../minion-build/#commands)) is refused when queued on a
+  session whose minion uses another kind: an operator switches it first.
 - `help`, `connect` and `disconnect` are core's own commands: core runs
   them and they never go out ([Commands](../../minion-build/#commands)).
 
@@ -120,6 +158,8 @@ ack = {
   ? 2: xfer-id,         ; xfer, with next: the receiver has every byte of
   ? 3: uint,            ;   the transfer before next
   ? 4: bool,            ; hold, with xfer: the transfer waits (see File
+                        ;   transfers)
+  ? 5: bstr,            ; ctx, with xfer: the transfer's ctx (see File
                         ;   transfers)
 }
 ```
