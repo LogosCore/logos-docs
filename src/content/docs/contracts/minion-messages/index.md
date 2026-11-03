@@ -123,6 +123,7 @@ everything as it comes, so operators never see the numbers.
 | 14 | `conn_update` | minion | the connection it uses changed | [Sessions](sessions/#connections) |
 | 15 | `resume` | core | go on with a task from where its last part said | [Tasks and Results](tasks-and-results/#resuming-a-task) |
 | 16 | `poll` | core | come back sooner than the schedule: something may go on any moment | [Tasks and Results](tasks-and-results/#coming-back-sooner) |
+| 17 | `max_tasks` | both | how many tasks the minion runs at once: core sets it, the minion says what it has | [Tasks and Results](tasks-and-results/#max-tasks) |
 
 ## Mechanics by connection kind
 
@@ -159,6 +160,7 @@ them, first.
 | [Presence](sessions/#late-and-lost-sessions) | late and lost by its schedule | connected; between connections by its schedule | from the last call that worked, by its schedule if it says one | the connection: connected, not connected (on purpose), unreachable since |
 | [`get_tasks`](tasks-and-results/#asking-for-tasks) `max` | per reply | a standing allowance | per next call | a standing allowance |
 | [`cancel`](tasks-and-results/#cancelling-a-task) | at the next check-in | pushed | in the next call (a task inside a running call ends first) | pushed |
+| [Max tasks](tasks-and-results/#max-tasks) (`max_tasks`) | in every reply until the minion has it | pushed, then in every reply until it has it | in the next call, and every one after until it has it | pushed, then in every reply until it has it |
 | [Long tasks](tasks-and-results/#resuming-a-task) (`resume`) | answers a part | answers a part | every call carries it | answers a part |
 | [Files](file-transfers/) either way | the minion checks in at once while one moves | as it goes | a chunk a call, core calling again at once | as it goes |
 | [Streams](file-transfers/#streaming-a-file) that hold | core's `poll`: back within a second | pushed when they may go on | called when they may go on | pushed when they may go on |

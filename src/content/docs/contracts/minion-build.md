@@ -142,6 +142,7 @@ Declared in `module.register` under `build`:
 | `targets[]` | What the factory can produce, at least one. |
 | `commands[]` | Optional. What the minions can do. Operators pick each build's [commands](#commands) from its target's. |
 | `failover` | Optional, `false` by default. The minions honor a build's [failover settings](../channel-core-connections/#failover): they move between their connections on their own as those say. Without it the settings still reach the factory, which may ignore them; the build form says so. |
+| `max_tasks` | Optional, `false` by default. The minions' limit of tasks at once is the operators' to set: a build says how many (`max_tasks` in the request, under Commands in the build form), their `hello` says it, and core changes it live ([Max tasks](../minion-messages/tasks-and-results/#max-tasks)). Without it a build has no limit to set, and a minion runs as many as its factory made it (one at a time, say), which its `hello` may report but nothing changes. |
 | `persisted_sessions` | Optional, `false` by default. The minions can claim a persisted session: built with a `session_id`, they claim it in their `hello` (see [Persisted sessions](../minion-messages/sessions/#persisted-sessions)). Operators can build such a minion from a session only for a factory that says so. |
 
 A target:
@@ -245,7 +246,7 @@ does when they build it: a minion built for one job carries nothing more.
 
 | Field | Meaning |
 |---|---|
-| `id` | Identifier, unique in the schema, `^[a-z][a-z0-9_-]{0,62}$`, and not `help`, `connect` or `disconnect`. Builds, core and operators name the command by it. |
+| `id` | Identifier, unique in the schema, `^[a-z][a-z0-9_-]{0,62}$`, and not `help`, `connect`, `disconnect` or `max_tasks`. Builds, core and operators name the command by it. |
 | `op` | The command's number, unique in the schema, 1 to 65 535: what a [task](../minion-messages/tasks-and-results/#tasks) names it by on the wire. |
 | `label`, `description` | Shown in the UI. |
 | `targets[]` | Optional. Narrows the command to these targets; empty means every target. |
@@ -272,7 +273,11 @@ does when they build it: a minion built for one job carries nothing more.
   core's too, in the console of a session whose connection is
   `bind-persistent`: they open and close its target's connection
   ([Connections](../channel-core-connections/#bind-persistent-connections-opening-and-closing)),
-  kept as tasks. A schema that declares any of the three is refused
+  kept as tasks. `max_tasks` is core's too, in the console of a session
+  whose build's factory declares `max_tasks` and whose minion said its
+  limit: `max_tasks <max>` sets how many tasks the minion runs at once, as
+  the session's Tasks do ([Max tasks](../minion-messages/tasks-and-results/#max-tasks)).
+  A schema that declares any of the four is refused
   (`protocol.IsCoreCommand`), and factories do not implement them.
 - **A task names its command by `op` and its args by their params' `num`**
   ([Tasks](../minion-messages/tasks-and-results/#tasks)), so a minion needs
@@ -493,6 +498,7 @@ Request `payload`:
 | `connections` | The [connections](#connections), in the order the minion tries them: each one's settings as an endpoint [export](../minion-connection/#the-export) under `endpoint` (its `name`, channel kind, schema version, connection `kind`, and `params` with defaults filled in), its [connection parameter](#connection-parameters) `values`, defaults filled in, and its own `failover` settings when it has any. |
 | `failover` | The build's [failover policy](../channel-core-connections/#failover), defaults filled in: `enabled`, `fail_after`, `fail_for`, `wrap`, `cycle_pause`, `failback_after`. Sent whatever the factory declares; one that does not declare `failover` may ignore it. |
 | `crypto` | Present when the factory declares `crypto`: its `suite` and the minion's key `material`, fresh for every build. For `aes-256-cbc-hmac-sha256`: `enc_key`, the AES-256 key, and `mac_key`, the HMAC-SHA256 key, 32 random bytes each in base64. The factory puts them in the artifact and keeps them nowhere else. |
+| `max_tasks` | Present for a factory that declares `max_tasks`: how many tasks the minion runs at once as it starts, 0 (none until a session sets more) to 64; 5 unless the operator set another. The factory builds it in. |
 | `session_id` | Present for a build with a persisted session (only to a factory that declares `persisted_sessions`): the session the minion claims in its `hello`, a lowercase UUID; an existing session, or one core reserved with the build. The factory builds it in. |
 | `artifact` | Where to upload the artifact: `upload_url`, a presigned URL to `PUT` it to, valid until a minute past the deadline, and `max_size`, the largest artifact the factory may upload (a core setting, default 256 MiB). factory-core refuses to upload a larger one (`artifact_too_large`). A presigned upload cannot be capped, so core holds the factory to it by its result: see [`factory.build.result`](#factorybuildresult). |
 | `deadline` | When core stops waiting: the build timeout after the offer. |

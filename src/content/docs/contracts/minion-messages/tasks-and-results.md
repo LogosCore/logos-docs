@@ -91,6 +91,68 @@ get_tasks = {
   unfinished tasks ([Connections](../../channel-core-connections/#get_tasks-on-a-persistent-connection)),
   and `max 0` takes none for now: a minion pauses with it.
 
+## Max tasks
+
+Every minion has a limit of tasks at once. Its factory sets it in one of
+two ways:
+
+- **The factory's own** (one at a time, say): the minion may say it in its
+  `hello`, and the session shows it ("max 1 · set by its factory"); nothing
+  changes it. A minion that does not say shows "max not reported".
+- **The operators'**, for a factory that declares `max_tasks` ([Minion
+  Build](../../minion-build/)): the build's as the minion starts, which an
+  operator changes live from the session (**Tasks** in its record: the
+  pencil). Its minion must say it in its `hello`, and takes the
+  `max_tasks` item, which carries it both ways:
+
+```cddl
+max_tasks = {
+  0: 17,                ; t: max_tasks
+  1: uint,              ; max: tasks at once, 0 to 64
+}
+```
+
+- **Core → minion: the limit to have.** It goes in every message core
+  sends the minion, after the cancels and before any task, whatever the
+  minion runs and whether it asked for tasks, until the minion says it has
+  it. Not a task: a task would wait for a free slot (the very limit it
+  changes), and after a limit of 0 none could reach the minion again. Core
+  sends it only to a minion whose build's factory declares `max_tasks`.
+- **5 messages at most.** A minion that takes it says so in its very next
+  message; one that never does (one that does not know the item answers
+  `unknown_item`, which names the item only by its place in a message core
+  no longer has) is sent it 5 times, then no more: the session says the
+  minion did not take it. Setting it again, or the minion saying a limit
+  (a `rehello`), tries again.
+- **Minion → core: the limit it has**, in its next message (at once, not
+  on its schedule) after core's, and whenever it changes on its own. Core
+  records it as the session's; its `get_tasks` follow it: through a call,
+  the room the limit leaves (none asked when it is full); on a persistent
+  connection, the limit itself, a standing allowance core counts the
+  unfinished tasks against.
+- **The `hello` says the limit the minion starts with** (key 17). A minion
+  whose `hello` says none gets no `max_tasks`, whatever its factory
+  declares.
+- **0 pauses**: no new tasks; what runs goes on, and `cancel` still
+  reaches it.
+- **The operator's limit stays with the session**: a process that claims
+  it later (a [persisted session](../sessions/#persisted-sessions), or a
+  `rehello` saying another) gets it again.
+- **A build sets the starting limit** for a factory that declares
+  `max_tasks` ([Minion Build](../../minion-build/)), 5 unless the operator
+  says otherwise.
+- **From the console**: `max_tasks <max>`, core's own command in such a
+  session's console. Core keeps it as a task, running ("max tasks 5 → 8: on
+  its way to the minion") until the minion says it has the limit (done:
+  "the minion runs 8 at once now"; at once when it has it already), or does
+  not take it, or a newer limit (another `max_tasks`, the session's Tasks)
+  replaces it (failed, saying which). Nothing goes to the minion as a task:
+  a task would wait for a free slot, the very limit it changes.
+
+BOB runs each task in a goroutine of its own, its parts sharing each
+message's room; its `exit` stops the tasks running beside it first, so each
+ends cancelled, its end sent before exit's.
+
 ## Tasks
 
 ```cddl
@@ -146,8 +208,12 @@ value or a default. Their types map to CBOR like this:
 - **A command that works over some kinds only** (its build schema's
   [`kinds`](../../minion-build/#commands)) is refused when queued on a
   session whose minion uses another kind: an operator switches it first.
-- `help`, `connect` and `disconnect` are core's own commands: core runs
-  them and they never go out ([Commands](../../minion-build/#commands)).
+- `help`, `connect`, `disconnect` and `max_tasks` are core's own
+  commands: core runs them and they never go out
+  ([Commands](../../minion-build/#commands)). A core command still
+  running (a `connect` waiting for its dial, a `max_tasks` for the
+  minion's word) takes none of the minion's room: core counts only the
+  minion's tasks against its `get_tasks`.
 
 ## Acknowledging
 

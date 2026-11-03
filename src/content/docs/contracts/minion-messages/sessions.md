@@ -101,6 +101,11 @@ hello = {
   ? 14: { sleep },      ; sleep: the check-in schedule it starts with
   ? 16: uint,           ; conn: the connection it says hello through,
                         ;   its place in the build's connections, from 1
+  ? 17: uint,           ; max_tasks: how many tasks it runs at once as it
+                        ;   starts, 0 to 64; absent: it does not say. Any
+                        ;   minion may (1: one at a time); one whose factory
+                        ;   declares max_tasks must (Tasks and Results, Max
+                        ;   tasks)
 }
 
 sleep = (
@@ -217,8 +222,10 @@ A minion takes the **first** of these it can read, skipping placeholders:
   the card), a volume's serial (copied with the disk image).
 
 BOB's minion, on Linux: the container's id when in one, else the machine
-id, else the host name, else a random id for the process; the same as any
-user. It keeps none of its own: it leaves nothing on the host.
+id, else the host name, else a random id for the process; on Windows: the
+SMBIOS UUID, else the `MachineGuid`, else the host name, else a random id.
+The same as any user either way. It keeps none of its own: it leaves nothing
+on the host.
 
 ## Session lifetime
 

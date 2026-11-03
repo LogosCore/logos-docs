@@ -14,6 +14,7 @@ flowchart LR
     RM[rm: delete_path] --> S
     DL[download, stream_download] --> S
     UP[upload, stream_upload] --> S
+    VO[volumes: list_volumes] --> S
     S --> FB[File Browser tab]
     FB -- "Refresh, Download, Stream, Upload here, Delete" --> T[Tasks of a session of the machine]
     T --> S
@@ -45,6 +46,7 @@ listing's `sep`). Its parent and name, then what was last known of it:
 | `gone_at`, `gone_by` | it was deleted (`rm`), or a later listing of its folder no longer had it; null while it is there |
 | `downloaded` | the files core keeps of it ([`file_download`](../task-results-and-actions/#file_download)): each one's id, size, SHA-256 and when |
 | `uploaded` | what an operator put there ([`file_upload`](../task-results-and-actions/#file_upload)): size, SHA-256, when, by whom |
+| `volume` | a volume's files are here (a drive's root, a mount point), as the newest [`volumes`](../task-results-and-actions/#volumes) task said: its kind, device, label, file system, size and free space, and when and by which task and session it was listed; null once a later one no longer had it |
 
 A **folder** also says when its children were last listed (`listed_at`, by
 which session and host user): a folder never listed holds only what other
@@ -66,6 +68,7 @@ command's; the rest as each task ends, done.
 | `delete_path` (an `rm`) | The entry is gone; a folder, with everything under it. |
 | `file_download`, `file_stream` | The file is seen (its size), and `downloaded` gets the kept file (a download's; a stream keeps none: its SHA-256 only). |
 | `file_upload` | The file is seen, with the size the minion wrote, and `uploaded` gets it. |
+| `volumes` (a `list_volumes`) | Each volume's path is a folder holding its `volume` (a Windows drive one of the machine's roots, with its parents up to the root on Linux); a volume a newer list no longer has loses it, and a list older than the newest the machine holds changes nothing (it would bring a drive back). None at all changes nothing either. |
 
 **Newer wins.** Results come out of order (a slow listing ending after a
 delete it raced): each change is stamped (a listing with when core took its
@@ -88,7 +91,9 @@ snapshot of the session's machine.
 - **Its header**: the session its actions run through (**Act as**), the
   machine's search, **Show deleted**, and **Auto-list**: with it on,
   entering a folder never listed lists it (its `list_dir`, once while the
-  tab shows it). Off by default.
+  tab shows it), and entering the machine's roots while none holds a
+  volume lists its volumes (its [`list_volumes`](../task-results-and-actions/#list_volumes),
+  the same way). Off by default.
 - **Its path** as crumbs (from the machine's roots), and a folder tree beside
   the table: folders open as they are expanded, from core; opening a folder
   opens the tree on the way to it.
@@ -97,7 +102,12 @@ snapshot of the session's machine.
   sorted by core, filtered by a search, as every table: a folder of 100 000
   entries reads as one of 100.
 - **Freshness**: "listed 3 h ago by #46 (root)", or "never listed: only what
-  other tasks put here", on every folder.
+  other tasks put here", on every folder; at the roots, "volumes listed 3 h
+  ago by #46 (root)", or "volumes never listed".
+- **Volumes**: a volume's path (a drive, a mount point) shows its kind's icon
+  (fixed, removable, optical, network, RAM), its label and space beside its
+  name ("System · 35 GB free of 79 GB", "No media"), and the rest on hover;
+  in the tree too.
 - **Listed or not**: a folder listed shows amber, in the table and the tree;
   one never listed (known only as the way to another entry) grey and dashed;
   one a task could not read, a red lock, its line saying why.
@@ -120,7 +130,8 @@ with it where they left it.
 
 The same as a listing's (see [dir_listing's view](../task-results-and-actions/#view)),
 run as tasks of a session of the machine: **Refresh** (the folder's
-`list_dir`, with the command picked for the session in its console),
+`list_dir`, with the command picked for the session in its console; at the
+machine's roots, its `list_volumes`),
 **Upload here** and **Walk from here** (the folder), and in an entry's menu
 **Open**, **List directory**, **Walk from here** (a folder and those under
 it, [`walk_dir`](../task-results-and-actions/#walk_dir)), **Download**,

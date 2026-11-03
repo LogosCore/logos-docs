@@ -76,6 +76,7 @@ A command names them in the [build schema](../minion-build/#commands):
 | [`file_upload`](#file_upload) | A file core sent the minion: where it went | The upload's progress, then where and whether it checked out |
 | [`file_stream`](#file_stream) | A file the minion streamed: which one, how big | Download and a curl line, the stream's progress |
 | [`dir_walk`](#dir_walk) | Where a walk through a directory stands (its listings go to the file browser) | Its progress, Open in File Browser |
+| [`volumes`](#volumes) | The host's volumes: its drives, its mounts (each a folder of the file browser) | A table of them: kind, file system, space |
 
 | Action | Core gives | Needs result | Run from |
 |---|---|---|---|
@@ -86,6 +87,7 @@ A command names them in the [build schema](../minion-build/#commands):
 | [`delete_path`](#delete_path) | `path` (string), `recursive` (bool) | none | a listing's entry: Delete |
 | [`stream_file`](#stream_file) | `path` (string) | `file_stream` | a listing's file: Stream |
 | [`walk_dir`](#walk_dir) | `path` (string) | `dir_walk` | a listing's or the file browser's folder: Walk from here |
+| [`list_volumes`](#list_volumes) | nothing | `volumes` | the file browser's roots: Refresh, and once by itself |
 | [`switch_connection`](#switch_connection) | `conn` (int) | none | a session's connection: Switch to |
 
 More come as commands need them (a process list, a screenshot); each gets
@@ -172,8 +174,9 @@ For a command with a result, core:
    the problem above it. The minion gets no error: it delivered the part,
    and only its factory can fix the shape.
 2. **Joins the parts by the result's rule** ([dir_listing's](#parts): its
-   entries appended; [dir_walk's](#dir_walk): the latest part), in `seq`
-   order, instead of the generic one.
+   entries appended; [dir_walk's](#dir_walk): the latest part;
+   [volumes'](#volumes): the generic one, their volumes appended), in `seq`
+   order.
 3. **Shows it with the result's view**, with the raw JSON a toggle away.
 
 A task keeps the result its command had when it was queued.
@@ -602,6 +605,70 @@ listing's folder, and in the file browser on a folder or the folder shown.
   `max_folders` 10 000; 0 for either is no limit).
 - **The result is a `dir_walk`.** The file browser shows the walk's folders
   as their listings come, the folder walked marked "walking…".
+
+## volumes
+
+The host's volumes: the result of a command that says what file systems
+the host has (BOB's `volumes`). On Windows, its drives, `A:` to `Z:`, its
+mapped network drives with them; on Linux, the file systems mounted where
+the minion sees them (a container's own), less the kernel's own (`/proc`,
+`/sys`, cgroups) and the like:
+
+```cddl
+volumes = {
+  sep: "/" / "\\",       ; the host's path separator, on every part
+  ? volumes: [* volume], ; some of them, in the host's order
+  ? x: { * tstr => any },
+}
+
+volume = {
+  path: tstr,            ; where its files are, absolute, as the host writes
+                         ;   it: a drive's root "C:\\", a mount point "/boot"
+  kind: tstr,            ; fixed, removable, optical, network, ram or other
+  ? device: tstr,        ; what it is mounted from: "/dev/sda1",
+                         ;   "\\\\server\\share"
+  ? label: tstr,         ; its name, where it has one
+  ? fs: tstr,            ; its file system, as the host names it: NTFS, ext4
+  ? size: uint,          ; bytes; left out where the host does not say
+  ? free: uint,          ; bytes the minion's user may still write
+  ? read_only: bool,     ; mounted, or made, read only
+  ? no_media: bool,      ; a drive with nothing in it (an empty DVD drive or
+                         ;   card reader): no fs, size or free
+  ? x: { * tstr => any },
+}
+```
+
+On the wire: `sep` 1, `volumes` 2, `x` 3; a volume's `path` 1, `kind` 2,
+`device` 3, `label` 4, `fs` 5, `size` 6, `free` 7, `read_only` 8,
+`no_media` 9, `x` 10.
+
+- **In parts, if it takes several** (a host with many mounts, a connection
+  that carries little: BOB's keep to half a message each, as a listing's
+  pieces do). Core joins them by the generic rule, the volumes appended in
+  `seq` order (`Volumes`, `ReadVolumes` in the protocol package). Every
+  path is checked absolute for the host's `sep`.
+- **A kind a later version adds** reads as `other`.
+- **The file browser takes them** when the task ends done
+  ([file browser](../file-browser/#what-feeds-it)): each volume's path is a
+  folder there holding its volume, a Windows drive one of the machine's
+  roots, and a volume the machine no longer has (a drive taken out) loses
+  it.
+- **Its view** is a table: each volume's kind (an icon), path and label,
+  file system, how full it is ("12 GB free of 64 GB", a bar), and what it
+  is mounted from, with **Open in File Browser** on each one that has a
+  medium.
+
+## list_volumes
+
+Lists the host's volumes: what the file browser's roots run, through the
+tab's session.
+
+- **Core gives** nothing: a command of it takes no param core must give,
+  and its own have defaults.
+- **The result is a `volumes`.** At the machine's roots, **Refresh** runs
+  it, and so does entering the roots while none holds a volume (with
+  Auto-list on, once while the tab shows them): a Windows machine shows
+  all its drives, not only those something was listed on.
 
 ## file_stream
 
