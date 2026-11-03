@@ -71,7 +71,7 @@ core-message = {        ; core → minion
                         ;   unix seconds; on every message with id
 }
 
-minion-item = stage / hello / sleep_update / conn_update / get_tasks / max_tasks / result / chunk / ack / err
+minion-item = stage / hello / sleep_update / conn_update / get_tasks / max_tasks / feedback / result / chunk / ack / err
 core-item   = stage_response / hello_response / rehello / task / cancel / max_tasks / resume / poll / chunk / ack / err
 
 msg-id  = bstr .size 16
@@ -248,6 +248,7 @@ given in its CDDL on the page that defines it.
 | | | 15 | [`resume`](../tasks-and-results/#resuming-a-task) |
 | | | 16 | [`poll`](../tasks-and-results/#coming-back-sooner) |
 | | | 17 | [`max_tasks`](../tasks-and-results/#max-tasks) |
+| | | 18 | [`feedback`](../sessions/#feedback) |
 
 **The message**: `v` 0, `id` 1, `re` 2, `items` 3, and core's `at` 4, as [above](#message).
 

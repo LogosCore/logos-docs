@@ -360,6 +360,55 @@ conn_update = {
   carries it. A rehello through another connection moves `conn` too, without
   a change recorded.
 
+## Feedback
+
+A minion tells its operators what goes wrong on its side, what it would
+otherwise only log on the host, with `feedback` items:
+
+```cddl
+feedback = {
+  0: 18,                ; t: feedback
+  1: bstr .size 8,      ; id: the minion's own, random: core keeps one entry
+                        ;   per id in a session, so a message sent again
+                        ;   adds nothing
+  2: uint,              ; level: 1 warning, 2 error; a later one reads as a
+                        ;   warning
+  3: tstr,              ; msg: what happened, for people, 1 KiB at most
+  ? 4: tstr,            ; code: the factory's short tag for the kind of
+                        ;   problem ("checkin_failed"): lowercase letters,
+                        ;   digits, _ - and ., 64 bytes at most
+  ? 5: task-id,         ; task: the task it is about
+  ? 6: uint,            ; at: when it happened, unix seconds
+  ? 7: uint,            ; count: how many times (the minion folds repeats)
+}
+```
+
+- **Any minion may send it, in any message**, under its session, on every
+  connection kind: with a check-in, over its WebSocket or TCP connection,
+  in a page's answer to core's call. Core answers nothing: the message that
+  carried it went, and one sent again adds nothing.
+- **Core keeps it with the session**: the newest 1,000 entries, gone with
+  the operation. The session counts the errors and warnings that came
+  since someone last marked them read; read is the same for everyone of
+  the operation (**Mark all read**).
+- **Operators see it** in the Sessions table's **Feedback** column (unread
+  errors and warnings, sorted and filtered by core), in the session's
+  **Feedback** tab (newest first, paged, by level and by a word of its
+  message or code), as counts on the session's console tab, and on the
+  task it is about.
+- **A polling minion sends it with its next check-in**, at once rather
+  than on its schedule.
+
+BOB sends what it would only log: check-ins that failed two or more times in
+a row (said once one works again, with the first error: `checkin_failed`),
+its WebSocket closing (`ws_closed`, not when the minion closes it), a
+connection to its TCP listener past `max_connections` (`tcp_refused`), core
+not giving the persisted session it claimed (`session_not_claimed`), and a
+command that crashed (`task_panic`, an error: the task fails, the minion goes
+on). It keeps at most 100 unsent, folds the same one into a count, and says
+how many it dropped. Its `feedback` command (op 14) sends a warning or an
+error of the operator's words, to try it.
+
 ## When an exchange fails
 
 A session's keys live only in the process that staged it, so starting over
