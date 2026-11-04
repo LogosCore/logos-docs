@@ -94,8 +94,10 @@ and [Channel ↔ Core: Connections](../contracts/channel-core-connections/).
 - Listening minions: `logos-tcp-channel` dials a minion that listens on a
   TCP port, directly or through a proxy (`bind-persistent`), and relays its
   length-prefixed frames over a connection socket.
-- DNS, SSH or GitHub channels: possible, none built yet. A DNS channel
-  would say a small `max_message` for its kinds.
+- SSH: a [draft](../contracts/agentless-channels/) in which the channel
+  acts as the minion, with nothing installed on the server.
+- DNS or GitHub channels: possible, none built yet. A DNS channel would say
+  a small `max_message` for its kinds.
 
 ### Notes
 

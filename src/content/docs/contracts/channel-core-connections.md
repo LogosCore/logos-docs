@@ -466,8 +466,11 @@ build schema may not declare them). They open and close the session's
 target's connection, as the target's Connect and Disconnect do, and are kept
 as tasks: running while the open waits for the channel, then done
 ("connected", "disconnected", "already connected") or failed with the
-target's state ("unreachable: …"). Nothing goes to the minion, and they
-cannot be cancelled. A session with no target refuses them.
+target's state ("unreachable: …"). They go by whether the target has a
+connection open now, not by its stored state: a `disconnect` closes what is
+open, and a `connect` with a connection open says "already connected".
+Nothing goes to the minion, and they cannot be cancelled. A session with no
+target refuses them.
 
 A session that closes does not close the connection: the minion hears
 `session_closed` over it and stages again, as any minion does, and the
@@ -477,13 +480,20 @@ target links to the new session.
   everyone in the operation sees it open and can use it.
 - **An open that fails** puts its failure (unreachable, timeout, TLS, other)
   on the target; `on-demand` and `always` retry with a target's backoff,
-  `manual` does not. An open the channel says worked, whose socket closed
-  before the answer (the minion hung up at once), fails too.
+  `manual` does not. An open the channel says worked fails too when its
+  socket closed before the answer (the minion hung up at once), or took the
+  open and did not become the target's within 5 s (its upgrade failed).
 - **Correlation**: core records the open before its frame goes out; the
   socket that names it (`Logos-Open-Request`) takes it, and a second socket
   naming it, or one naming an open core is not waiting for, is refused
-  (409). The socket comes before the answer, so the connection is the
+  (409). The socket takes the open before its WebSocket upgrade and becomes
+  the target's right after it, and the channel answers once its side of the
+  upgrade is done: the answer can outrun the socket, so core waits for the
+  socket that took the open before it decides. The connection is the
   target's from its first frame.
+- **The minion speaking is the proof**: a target whose minion speaks over
+  its connection is connected, so a state an open left wrong is put right
+  at the minion's first message.
 - **The session shows its connection**, not late or lost: a closed connection
   is closed on purpose. It is `connected`, `connecting`, `not connected`, or
   `unreachable since` when opens fail; while connected, the socket's pings
