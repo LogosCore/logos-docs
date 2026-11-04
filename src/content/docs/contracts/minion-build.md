@@ -279,6 +279,36 @@ does when they build it: a minion built for one job carries nothing more.
   the session's Tasks do ([Max tasks](../minion-messages/tasks-and-results/#max-tasks)).
   A schema that declares any of the four is refused
   (`protocol.IsCoreCommand`), and factories do not implement them.
+- A console line that starts with `/` is **the console's own**, run in the
+  browser for the operator typing it: never a task, so no minion and no
+  session's history sees it. A command's `id` starts with a letter, so no
+  build's command can be one. `/fx [lightning|inferno|off]` sets the
+  prompt's effect, kept with the operator's sessions layout (`promptFx`) for
+  every session; none shows when the system asks for less motion. Text
+  pasted or cut, more than a letter at once, plays along the text it moved,
+  as if its letters were typed or deleted at once. Lightning: a charge that
+  builds as keys come fast (as inferno's heat) and runs down in a couple of
+  seconds, crackling across the line's text while it is up (short arcs over
+  its letters, sparks popping off them, more and longer the higher it is),
+  not piled on the key; a bolt at the caret as a key is typed, a little
+  taller and forked as the charge builds; arcs in a set (two to five, each
+  wandering, creased and bright its own way) across a word as it is
+  completed (Tab) and sweeping along a line recalled from the history (↑
+  back, ↓ on; past the oldest, a fizzle that halves the charge), and the
+  same sweep along text pasted (its sparks flying up) or cut (falling); a
+  strike of two to four bolts from the top of the console as a line runs,
+  its flash soft and never three a second. Inferno: fire as the On Fire mark
+  burns it (the Doom fire, in its colors, painted crisp) along the bottom of
+  the console, but quick, as light stuff burns: small puffs that flash up
+  and are gone in a fifth of a second, heat coming into it where things
+  happen: a puff at the caret as a key is typed, taller as the heat builds
+  (keys coming fast, cooling in a couple of seconds), a low bed of fire
+  along the bottom while it is hot; a fuse burning along a completed word or
+  a recalled line; smoke and ash for a key deleted; flames off the letters
+  of text pasted, heating as typing does; flame, smoke and ash where text
+  cut was; a line that runs flashes all at once, its letters glowing hot and
+  burning out in a white-hot puff off the whole line; steam for one that
+  does not read, which halves the fire and the heat.
 - **A task names its command by `op` and its args by their params' `num`**
   ([Tasks](../minion-messages/tasks-and-results/#tasks)), so a minion needs
   no command or param names: it dispatches on numbers the factory compiled
