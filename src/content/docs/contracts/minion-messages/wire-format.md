@@ -98,9 +98,11 @@ kind](../../../module-types/#connection-kinds):
 | `bind-call` | core | `id` (and `at`) | `re` |
 | `bind-persistent` | either side | `id` | `re` |
 
-A minion message with `re` answers one core sent: core takes it only over
-the connection socket where it waits for that answer, and never through
-the sync call, where a minion only starts exchanges.
+A minion message with `re` answers one core sent: core takes it over any
+connection socket of the session, once, within 10 minutes of core's
+message (the minion may have connected again), and never through the sync
+call, where a minion only starts exchanges. An answer gets no reply: what
+must arrive goes in a message the minion starts, whose reply says it did.
 
 ## CBOR rules
 

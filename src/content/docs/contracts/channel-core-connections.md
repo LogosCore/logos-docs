@@ -74,10 +74,25 @@ Each binary frame is one message: the [sync call](../channel-core-sync/)'s
 values (message id, the id it is sent under, the peer) and the ciphertext,
 raw. Both sides send on it whenever they have something: core starts
 exchanges (tasks, `cancel`) as well as answering. The socket is the
-connection: while it is open, core shows the session **connected**; when
-either side closes it, the connection is gone. If only the socket drops (core
-restarts), the channel opens a new one for the minion's connection, which
-does not notice.
+connection, one socket for each minion connection (never one for several
+minions' connections): while it is open, core shows the session whose own
+connection it is **connected**; when either side closes it, the connection
+is gone, at both ends.
+
+- **The channel closes the socket when the minion's connection ends**, or
+  stops answering the channel's own liveness check (the HTTP channel pings
+  the minion every 30 seconds and drops one silent for its
+  `ws_idle_timeout`). Core's pings reach the channel, not the minion: the
+  socket staying open is the channel saying the minion is there, so a
+  channel that cannot tell a dead minion connection from a quiet one must
+  not keep its socket open for it.
+- **The channel closes the minion's connection when the socket closes**
+  (core restarted, or closed it): the minion connects again, and its first
+  message ties the new socket to its session
+  ([lifetime](#reverse-persistent-connections-lifetime-and-presence)).
+- **A socket no open session uses for 2 minutes closes**: nothing spoke
+  over it (a minion speaks first, at once), or the sessions it served
+  closed and their minions did not start over on it.
 
 - **A request over a socket always gets its reply**, empty when core has
   nothing to say (through the sync call that is the 204): the minion knows
@@ -634,6 +649,14 @@ its own, each sent under its own id.
 
 - **Core keeps, for each session, the open connections that carried its
   messages**; a connection serves every session it carried a message of.
+- **A connection is its first speaker's own**: the minion whose connection
+  it is speaks first. That session is `connected` while the connection is
+  open, and checked in by it. The sessions it relays (a pivot's) are
+  reached over it, but are not connected: each message of theirs checks
+  them in, and they go late and lost by their own schedule, as if they
+  checked in through calls. When the session whose own it is closes, or
+  another process takes it (`session_closed` or `session_replaced` over the
+  connection), the next session to speak over it is its own.
 - **A push goes on the one that carried the session's latest message**; if
   that send fails (its socket is gone), on the one before; if none is left,
   what was to go waits for the next exchange: a check-in's reply, or a call.
@@ -642,7 +665,12 @@ its own, each sent under its own id.
   acknowledged goes again on whichever connection comes next.
 - **Core does not close a session's older connections**: a dead one goes when
   its pings stop, a live one may be a second path. A session keeps 8 at
-  most; a ninth closes the oldest.
+  most: a ninth no longer reaches it over the oldest, which closes when no
+  other session uses it (a pivot's own connection stays).
+- **An answer to core's push** (`re`) is taken over any connection of the
+  session, once, within 10 minutes: a minion that connected again still
+  answers. An answer gets no reply, so what must arrive goes in a message
+  the minion starts, whose reply says it did.
 - **Calls go on alongside**: a `reverse-call` request is answered as always
   while persistent connections are open, tasks in its reply only with
   `get_tasks`. The [allowance](#get_tasks-on-a-persistent-connection) is a
@@ -655,8 +683,10 @@ at once when it drops, others connect on their schedule, stay a while and
 leave. While a socket is open, the connection itself says the minion is
 there, better than check-ins do.
 
-- **Connected.** While a persistent connection serving it is open, a session
-  is `connected`, last seen now: the socket's pings say it is alive.
+- **Connected.** While a connection of its own is open (one it was the
+  first to speak over), a session is `connected`, last seen now: the
+  channel keeps the socket open only while the minion's connection lives
+  ([connection sockets](#three-paths)).
 - **Check-ins are optional.** On an open persistent connection a minion
   sends only what it has (output, acks, a new `get_tasks`): core pushes
   tasks and cancels as they come, so no scheduled check-in is needed for
@@ -678,10 +708,13 @@ there, better than check-ins do.
   hour.
 - **Quiet is not idle.** A channel's idle timeout counts answered pings on a
   connection that carries sessions, so a minion waiting for tasks is not cut
-  off. (The HTTP channel's `ws_idle_timeout` counts messages only today.)
-- **Disconnect** closes the connection's socket; the minion may connect
-  again, as its build does. Closing the session is what stops it: every
-  message after gets `session_closed`.
+  off (the HTTP channel's `ws_idle_timeout` counts them).
+- **A session closed** (its operation deleted) is told within 30 seconds
+  over its open connections (`session_closed`, pushed as a reply would
+  carry it), which no longer serve it, and every message after gets the
+  same. Core closes a connection its minion did not start over on 2
+  minutes later. Nothing else closes a `reverse-persistent` connection from
+  core's side: the minion decides when it connects.
 
 | | Open | Closed |
 |---|---|---|

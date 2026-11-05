@@ -302,7 +302,7 @@ depends on the minion's connection:
 | Connection | A check-in | Late and lost |
 |---|---|---|
 | `reverse-call` | each message the minion sends | by its schedule |
-| `reverse-persistent` | each message, and the open connection itself (its pings) | while connected, never; after, from when it closed, by its schedule: how soon it will be back |
+| `reverse-persistent` | each message, and its own open connection (one it spoke over first); a session another minion's connection relays, its messages only | while connected, never; after, from when it closed, by its schedule: how soon it will be back |
 | `bind-call` | each call that reaches the page | by its schedule, when the page says one (core then calls on it); never without one |
 | `bind-persistent` | each message, and the open connection itself | never: the connection says whether the minion is there (connected, not connected on purpose, unreachable since) |
 
@@ -342,7 +342,12 @@ starts, since the connections went with the process before.
 A minion built with several connections uses one at a time, and says which:
 in its `hello` (`conn`), and with a `conn_update` whenever it moves to
 another, whatever moved it: an operator's [`switch_connection`](../../task-results-and-actions/#switch_connection),
-a fallback after failures, its own logic.
+a fallback after failures, its own logic. A `hello` that names none is
+taken to come through the connection that carried it, when only one of the
+build's fits: the build's only connection, else its only one of the kind
+and the channel the message came through (a target's, for a `bind`
+minion). When more fit, the minion has to say: core would not know its
+connection, nor that connection's `max_message`.
 
 ```cddl
 conn_update = {
