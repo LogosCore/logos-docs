@@ -34,7 +34,10 @@ id. The session then keeps the build's own keys:
   staging exists. Core finds the keys by the id: a session's, a temporary
   id's or a build's.
 - **Under a build id** core takes only `stage` or `hello`; **under a
-  temporary id** only `hello`. Anything else there gets `bad_message`.
+  temporary id** only `hello`. Anything else there gets `bad_message`. The
+  exception is a `bind-call` minion's answer to core's `rehello` under the
+  build id: its `hello` opens the session, and the rest of the answer is
+  taken under that session, as any later answer is.
 - **A build's own keys stay valid** after staging: the same build may run as
   several processes, on one host or several, and each stages on its own.
 

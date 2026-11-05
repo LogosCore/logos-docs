@@ -21,7 +21,7 @@ sequenceDiagram
     participant C as Core
     participant CH as SSH channel (the minion)
     participant S as SSH server
-    C->>CH: call {target's values, rehello}, unsealed
+    C->>CH: call {target's values, rehello, the build's keys}
     CH->>S: SSH login (a password or a key)
     CH->>S: uname, id; /etc/machine-id over SFTP
     CH->>C: answer {hello}
@@ -32,47 +32,38 @@ sequenceDiagram
 
 | Part | What changes |
 |---|---|
-| Protocol | The `none` crypto suite; `agentless` on a `bind` kind of a connection schema; the link failure kinds `login` (5) and `host_key` (6); the machine id source `ssh-host-key` (11) |
-| Core | `none` builds (no keys, no sealing, no staging), taken only where their channel is the minion; core speaks first on an agentless kind's connection socket; the session's connection taken from its target; the failures `login` and `host_key` shown as refused, not retried, for calls and opens; "unencrypted" on such builds and sessions |
+| Protocol | `agentless` on a `bind` kind of a connection schema; `keys` (key 11) on a call or an open to such a kind: the keys of its id; an `open`'s `under` (key 10): the id the minion speaks under; the link failure kinds `login` (5) and `host_key` (6); the machine id source `ssh-host-key` (11); a hello's `pid` optional (0: no process of its own) |
+| Core | a call or an open to an agentless kind carries its id's keys (the build's under the build id, the session's under the session id); an `open` says the id the minion speaks under (core never speaks first); the session's connection taken from its target; the failures `login` and `host_key` shown as refused, not retried, for calls and opens |
 | SSH module | `logos-ssh`, new: the `ssh` factory, and the `ssh` channel with its own minion (for calls as the Dumbo page answers, for a persistent connection as a listening minion) |
 | Unchanged | Targets and their states, sessions, tasks, results, file transfers, streams, the file browser, the console |
 
-## The `none` suite
+## Keys for the channel
 
-- **A factory declares it**: `"crypto": "none"` in its [build
-  schema](../minion-build/#the-build-schema). Its minions and core exchange
-  messages unsealed.
-- **Explicitly, never by leaving `crypto` out.** A schema without a suite
-  registers and builds today, but core opens none of its minions' messages,
-  and that stays so: an empty suite is a forgotten one, not a choice.
-- **No keys.** Core generates none; a build request's `crypto` names only
-  the suite (`{"suite": "none"}`), and the artifact holds nothing secret.
-- **Frames keep their shape.** Where a sealed message goes (the `call`'s
-  key 4, the `answer`'s key 4, a connection socket frame's key 2: [formats](../channel-core-connections/#the-control-link-and-connection-sockets-formats)),
-  the message's CBOR goes as it is, under its id as before.
-- **No staging.** Under a `none` build's id core takes only `hello`; a
-  `stage` gets `bad_message` ([Staging](../minion-messages/sessions/#staging)).
-  The session has no keys.
-- **Only where the channel is the minion.**
-  - A build of a `none` factory may have only connections of
-    [agentless kinds](#agentless-kinds); core refuses any other
-    (`validation_failed`). No unsealed message crosses a transport that
-    anyone but the channel reaches.
-  - Core takes an unsealed message under a `none` build's or session's id
-    only in an `answer` to its own `call`, and on a connection socket that
-    an `open` for one of that build's targets brought. A sync call under
-    one gets 422, as a frame core cannot open.
-  - Core never sends one to a kind that is not agentless, or no longer is:
-    a target of such a kind shows **needs editing** and is not called.
-- **The UI says so**: "unencrypted" on such builds and their sessions, and
-  on the factory's page.
+Every build is sealed the same way, whatever its channel: a factory
+declares its suite (`aes-256-cbc-hmac-sha256`), core generates each build's
+keys, and core seals every message with the keys of the id it goes under.
+What an agentless kind changes is who opens the messages at the other end:
+
+- **The keys go with every call and open.** A `call` or an `open` to an
+  [agentless kind](#agentless-kinds) carries `keys` (key 11): the suite and
+  the keys of its id (the build's under the build id, the session's under
+  the session id; an `open`'s are those of its `under`). The channel opens
+  core's message and seals the minion's answer with them, as a minion
+  would. It keeps nothing between calls, so they come every time.
+- **Only to agentless kinds.** Any other channel never sees a key, and
+  relays sealed frames it cannot read, as channels do. A channel from
+  before `keys` decodes the frame and skips the key.
+- **A minion that does not stage keeps its build's keys** as its
+  session's: the SSH minion's session keys are its build's, and the
+  factory's artifact holds none of them (core keeps them).
+- **Everything else is unchanged in core**: the same sealing, the same
+  sessions, the same checks, for a page and for an SSH server alike.
 
 The seal does two things: it hides a message, and its HMAC shows that the
 minion sent it, since ids travel in the clear. Between core and an
-agentless channel there is nothing to hide from the channel, which acts on
-the plaintext anyway. And the channel *is* the minion, so what shows that a
-message came from it is the link it came over. Keys sent to it with the
-message would protect nothing that the link does not.
+agentless channel, which holds the keys, the seal hides nothing from the
+channel; it still means only a holder of the keys (core and that channel)
+can speak under a build's or a session's id.
 
 ## Agentless kinds
 
@@ -85,7 +76,9 @@ A channel says it per kind, in its [connection schema](../minion-connection/#the
 - **`agentless`**: optional, `false` by default, for `bind-call` and
   `bind-persistent` only (core refuses it on a `reverse` kind). It means
   the channel answers for the minion: no minion runs on the target, and the
-  channel reads and writes the messages of that kind.
+  channel reads and writes the messages of that kind. Core therefore gives
+  it the keys of each call's and open's id ([keys](#keys-for-the-channel)):
+  that is all `agentless` changes in what core does.
 - **`fields`** are what a build's connection gives the channel (how it
   calls), kept in endpoints as for any `bind` kind; nothing is built into
   a minion, as there is none. **`target`** is what each target gives it.
@@ -99,15 +92,15 @@ On such a kind:
   nothing between calls; walks and transfers resume through their `ctx`;
   a task ends within the call's deadline.
 - **`bind-persistent`** goes as for a listening minion ([opening and closing](../channel-core-connections/#bind-persistent-connections-opening-and-closing)),
-  opened by the target's policy, except that **core speaks first** on the
-  new socket, because the minion keeps nothing from one connection to the
-  next: `rehello` under the build id when the target has no session yet,
-  otherwise a message under the session id. The minion answers a `rehello`
-  with its `hello` alone: under a build id core takes one `hello` or one
+  opened by the target's policy, the minion speaking first. It keeps no ids
+  of its own, so the `open` says the id it speaks under (`under`, key 10):
+  the target's open session's id, else the build's. Its first message is
+  its `hello`, alone: under a build id core takes one `hello` or one
   `stage` and nothing else (`protocol.ValidateBuildMessage`), and refuses
-  more with an `err`. Its next message, under the session id the
-  `hello_response` gives, carries `get_tasks`, which sets the allowance, and
-  core pushes from then on, as on any persistent connection. A minion whose
+  more with an `err`. A hello under the build id opens a session; under
+  the session id it says the session's host again. The next message, under
+  the session id, carries `get_tasks`, which sets the allowance, and core
+  pushes from then on, as on any persistent connection. A minion whose
   hello core refuses closes the connection, saying why: it has nothing to
   do on it. The connection to the server lives as long as the
   socket: when either closes, so does the other.
@@ -130,7 +123,9 @@ factory sharing one would replace each other.
 
 Its build schema:
 
-- `crypto`: `none`. No `max_tasks`: a minion that keeps nothing between
+- `crypto`: `aes-256-cbc-hmac-sha256`, as any factory's. Its builds'
+  keys stay with core, which gives them to the SSH channel with each call
+  and open; the artifact (a description) holds none. No `max_tasks`: a minion that keeps nothing between
   calls could not keep a limit core sets. Through `bind-call` a call
   brings 4 tasks at most; on a persistent connection the minion runs 4 at
   once, each in an SSH channel of its own, and its `hello` says so
@@ -145,15 +140,15 @@ Its build schema:
 
   | Command | Action | Result | Over SSH |
   |---|---|---|---|
-  | `shell` | | | The command line in `/bin/sh`, in an exec channel (as BOB's runs it on Unix); its output and exit status. A stop kills its process group: what it started too |
-  | `ls` | `list_dir` | `dir_listing` | An SFTP directory read |
-  | `walk` | `walk_dir` | `dir_walk` | SFTP directory reads, resumed through `ctx`; `one_fs` by the server's mount table (`/proc/self/mounts`, else `df`), as SFTP says no file systems |
+  | `shell` | | | The command line in `/bin/sh`, in an exec channel (as BOB's runs it on Unix); its output and exit status. A stop kills its process group: what it started too. On a [Windows server](#windows-servers), the line as typed in its default shell, and a stop ends all it started |
+  | `ls` | `list_dir` | `dir_listing` | An SFTP directory read (a Windows server's with its attributes, from cmd's `dir`) |
+  | `walk` | `walk_dir` | `dir_walk` | SFTP directory reads, resumed through `ctx`; `one_fs` by the server's mount table (`/proc/self/mounts`, else `df`), as SFTP says no file systems; on Windows, by drive |
   | `download` | `download_file` | `file_download` | SFTP reads, a chunk a message |
   | `stream_download` | `stream_file` | `file_stream` | SFTP reads, as the downloader takes them |
   | `upload` | `upload_file` | `file_upload` | SFTP writes |
   | `stream_upload` | `upload_stream` | | SFTP writes, as the bytes come |
   | `rm` | `delete_path` | | SFTP removes, as BOB's `rm` |
-  | `volumes` | `list_volumes` | `volumes` | `df -kPT` (GNU's, with types), else `df -kP` |
+  | `volumes` | `list_volumes` | `volumes` | `df -kPT` (GNU's, with types), else `df -kP`; on Windows, the drives |
 
   No `sleep` and no `exit`. Without a schedule, core calls only when it
   has something to send. A session ends when an operator archives it, and
@@ -194,7 +189,8 @@ Its connection schema (`ssh`, version 1), both kinds agentless:
   | logged in | `hello` | connected |
 
 - **The `hello`** ([Hello](../minion-messages/sessions/#hello)), from one
-  exec of `uname -snm; id -un; id -u` and an SFTP read:
+  exec of `uname -snm; id -un; id -u` and an SFTP read (a Windows server's
+  [as below](#windows-servers)):
   - `os` and `arch` from `uname` in Go's names (`Linux` `linux`, `x86_64`
     `amd64`, `aarch64` `arm64`); `host` the node name; `user` the login's;
     `integrity` `root` for uid 0, else `user`;
@@ -204,23 +200,27 @@ Its connection schema (`ssh`, version 1), both kinds agentless:
     machine in the file browser; else `ssh-host-key`: the SHA-256 of the
     host key, in hex (core lowercases a machine id, which base64 would not
     survive);
-  - `pid` 0: it has no process of its own on the server. A hello needs a
-    pid, except in an unsealed message: core checks that one with the
-    protocol's `HelloItem.ValidateAgentless`, which takes 0. `version` the
-    module's, `max_tasks` 4;
+  - `pid` 0: it has no process of its own on the server (a hello's pid is
+    optional, 0 for none, for any minion). `version` the module's,
+    `max_tasks` 4;
   - `x`: `ssh_server`, the version string the server sent
     (`SSH-2.0-OpenSSH_9.6p1 …`), and `host_key`.
 - **Tasks** run each in an SSH channel of its own. Over `bind-call` a
   call's tasks run in it, one after another, as the Dumbo page runs them:
-  a task ends within the call's
-  deadline (the channel's request timeout), a `shell` still running then
-  stopped and failed with its output so far ("a long command needs a
-  persistent connection"), and a task waits for the next call, not acked,
-  once the answer has used half its room. Over `bind-persistent` the
+  a task ends within the call's deadline (the shorter of core's, 2
+  minutes as the SSH channel declares no `max_call`, and the channel's
+  `call_timeout`), a `shell` still running then
+  stopped and failed with its output so far ("stopped at the call's
+  deadline …: a command meant to run longer needs a bind-persistent
+  connection"), and a task after the call's first waits for the next
+  call, not acked, once the answer has used half its room or less than 5
+  seconds of the call are left. Over `bind-persistent` the
   minion runs up to 4 at once, a task takes as long as it
   takes, and the connection closing stops the tasks on it.
 - **Nothing waits on a server for good.** A call lives as long as its
-  context: core's deadline, and the control link (channel-core cancels a
+  context: core's deadline, the channel's `call_timeout` (`CALL_TIMEOUT`,
+  2 minutes by default, live in its management), and the control link
+  (channel-core cancels a
   call's context when the link drops, and opens the link again only once
   its calls returned). Ending the context closes the call's SSH
   connection, so whatever still waits on the server gives up: an SFTP
@@ -229,17 +229,73 @@ Its connection schema (`ssh`, version 1), both kinds agentless:
   leave an open unanswered for good on a connection that went away under
   it. A connection that broke this way is not kept for `call_reuse`.
 
+### Windows servers
+
+Windows's OpenSSH (Win32-OpenSSH) is served as BOB's minion runs on
+Windows: the same commands, with the paths, results and stops it gives
+there.
+
+- **Telling one**: the server's version says so (`OpenSSH_for_Windows`),
+  or its SFTP says a drive's folders (`/C:/Users/me`). Paths follow what
+  SFTP says; the shell, the hello and the volumes follow the server.
+- **Paths** are Windows's (`C:\Users\me`, `\\server\share\x`), which core's
+  file browser tells apart whatever their case: `/` read as `\`, a drive
+  alone its root (`C:` is `C:\`), `\x` on the login's drive, and the rest
+  from the login's folder. Each SFTP call takes its path in SFTP's form
+  (`/C:/Users/me`). The drive letter is upper case; the rest is kept as
+  typed.
+- **Listings**: Windows's SFTP says no owners, modes of its own making, and
+  a junction (`Application Data`, `Documents and Settings`) as the folder
+  it points to, which it follows. Each listing therefore also asks cmd's
+  `dir` of the folder, in UTF-8 (`chcp 65001`), while SFTP lists it. The
+  entries' modes are their attributes (read-only, hidden, system, archive,
+  reparse point), as BOB sends them and core shows them
+  (`-a-h--`). A hidden attribute makes an entry hidden, as a leading dot
+  does. A junction is a link to its target, which walks do not enter. A
+  folder whose path names a variable (`%TEMP%`, which cmd would expand)
+  lists without them.
+- **Removing** goes as Go's `os.RemoveAll` on Windows: a junction or a link
+  as itself, never what it points to; a read-only file's attribute cleared
+  first. A folder whose junctions cmd cannot tell apart is not removed
+  through.
+- **`shell`**: the line as typed, in the server's default shell. Windows's
+  OpenSSH runs `cmd.exe /c "<line>"`, which reads a line as BOB's
+  `cmd.exe /d /s /c` does, unless its `DefaultShell` names another. The
+  output is as the console's code page writes it. A stop is a `KILL`
+  signal, on which Windows's OpenSSH ends the command and all it started;
+  closing the channel alone would leave them running, past the connection
+  too.
+- **The `hello`**, from one PowerShell script (`-EncodedCommand`, within
+  what constrained language mode allows, each value said as hex of its
+  UTF-16, whatever the console's code page): `os` `windows`; `arch` the
+  machine's (`AMD64` `amd64`, `ARM64` `arm64`, `x86` `386`); `host` its
+  DNS name; `user` `DOMAIN\user`; `domain` the domain it is joined to (its
+  DNS name) or its workgroup; `integrity` from the login's mandatory label
+  (`whoami /groups`), as BOB reads its token's: `low`, `medium`, `high`,
+  `system`. The machine id is BOB's on Windows: `smbios-uuid`
+  (`Win32_ComputerSystemProduct`), else `win-machine-guid` (the registry's
+  `MachineGuid`), else `ssh-host-key`. Where PowerShell does not run, cmd
+  says what it can: the host, the architecture, `whoami`, the
+  `MachineGuid`, the label.
+- **`volumes`** are the drives (`Win32_LogicalDisk`): each one's kind by
+  its drive type, label, file system, size and free space, a network
+  drive's share, and an empty drive (a DVD drive with nothing in it) with no
+  media. Where PowerShell does not run, they are the drives SFTP's root
+  lists, with the space `statvfs@openssh.com` says.
+
 ## Trust
 
 An agentless channel is not blind:
 
-- it sees what it carries in the clear: commands, their output, files;
+- it holds the keys of the builds it serves, which core gives it with
+  every `call` and `open`, and so reads what it carries: commands, their
+  output, files;
 - it holds the targets' credentials, which core gives it with every `call`
   and `open`, as it gives any `bind` channel its target's
   [secrets](../channel-core-connections/#the-connection-schema-by-kind).
 
-Run one where you would run an agent. Its link to core carries that
-plaintext and those credentials, so it needs TLS (core behind nginx) and
+Run one where you would run an agent. Its link to core carries those keys
+and credentials, so it needs TLS (core behind nginx) and
 channel authentication: mTLS or a shared secret, planned, not built
 ([HTTP Sync](../channel-core-sync/)). Until channel authentication is
 built, run an agentless channel only where its link to core is private:
@@ -250,15 +306,15 @@ core's Docker network, or a VPN.
 In order:
 
 1. This page.
-2. **Protocol**: the `none` suite, `agentless` on `bind` kinds, the link
-   failure kinds and the machine id source.
+2. **Protocol**: `agentless` on `bind` kinds, `keys` and `under` on calls
+   and opens, the link failure kinds and the machine id source.
 3. **`logos-ssh`** (a new repo): the factory, the channel, and the
    channel's own minion: for calls as the Dumbo page answers them (a
    call's tasks run in it, walks and transfers going on from their ctx),
    for a persistent connection as a listening minion runs (tasks in the
    background, pushed as they come), acting on the server over SSH and
    SFTP (`golang.org/x/crypto/ssh`, `github.com/pkg/sftp`).
-4. **Core**: the suite, agentless kinds, speaking first on their sockets,
+4. **Core**: the suite, agentless kinds, an open's `under`,
    the session's connection from its target, the UI.
 5. **Docs**: the pages this changes (Wire Format, Sessions, Minion Build,
    Minion Connection Schema, Connections, Module Types, Architecture), and
@@ -268,9 +324,6 @@ In order:
 
 - **Channel authentication**: mTLS or a shared secret, needed before an
   agentless channel runs outside core's own network.
-- **Windows OpenSSH servers**: telling one (its `uname` fails, and SFTP
-  paths start with a drive, `/C:/`), its shell (cmd or PowerShell), its
-  paths, volumes and integrity.
 - **A schedule** for SSH targets: periodic logins that show a server is
   still there.
 - **Later**: jump hosts (a target reached through another), tunnels through
@@ -288,10 +341,15 @@ In order:
   core and the channel, and drop every SSH session when core restarts. In
   the channel, the minion protocol stays the only one, and core changes
   little.
-- **Why `none` and not keys.** Keys sent to the channel with each `call`
-  and `open` would travel with the messages they seal: they would protect
-  nothing that the link does not. `none` says what is true, and its rules
-  keep unsealed messages on the one link where that holds.
+- **Why keys, not a suite of no crypto.** A `none` suite was built first,
+  and dropped: it made the SSH factory a special case everywhere in core
+  (unsealed messages, no keys, no staging, its own marks in the UI), while
+  a page and an SSH server are reached the same way. With keys, core seals
+  every message alike, and `agentless` means one thing: the channel gets
+  the keys. The keys travel with the messages they seal over the link, so
+  they hide nothing from whoever reads that link; what they keep is that
+  only core and the channel can speak under a build's or a session's id,
+  which a suite of no crypto gave to anyone who knew the id.
 - **Why still a factory.** A build is a factory's from start to finish:
   offered to one of its instances, made of its schema's commands and flags,
   finished by its artifact, built again from its form. A build that core
@@ -313,6 +371,14 @@ In order:
   would need targets that move between connections and a switch that core
   runs on the minion's behalf. Adding a target on the other connection is
   enough.
+- **Why ask cmd of a Windows listing.** SFTP says a junction as the folder
+  it points to, and follows it: a walk would loop through one that points
+  above it (`AppData\Local\Application Data` is `AppData\Local`), and a
+  removal would reach through one into what it points to. Only Windows
+  itself says which entries are junctions, with the attributes beside
+  them. `dir` says both in one exec, beside the SFTP read: a few tens of
+  milliseconds a folder. PowerShell would say them too, but it takes ten
+  times that to start.
 - **Why the host key as a machine id.** An SSH server's host key is what
   identifies it before any login, and reading it runs nothing. The machine
   id file comes first, so that a machine reached both by a minion and over

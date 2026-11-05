@@ -62,6 +62,8 @@ Declared in `module.register` under `connection`:
 | `kinds.<kind>.fields[]` | Up to 32, with unique keys within the kind, each a field spec exactly as in a [management manifest](../module-management/#fields): `key`, `type`, label, description, group, order, required, default, bounds, pattern, options. `file` is not allowed. |
 | `kinds.<kind>.target[]` | Bind kinds only: what core needs to reach a minion ([bind-call targets](../channel-core-connections/#bind-call-minions-targets-and-sessions)). Built for `bind-call` and `bind-persistent`. |
 | `kinds.<kind>.max_message` | Optional. The largest minion message (CBOR plaintext) the channel carries each way on a connection of the kind, 1 024 to 786 432 bytes; left out, 786 432 (768 KiB). Core keeps what it sends within it, and gives it to builds ([Limits](../minion-messages/wire-format/#limits)). |
+| `kinds.<kind>.agentless` | Bind kinds only, optional: the channel acts as the minion on connections of the kind, with nothing on the target ([agentless channels](../agentless-channels/)). Core gives it the keys of each call's and open's id; every other channel never sees a key. The channel's code says it, never an operator or a factory. |
+| `kinds.<kind>.max_call` | `bind-call` only, optional: the longest a call of the kind may take, a duration from `1s` to `1h` (`"10m"`). A slow transport (a DNS tunnel, mail) asks for more, a quick one for less. Core keeps each call within it and its own cap, 10 minutes, and says the result as the call's deadline; left out, 2 minutes ([when core calls](../channel-core-connections/#bind-call-minions-when-core-calls)). |
 
 **Each kind spells out its fields in full**, even where kinds share most of
 them: nothing is inherited from another kind or from a shared list. A field

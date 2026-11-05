@@ -16,8 +16,8 @@ factory's PHP pages. And `bind-persistent`: the link's `open`, the
 targets' policies (on demand, manual, always), Connect and Disconnect, idle
 closes, in core, channel-core (`linkclient`'s opener, `connclient`'s open
 request), the TCP channel and BOB's minion (a listener). Failover (the build's
-policy, BOB's minion) is built too, and so are a kind's `max_message`, core's
-`poll`, the `at` a page checks, and commands' `kinds`. `add_connection` is an
+policy, BOB's minion) is built too, and so are a kind's `max_message` and
+`max_call`, core's `poll`, the `at` a page checks, and commands' `kinds`. `add_connection` is an
 agreed design, not built yet.
 :::
 
@@ -177,15 +177,20 @@ core speaks first, and that core has to be told where the page is:
 
    | What came back | Core | Target |
    |---|---|---|
-   | a sealed `hello` | opens the session, as for any `hello` under a build id, and links the target to it | `connected` |
+   | a sealed `hello` | opens the session, as for any `hello` under a build id, links the target to it, and takes the rest of the answer under the session as any later answer's (its `get_tasks`, feedback, a schedule) | `connected` |
    | nothing: DNS, refused, timed out, TLS | retries | `unreachable`, with why |
+   | the target refused the channel: a login, a host key (link failures `login`, `host_key`) | does not retry | `refused`, with why |
    | something that does not open: an HTTP 404, a WAF's page | does not retry: it rarely helps | `not the minion`, with what answered |
-   | a sealed `err` | records it | `refused`, with the code |
+   | a sealed `err`, no `hello` | records it | `refused`, with the code |
+   | a sealed answer with neither | records it | `refused` |
 
    The channel never reads what came back: core tells these apart by opening
-   it. **Retries**, on `unreachable` only: 1 minute, 5, 30, then hourly, for
-   24 hours, then they stop; Check now any time, and a target can turn
-   retries off where every request in the server's log counts.
+   it. **Retries**, on `unreachable` (and `no channel`) only: 1 minute, 5,
+   30, then hourly, for 24 hours, then they stop; Check now any time, and a
+   target can turn retries off where every request in the server's log
+   counts. A **`refused`** target is called again only on Check now or after
+   an edit, not for news (a task queued, a cancel, a stream): where its
+   channel logs in, each call would be one more failed login on the target.
 6. **After.** Calls go under the session id; the page takes the id from what
    the channel delivers, checks the tag with its build keys, and answers
    under the same id, so it needs to remember nothing. `hello_response` is
@@ -219,6 +224,9 @@ stateDiagram-v2
     new --> connected: hello answered (the session opens)
     new --> unreachable: nothing reached it
     new --> not_the_minion: something else answered
+    new --> refused: a login, a host key or an err refused it
+    refused --> connected: Check now or an edit succeeds
+    connected --> refused: a later call is refused
     unreachable --> connected: a retry or Check now succeeds
     unreachable --> stopped: 24 hours of retries
     stopped --> connected: Check now succeeds
@@ -281,8 +289,25 @@ Core calls a `bind-call` minion:
 - **A `cancel` for a task inside a call still running** cannot reach the
   process running it: it goes in the next call, by when the task has
   usually ended, which the page then says.
-- **A call's deadline** is the channel's request timeout. A task meant to
-  run longer belongs in the background on the page.
+- **A call's deadline** is the shorter of core's and the channel's request
+  timeout. Core says on every call what the channel's connection schema
+  declares for the kind ([`max_call`](../minion-connection/), 1 s to 1 h)
+  within its own cap of 10 minutes, and 2 minutes when it declares none;
+  it waits that long for the answer, and a few seconds more. The Dumbo
+  channel's `CALL_TIMEOUT` is 30 s by default, the SSH channel's 2 minutes.
+  No call goes on past core's wait: one that did would run its tasks for an
+  answer core no longer takes, and the next call would carry them again, as
+  they were never acknowledged. A task meant to run longer belongs in the
+  background on the page, or on a persistent connection.
+- **A call sent is always waited for**, up to its deadline: whatever asked
+  for it may go first (an operator leaving a Check now, the request that
+  added a target), and the call, and the calls after it while work remains,
+  go on. An answer not taken would leave the tasks it ran unacknowledged,
+  and the next call would run them again.
+- **A call core could not make itself** (a lookup or a store failed in
+  core, not the channel or the network) leaves the target as it was, says
+  why in its detail, and is tried again in a minute, whatever its retries:
+  the target's schedule (a retry, its minion's own) is not lost.
 - **Every call says core's time** (`at`). A page, which cannot remember
   message ids, refuses a call further than 10 minutes from its own clock (a
   replay, or a clock that is off) with an `err` `stale`, running nothing; the
@@ -326,13 +351,18 @@ On the **control link**, key 0 says what the frame is:
 
 | Frame | Direction | Keys |
 |---|---|---|
-| `call` (1) | core → channel | 1 request id; 2 the values: the build connection's and the target's, in one map by the keys the channel [declared](#the-connection-schema-by-kind); 3 the id the message is sent under; 4 the ciphertext; 5 deadline in milliseconds, optional (the channel keeps to the shorter of it and its own request timeout) |
-| `open` (2) | core → channel | 1 request id; 2 the values, as for `call`; 5 deadline, 30 seconds unless core says otherwise |
+| `call` (1) | core → channel | 1 request id; 2 the values: the build connection's and the target's, in one map by the keys the channel [declared](#the-connection-schema-by-kind); 3 the id the message is sent under; 4 the ciphertext; 5 deadline in milliseconds (core says the kind's `max_call` within its 10-minute cap, else 2 minutes; the channel keeps to the shorter of it and its own request timeout); 11 keys, to an [agentless](../agentless-channels/) kind only: the keys of the id, `{1: suite, 2: {1: enc key, 2: mac key}}` |
+| `open` (2) | core → channel | 1 request id; 2 the values, as for `call`; 5 deadline, 30 seconds unless core says otherwise; 10 under: the id the minion speaks under on the connection, 16 bytes (its target's open session's id, else its build's); 11 keys, to an agentless kind only: under's keys |
 | `answer` (3) | channel → core | 1 request id; then one of: 3 the id and 4 the sealed message that came back, unpacked from the channel's transport format, with 6 the transport's status (the HTTP status, say); 6 the status and 8 the first 512 bytes of what answered, when it is not a minion message (a 404, a WAF's page); or 7 a failure: `{1: kind, 2: message}`, the kind unreachable 1 (DNS, refused), timeout 2, TLS 3, other 4. An answer that reached something may carry 9 the peer: the IP address the channel connected to, which core keeps as the session's external address |
 
 - **Every request gets exactly one `answer`.** An `open` that worked is
   answered once its connection socket is up, the socket naming the request,
   so core knows the session it serves.
+- **Under** (key 10) is for a minion that keeps no ids of its own, such as
+  one a channel acts as: it speaks first, as every persistent minion does,
+  under that id. A channel whose minion knows its ids leaves it. It is a
+  key of its own, so a channel from before it decodes the `open` as
+  before.
 - **The peer** (key 9) is the address the channel knows it reached without
   a lookup of its own: the one it connected to when it dials directly; the
   target's host through a proxy when that is an IP address; none for a
