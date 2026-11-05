@@ -170,6 +170,7 @@ them, first.
 | [Switching](sessions/#connections) | the minion moves | the minion moves | a page has one connection | core dials, the minion moves through the dial |
 | [Failover](../channel-core-connections/#failover) | the minion's | the minion's | none | none: core has to dial it |
 | [Replays](wire-format/#freshness-and-replay) of core's messages | none: replies match `re` | the minion may remember ids | the page refuses an `at` out of its window | the minion may remember ids |
+| A [lost reply](wire-format/#freshness-and-replay) | the request sent again as it was gets it (10 minutes) | the same | core waits for every call it sends; what it carried goes again until acknowledged | the same as `reverse-persistent` |
 | Message size | the connection's `max_message` | the same | the same | the same |
 
 ## Changing these formats

@@ -35,8 +35,8 @@ traceparent: 00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01
 |---|---|---|
 | `Content-Type` | yes | `application/octet-stream`. Anything else → **415**. |
 | Body | yes | The minion's ciphertext, as the minion sent it once the channel has undone its own transport encoding. Not empty. At most `CHANNEL_SYNC_MAX_SIZE` (a core setting, default 16 MiB). |
-| `Logos-Message-Id` | yes | Unique per request, a UUIDv4. Core dedups on it. |
-| `Logos-Build-Id` | yes | The id of the build that made the minion, as a lowercase UUID. |
+| `Logos-Message-Id` | yes | Unique per request, a UUIDv4: it names the request in logs. Core does not dedup on it: a request sent again is the minion's message sent again (step 4). |
+| `Logos-Build-Id` | yes | The id the minion's message is sent under, as a lowercase UUID: its build's, the temporary id its stage got, or its session's (the header keeps its first name). |
 | `Logos-Channel-Instance` | yes | The sending channel's registered instance id, for the registration gate. |
 | `Logos-Peer-Address` | no | The IP address the channel got the message from, when its transport has one: the minion's host as the channel's network sees it (its NAT's outside address, say), or the client a proxy the channel trusts forwarded for. The channel's observation, not the minion's claim. Core keeps it as the session's external address, with the history of every one it was seen from; anything that is not an IP address is ignored. |
 | `traceparent` | no | [W3C Trace Context](https://www.w3.org/TR/trace-context/). Core returns it on the reply; an invalid one is ignored. |
@@ -58,16 +58,16 @@ In this order, so core reads no body for a request it will refuse:
 3. **Size** — a `Content-Length` over the limit → **413** before the body is
    read; a body without one is cut off at the limit, also **413**. An empty
    body → **400**.
-4. **Idempotency** — `Logos-Message-Id` is deduped via `SetNX` with a 24-hour
-   window. A replay of an already-seen id gets the same no-op answer (**204**),
-   not an error: a channel retrying a request it is unsure of. The dedup
-   fails open: with the cache disabled or failing, every message is
-   processed.
-5. **The minion's message** — core opens the ciphertext ([Minion
-   Messages](../minion-messages/)). One it cannot open → **422**; one whose
-   own message id core has seen (a captured message sent again) → **409**.
-   A channel answers its client for both as for any failure, so a stranger
-   learns nothing from them.
+4. **The minion's message** — core opens the ciphertext ([Minion
+   Messages](../minion-messages/)). One it cannot open → **422**. One whose
+   own message id core has seen gets the reply it got the first time, while
+   core keeps it (10 minutes, for a reply of at most 64 KiB; nothing again,
+   **204**, when core had nothing to say), and nothing runs twice: a channel
+   retrying a request it is unsure of, or a minion sending again a request
+   whose reply did not come, get what was lost. Past that it is a replay →
+   **409**. A channel answers its client for 422 and 409 as for any
+   failure, so a stranger learns nothing from them. With the cache disabled
+   or failing, every message is processed.
 
 ## Response
 
@@ -99,15 +99,19 @@ application/json`, so a channel tells a reply from an error by the status
 code. A channel checks that `Logos-Build-Id` is the one it sent, and relays a
 200 body to the minion unchanged.
 
-Core holds no tasking yet, so today it answers every valid request with
-**204**. Channels relay that like any other reply: `logos-http-channel`
-answers the minion with the packed id alone.
+Core answers **200** when it has something for the minion (a stage's or a
+hello's reply, tasks, acks, cancels) and **204** when it has nothing.
+Channels relay a 204 like any other reply: `logos-http-channel` answers the
+minion with the packed id alone.
 
 ## Processing semantics
 
 - One minion message per HTTP request, one reply per response.
-- Core decrypts inbound and encrypts outbound (planned, with the payload
-  crypto contract). Channel never decrypts.
+- Core opens the minion's message and seals its reply ([payload
+  crypto](../minion-messages/wire-format/)); the channel never does.
+- **The handling is core's own**: a channel that stops waiting (its request
+  timed out, its client went away) does not cut it short. It goes on for up
+  to 2 minutes, and the minion's message sent again gets its reply.
 - Channel relays a 200 body to the minion unchanged.
 
 ## Go SDKs

@@ -129,12 +129,17 @@ seconds, so a minion parses integers only.
 
 A minion's messages carry no time: core stamps each with its own receive time. Core's messages that start an exchange say its clock (`at`), for a minion that cannot remember ids (below).
 
-- **Core refuses a message whose `id` it has seen** in the last 24 hours:
-  the sync call answers **409**, and the channel answers its client as for
-  any failure (the HTTP channel's 404); over a connection socket core drops
-  it and answers nothing. A minion never sends an `id` twice, so only a
-  captured message sent again meets this, and it learns nothing from the
-  answer.
+- **A message whose `id` core has seen gets the reply it got**, for 10
+  minutes (a reply of at most 64 KiB): a request whose reply was lost on
+  the way is sent again as it was, the same message, and nothing in it runs
+  twice. A minion sends a message again only so; a new message has a new
+  `id`.
+- **Core refuses a message whose `id` it has seen** in the last 24 hours,
+  past that: the sync call answers **409**, and the channel answers its
+  client as for any failure (the HTTP channel's 404); over a connection
+  socket core drops it and answers nothing. Only a captured message sent
+  again meets this, and it learns nothing from the answer: a reply core
+  kept is sealed for the minion.
 - **A reply is fresh** when its `re` is the `id` of a request the receiver is
   still waiting on. An old reply, replayed, matches nothing and is dropped.
 - **The direction byte** stops a frame from being turned around: both sides

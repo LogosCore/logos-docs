@@ -127,7 +127,12 @@ hello_response = {
    keys (or, skipping staging, under the build id with the build's own keys).
    It may ask for tasks in the same request ([`get_tasks`](../tasks-and-results/#asking-for-tasks)).
 2. Core creates a **session**, gives it those keys, and records the host and
-   process. A temporary id serves one `hello`: its entry goes at once.
+   process. A temporary id serves one `hello`. A `hello` again under it
+   within 10 minutes (its reply lost on the way) gets the same
+   `hello_response`, and no other session opens; after that it no longer
+   opens. Under the build id each `hello` opens a session: a minion that
+   skips staging sends its `hello` again as the same message, which gets
+   the reply it got.
 3. Core answers with `hello_response`: the **session id**. Every message after
    that is sent under the session id and sealed with the session's keys, for
    as long as the process runs.
@@ -325,8 +330,10 @@ sleep_update = { 0: 5, sleep }   ; t: sleep_update
   stretched by their jitter, plus the same grace. A minion that sleeps an
   hour is lost after about three hours; one that checks in every second,
   after about half a minute.
-- A session whose minion never said its schedule is neither: core does not
-  guess.
+- A minion that never said its schedule is taken to keep a day's, on a
+  reverse kind: its session goes late after a day without a check-in, and
+  lost after three. A `bind-call` page that says none is neither: core
+  calls it when there is something for it, so its silence says nothing.
 
 Late and lost only describe a session: it stays open, nothing is sent to its
 minion, and a lost minion that checks in again is on time at once. In the
@@ -452,14 +459,20 @@ minion connects again (`reverse-persistent`) or waits for core's next dial
   exchanges have **all failed for 24 hours** starts over on its own.
 - **Starting over** is staging again from the beginning: a new key pair, a
   new correlation id, a new `stage` (or a new `hello` under the build id). A
-  failed stage or `hello` is tried again on the minion's schedule, with a new
-  key pair each time.
+  stage or `hello` whose reply did not come is better sent again first: the
+  same message gets the reply it got, and a new `hello` under the same
+  temporary id gets the session the first opened (both within 10 minutes).
+  One refused, or still unanswered, is tried again on the minion's
+  schedule, with a new key pair each time; a minion that starts over at
+  once (BOB's does) leaves the session its lost `hello` opened behind, which
+  closes after a day without a check-in.
 
 ## Timings
 
 | | |
 |---|---|
-| A temporary id and its keys | 1 day, or until its `hello` |
+| A temporary id and its keys | 1 day, or 10 minutes after its `hello` |
+| A reply core keeps for its message sent again | 10 minutes, at most 64 KiB |
 | A session's first check-in | within 1 day, or it is closed |
 | A closed session's tombstone | 30 days |
 | A persisted session's replaced keys | 30 days, the last 4 |
