@@ -95,6 +95,7 @@ export default defineConfig({
             { slug: "contracts/module-logs" },
             { slug: "contracts/minion-connection" },
             { slug: "contracts/minion-build" },
+            { slug: "contracts/credentials" },
             {
               label: "Minion Messages",
               items: [

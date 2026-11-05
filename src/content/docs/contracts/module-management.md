@@ -106,7 +106,7 @@ Properties and action parameters share one field description:
 | `min`, `max` | Numbers for `int` / `number` / `bytes`, duration strings for `duration`, RFC 3339 timestamps for `datetime`. |
 | `pattern`, `max_length` | For string-like types (each item of a `string_list`, each value of a `string_map`). `pattern` is a Go (RE2) regular expression, unanchored: anchor it with `^…$` to match the whole value. |
 | `key_pattern` | For `string_map`: what every key must match. |
-| `max_items` | For `string_list`, `string_map` and `enum_list`: most items or entries. |
+| `max_items` | For `string_list`, `string_map`, `enum_list` and `credential_list`: most items or entries. |
 | `options` | For `enum` and `enum_list`: 1 to 64, each a `value`, optional `label` and `description` (shown under the label in the option list). |
 
 A **property** adds `apply`:
@@ -122,7 +122,7 @@ prompt the UI shows before running it, up to 16 `params`,
 [conditions](#action-conditions).
 
 A **status value** (`key`, `type`, `label`, `description`, `unit`; any type
-but `secret` and `file`) is reported
+but `secret`, `file`, `credential` and `credential_list`) is reported
 by the module in its heartbeat `metrics` under `key`, and in
 [`mgmt.state.get`](#mgmtstateget), which core calls after every action. Core
 shows the latest value; it never stores history. For `bool`, `enum` and `string` values the
@@ -219,7 +219,10 @@ reported, or not of its type, holds: whoever knows the value decides.
 | `enum_list` | array of option values | each one of `options[].value`, no repeats; `max_items`; `required` means at least one |
 
 `file` exists too, for [build schemas](../minion-build/#field-types-for-builds)
-only: a management manifest that declares one is refused.
+only, and `credential` and `credential_list`, for build and connection
+schemas ([Credentials](../credentials/#credential-fields)): what holds
+their values belongs to an operation, and a module's settings are no
+operation's. A management manifest that declares one is refused.
 
 ### Limits
 

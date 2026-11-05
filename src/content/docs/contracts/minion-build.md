@@ -212,6 +212,12 @@ accepted only in build schemas: in a build's fields, and in a command's
 | `enum_list` | array of option values | each one of `options[].value`, no repeats; `max_items`; `required` means at least one |
 | `file` | string: a [build file](#build-files) id | `accept`: up to 32 extensions (`.ico`) or media types (`image/x-icon`, or `image/*` for any subtype), any file when empty; `max_size`: the largest file, in bytes. No `default`. |
 
+`credential` and `credential_list` (the operation's credentials, of the types
+`accept` names) are taken in build schemas too: in a build's fields, its
+connection parameters and a command's params. The factory gets them in the
+request's `credentials`; a command's minion, in the task's arg. See
+[Credentials](../credentials/).
+
 `accept` and `max_size` are new field spec members, for `file` only. In the
 UI, `datetime` is a date and time picker, `enum_list` a set of checkboxes, and
 `file` an upload or a choice from the operation's build files.
@@ -525,6 +531,7 @@ Request `payload`:
 | `values` | Every field of the target that has a value or a default. A `file` field holds the file's id. |
 | `commands` | The ids of the [commands](#commands) the minion is built with: those picked, the target's required ones among them, in the schema's order. The minion has these and no others. |
 | `files` | The files the values name (connection parameter values included), by id, as in [Build files](#build-files). |
+| `credentials` | The [credentials](../credentials/#what-a-module-gets) the values, the connections' `values` and their endpoints' `params` name, by id: each its `id`, `name`, `type` and the fields of its type that hold a value. Secret, as the values: for the build only. |
 | `connections` | The [connections](#connections), in the order the minion tries them: each one's settings as an endpoint [export](../minion-connection/#the-export) under `endpoint` (its `name`, channel kind, schema version, connection `kind`, and `params` with defaults filled in), its [connection parameter](#connection-parameters) `values`, defaults filled in, and its own `failover` settings when it has any. |
 | `failover` | The build's [failover policy](../channel-core-connections/#failover), defaults filled in: `enabled`, `fail_after`, `fail_for`, `wrap`, `cycle_pause`, `failback_after`. Sent whatever the factory declares; one that does not declare `failover` may ignore it. |
 | `crypto` | Present when the factory declares `crypto`: its `suite` and the minion's key `material`, fresh for every build. For `aes-256-cbc-hmac-sha256`: `enc_key`, the AES-256 key, and `mac_key`, the HMAC-SHA256 key, 32 random bytes each in base64. The factory puts them in the artifact and keeps them nowhere else. |

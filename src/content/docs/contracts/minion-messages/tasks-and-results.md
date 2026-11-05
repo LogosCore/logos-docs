@@ -163,6 +163,10 @@ task = {
   ? 3: { * uint => arg },  ; args: by their params' num in the build schema
 }
 
+; a credential param's arg is the credential, a credential_list's an
+; array of them, in order (Credentials, "What a module gets"): a minion
+; has no way to look one up by its id.
+
 file-offer = {          ; a file or stream param's arg
   1: xfer-id,           ; xfer: the transfer, core's pick, one a task
   2: tstr,              ; name: the file's name as uploaded, no path

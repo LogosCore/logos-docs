@@ -169,12 +169,21 @@ Its connection schema (`ssh`, version 1), both kinds agentless:
 
 | Kind | `fields`: each build connection's | `target`: each server's |
 |---|---|---|
-| `bind-call` | `call_reuse` (`30s`: how long the SSH connection stays open after a call for the next one; `0s` logs in for every call) | `host` (required), `port` (`22`), `user` (required), `password`, `private_key` (`format: multiline`; a key whose line breaks a paste lost is made a block again, and a public key or a PuTTY `.ppk` is refused saying so), `passphrase` (secrets), `host_key`, `proxy` (`socks5://`, `socks5h://` or `http://`, CONNECT), `connect_timeout` (`10s`) |
+| `bind-call` | `call_reuse` (`30s`: how long the SSH connection stays open after a call for the next one; `0s` logs in for every call) | `host` (required), `port` (`22`), `host_key`, `user` (who a credential without a username logs in as), `credentials` (required: a `credential_list` of the operation's [credentials](../credentials/), `KEY` and `PLAINTEXT`, up to 8, tried in order), `proxy` (`socks5://`, `socks5h://` or `http://`, CONNECT), `connect_timeout` (`10s`) |
 | `bind-persistent` | `keepalive` (`30s`) | The same |
 
-- **Logging in**: with a password or a private key (OpenSSH or PEM, with
-  its passphrase), and the key first when a target has both. A target with
-  neither gets a failure `login`.
+- **Logging in**: with the target's credentials, in its order, a connection
+  each, until one is taken: a `KEY` by its key (OpenSSH or PEM, with its
+  passphrase; a key whose line breaks a paste lost is made a block again,
+  and a public key or a PuTTY `.ppk` is refused saying so), a `PLAINTEXT`
+  by its password (as a password, and answering keyboard-interactive). Each
+  logs in as its username (a `PLAINTEXT`'s with a realm as `username@realm`),
+  or the target's `user` when it has none. A refusal goes on to the next; a
+  failure that is not one (unreachable, another host key, not an SSH server)
+  ends the call, as the next would meet it too. Every answer says the
+  [logins](../credentials/#logins) tried: core marks the credential that was
+  taken valid and notes each on the target. With every one refused, the
+  channel answers a failure `login` naming each.
 - **The host key**: `host_key` is the server's key's SHA-256 fingerprint
   (`SHA256:…`, as `ssh-keygen -l` prints it). When one is given, the
   server must present that key, or the channel answers a failure
