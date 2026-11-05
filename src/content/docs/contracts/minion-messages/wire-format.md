@@ -166,7 +166,7 @@ err = {
 |---|---|---|---|---|
 | 1 | `bad_message` | both | the message, or an item in it, is not valid | logs it; a task or transfer the item was about ends failed |
 | 2 | `unknown_item` | both | an item type the receiver does not know (`item` says which) | logs it |
-| 3 | `unknown_task` | both | a `cancel`, `chunk` or `ack` for a task or transfer the receiver does not have | ends that task or transfer: core ends a task the minion names (`task`) cancelled when it had asked to stop it, failed otherwise |
+| 3 | `unknown_task` | both | a `cancel`, `reack`, `chunk` or `ack` for a task or transfer the receiver does not have | ends that task or transfer: core ends a task the minion names (`task`) cancelled when it had asked to stop it, failed otherwise |
 | 4 | `too_large` | both | a message, chunk or file over the [limits](#limits) | ends the task or transfer it was about failed |
 | 5 | `session_closed` | core | the session the message was sent under is [closed](../sessions/#session-lifetime) | starts over |
 | 6 | `session_replaced` | core | another process claimed the [persisted session](../sessions/#persisted-sessions) | starts over, without claiming it |
@@ -249,6 +249,7 @@ given in its CDDL on the page that defines it.
 | | | 16 | [`poll`](../tasks-and-results/#coming-back-sooner) |
 | | | 17 | [`max_tasks`](../tasks-and-results/#max-tasks) |
 | | | 18 | [`feedback`](../sessions/#feedback) |
+| | | 19 | [`reack`](../tasks-and-results/#tasks-the-minion-lost) |
 
 **The message**: `v` 0, `id` 1, `re` 2, `items` 3, and core's `at` 4, as [above](#message).
 

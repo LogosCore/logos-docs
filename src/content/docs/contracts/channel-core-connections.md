@@ -454,9 +454,10 @@ A `bind-persistent` minion is a running process (an implant listening on a
 port, or reached over SSH), and every dial is a connection its network sees.
 Being a process, it stages as any minion does, speaking first once the
 channel has dialed, and keeps its session's keys between connections: a
-later dial carries on in the same session. Its target links to the session
-at the first `hello`, as a [`bind-call`](#bind-call-minions-targets-and-sessions)
-target's does.
+later dial carries on in the same session. The target is **connected once
+its minion has spoken** over the connection, and is linked to the session
+that speaks there: the one its `hello` opens or claims, the one it checks in
+under, and the next one if it stages again.
 
 **Who opens it** is the target's policy:
 
@@ -464,19 +465,64 @@ target's does.
 |---|---|---|---|
 | `on-demand` (the default) | core, when the session has something to send (as it calls a `bind-call` page) | after 10 minutes without an exchange | queued tasks go out, and the connection is there only while there is work |
 | `manual` | an operator: Connect, Disconnect | after an hour without an exchange, as a safety net | targets where every connection counts; tasks queued meanwhile wait, shown waiting for a connection |
-| `always` | core, and again whenever it drops, backing off | never | a minion meant to be reachable at any moment |
+| `always` | core, and again whenever it drops (backing off when it drops at once) | never | a minion meant to be reachable at any moment |
 
 The idle times are the policy's (core's `models.IdleClose`): a connection
 idle past them is closed by core's target loop, which looks every few
-seconds. Besides, a connection closes when:
+seconds, but not while a task it carried runs (below). Besides, a
+connection closes when:
 
 - an operator disconnects it, whatever the policy (Disconnect closes every
   connection the target has open; one of policy `always` is opened again);
 - the network or the minion drops it, or the channel stops: core opens it
   again for `always` (5 seconds later), for `on-demand` only while work waits
-  (tasks not sent, or sent and not acknowledged), and never for `manual`;
+  (tasks not sent, or sent and not acknowledged, a cancel to send) or a task
+  it carried runs, and never for `manual`. One that drops within 30 seconds
+  of its minion's first word is an open that failed (below);
 - the target is removed;
 - core closes its connection socket, which is how any connection is closed.
+
+**The minion speaks first**, within the open's time, and that is what
+connects the target: until then it is `connecting`, and core sends nothing
+over the connection. The open's time is 30 seconds, or what the kind says
+in [`max_open`](../minion-connection/) (10 minutes at most): the channel has
+it to answer (the open's deadline), and the minion as long again for its
+first word once the connection's socket is up. What speaks must be the
+target's minion: a message that opens with the keys of its id, under an id
+of the target's build (its stage, its `hello`, a session of it), the session
+the target is linked to (which a later build may have claimed), or a later
+build's that claims that session (one built to persist it). Anything else
+gives the target a state, not a session:
+
+| Over the new connection | The target | Retried |
+|---|---|---|
+| The target's minion speaks | `connected` | — |
+| A minion of another build speaks (of this operation or another: something else listens where the target points) | `not the minion`; the message is not taken, so no session opens, and the connection closes | no: Connect, Check now or an edit |
+| Nothing speaks within the open's time (a service that waits for its client to speak) | `not the minion`, the connection closes | no |
+| The connection closes before the minion spoke | `unreachable` | as a failed open |
+| The connection drops within 30 seconds of the minion's first word (by the minion, the channel or the network, not by core) | `unreachable`, its failures counted on from before the open | after the target's retry wait (1 minute, 5, 30, then hourly), as its policy reopens it |
+
+So a minion that hangs up at once, or a channel that cannot keep a
+connection, is not dialed every 5 seconds: each quick drop waits longer, and
+a day of them stops the target, as unreachable targets stop. A connection
+that held longer is a drop: its failures start over, and `always` opens it
+again in 5 seconds.
+
+**Running tasks keep it open.** A connection is not closed idle while a task
+it carried runs: one core sent over it, or one the minion sent a part or an
+ack of over it. The minion says that task's result there when it ends, which
+for a long command is a quiet while from now. Dropped while such a task runs,
+an `on-demand` target is opened again for it. Over each new connection core
+asks the minion which of its session's running tasks it still has (a
+[`reack`](../minion-messages/tasks-and-results/#tasks-the-minion-lost)), in
+the reply to its first message there: a minion that keeps its tasks between
+connections (BOB) acks them, and they are the new connection's, which stays
+open while they run; a channel acting as the minion, whose commands ran
+inside the connection that went (SSH's), answers `unknown_task` for each,
+and core ends them. A minion that does not take a `reack` leaves them
+running in core: they hold no connection open (the new one did not carry
+them), and an operator's cancel ends them (a cancel is work, which opens
+the connection, and the minion answers `unknown_task`).
 
 **A minion with other connections** (BOB built with reverse ones and a
 listening one) is on one at a time. Core opens a target's connection on its
@@ -494,25 +540,27 @@ minutes it closes the port and fails.
 session whose connection is `bind-persistent` (reserved, as `help` is: a
 build schema may not declare them). They open and close the session's
 target's connection, as the target's Connect and Disconnect do, and are kept
-as tasks: running while the open waits for the channel, then done
-("connected", "disconnected", "already connected") or failed with the
+as tasks: running while the open waits for the channel and the minion, then
+done ("connected", "disconnected", "already connected") or failed with the
 target's state ("unreachable: …"). They go by whether the target has a
-connection open now, not by its stored state: a `disconnect` closes what is
-open, and a `connect` with a connection open says "already connected".
+connection open now that its minion spoke over, not by its stored state: a
+`disconnect` closes what is open, and a `connect` with a connection open
+says "already connected".
 Nothing goes to the minion, and they cannot be cancelled. A session with no
 target refuses them.
 
 A session that closes does not close the connection: the minion hears
 `session_closed` over it and stages again, as any minion does, and the
-target links to the new session.
+target follows it to the new session (the session that last spoke over the
+target's connection is the target's).
 
 - **The connection is the session's**, not the operator's who opened it:
   everyone in the operation sees it open and can use it.
 - **An open that fails** puts its failure (unreachable, timeout, TLS, other)
   on the target; `on-demand` and `always` retry with a target's backoff,
   `manual` does not. An open the channel says worked fails too when its
-  socket closed before the answer (the minion hung up at once), or took the
-  open and did not become the target's within 5 s (its upgrade failed).
+  socket took the open and did not become the target's within 5 s of the
+  answer (its upgrade failed), or closed before the minion spoke (above).
 - **Correlation**: core records the open before its frame goes out; the
   socket that names it (`Logos-Open-Request`) takes it, and a second socket
   naming it, or one naming an open core is not waiting for, is refused
@@ -520,10 +568,10 @@ target links to the new session.
   the target's right after it, and the channel answers once its side of the
   upgrade is done: the answer can outrun the socket, so core waits for the
   socket that took the open before it decides. The connection is the
-  target's from its first frame.
-- **The minion speaking is the proof**: a target whose minion speaks over
-  its connection is connected, so a state an open left wrong is put right
-  at the minion's first message.
+  target's from its first frame. A socket that becomes ready only after its
+  open gave up on it is no one's: core closes it (the target says what the
+  open came to, and is retried as that says). So is one whose target was
+  removed while it opened.
 - **The session shows its connection**, not late or lost: a closed connection
   is closed on purpose. It is `connected`, `connecting`, `not connected`, or
   `unreachable since` when opens fail; while connected, the socket's pings

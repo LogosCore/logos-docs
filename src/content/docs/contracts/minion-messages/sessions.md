@@ -280,7 +280,9 @@ How a claim works:
    ones from the stage, or the build's own) and the `hello`'s host and
    process; core answers `hello_response` with the claimed `sid` and records
    the restart. No session keys are built into a minion: only the build's
-   own, as always.
+   own, as always. In its next message core asks the new process which of
+   the session's running tasks it has (a [`reack`](../tasks-and-results/#tasks-the-minion-lost)):
+   those the process before ran end, unless it acks them.
 3. A claim core does not honour (the session closed, of another build, or
    unknown) **opens a new session** instead, as a `hello` without `sid` does:
    the minion works, and `hello_response` says which session it got.

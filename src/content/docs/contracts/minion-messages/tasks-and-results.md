@@ -250,11 +250,60 @@ the task ends; a task not sent yet is cancelled in core at once and never
 goes out. The minion stops the task and still sends a final `result`
 (`done`). A `cancel` for a task the minion does not have gets an `err`
 `unknown_task` naming it (`task`), and core ends it cancelled: a minion that
-lost a task (it restarted) does not leave it stopping for good. A task whose
+lost a task (it restarted) does not leave it stopping for good. Core also
+asks on its own when a minion may have lost tasks ([Tasks the minion
+lost](#tasks-the-minion-lost)). A task whose
 parts said a `ctx` gets it on its `cancel`, and one whose parts did not gets
 its transfer's (a file going either way, or a stream): a minion that keeps
 nothing ends the task from there (its next `seq`), a page removing a
 partial upload.
+
+## Tasks the minion lost
+
+```cddl
+reack = {
+  0: 19,                ; t: reack (core → minion)
+  1: [+ task-id],       ; tasks: those core thinks the minion has, 256 at
+                        ;   most
+}
+```
+
+Core counts a task running from its `ack` until its last `result`. A
+minion can lose one in between: a process that restarts has none of the
+tasks the one before ran, and a channel acting as the minion (an
+[agentless](../../agentless-channels/) one) runs its commands inside its
+connection to the server, so they go when that connection goes. Core is not
+told: without asking, it would show the task running for good, and count it
+against the minion's [`get_tasks`](#asking-for-tasks) room, so a minion
+that lost as many tasks as it runs at once would get no more.
+
+So when the minion comes back in a way that may have lost them, core asks
+with a `reack` naming the tasks it thinks the minion runs:
+
+- **after a claim**: a new process took the [persisted
+  session](../sessions/#persisted-sessions) over;
+- **over a new `bind-persistent` connection**, at the minion's first message
+  under its session there: the commands of a channel acting as the minion
+  ran inside the connection that went.
+
+It goes once, in core's next message to the minion (the reply to the
+message that brought the minion back, or a push), as many tasks as the
+message has room for and the rest in the next. The minion answers in its
+next message:
+
+- an **`ack`** naming those it has: running, or ended with an end core has
+  not had yet (it sends that end as it would). They go on; over a
+  `bind-persistent` connection they are the new connection's, which [stays
+  open](../../channel-core-connections/#bind-persistent-connections-opening-and-closing)
+  while they run;
+- an **`err` `unknown_task`** naming each it does not have (`task`, with
+  `item` the `reack`'s place): core ends it failed, or cancelled when an
+  operator had asked to stop it.
+
+A minion that does not take a `reack` answers `unknown_item`, and core
+knows no more than before: the tasks stay as they were, and a `cancel`
+still ends one the minion does not have. A minion that keeps its tasks
+across restarts (on disk, say) acks them.
 
 ## Resuming a task
 

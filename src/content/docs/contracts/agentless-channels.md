@@ -92,7 +92,8 @@ On such a kind:
   nothing between calls; walks and transfers resume through their `ctx`;
   a task ends within the call's deadline.
 - **`bind-persistent`** goes as for a listening minion ([opening and closing](../channel-core-connections/#bind-persistent-connections-opening-and-closing)),
-  opened by the target's policy, the minion speaking first. It keeps no ids
+  opened by the target's policy, the minion speaking first: the target is
+  connected once it has, within the open's time. It keeps no ids
   of its own, so the `open` says the id it speaks under (`under`, key 10):
   the target's open session's id, else the build's. Its first message is
   its `hello`, alone: under a build id core takes one `hello` or one
@@ -100,7 +101,11 @@ On such a kind:
   more with an `err`. A hello under the build id opens a session; under
   the session id it says the session's host again. The next message, under
   the session id, carries `get_tasks`, which sets the allowance, and core
-  pushes from then on, as on any persistent connection. A minion whose
+  pushes from then on, as on any persistent connection. Back over a new
+  connection under the session's id, the minion is asked which tasks it
+  still has (a [`reack`](../minion-messages/tasks-and-results/#tasks-the-minion-lost)):
+  its commands ran inside the connection that went, so it answers
+  `unknown_task` for each, and core ends them. A minion whose
   hello core refuses closes the connection, saying why: it has nothing to
   do on it. The connection to the server lives as long as the
   socket: when either closes, so does the other.

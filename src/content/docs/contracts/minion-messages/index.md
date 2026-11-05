@@ -158,9 +158,10 @@ them, first.
 |---|---|---|---|---|
 | [Staging](sessions/#staging) | the minion stages | the minion stages | skipped: the session keeps the build's keys | the minion stages, once dialed |
 | [`hello`](sessions/#hello) | the minion's | the minion's | the page's, answering core's `rehello` | the minion's |
-| [Presence](sessions/#late-and-lost-sessions) | late and lost by its schedule | connected; between connections by its schedule | from the last call that worked, by its schedule if it says one | the connection: connected, not connected (on purpose), unreachable since |
+| [Presence](sessions/#late-and-lost-sessions) | late and lost by its schedule | connected; between connections by its schedule | from the last call that worked, by its schedule if it says one | the connection: connected once the minion spoke, not connected (on purpose), unreachable since |
 | [`get_tasks`](tasks-and-results/#asking-for-tasks) `max` | per reply | a standing allowance | per next call | a standing allowance |
 | [`cancel`](tasks-and-results/#cancelling-a-task) | at the next check-in | pushed | in the next call (a task inside a running call ends first) | pushed |
+| [Lost tasks](tasks-and-results/#tasks-the-minion-lost) (`reack`) | after a claim, at the next check-in | after a claim, pushed | none: a call's tasks end within it, long ones go on through `resume` | after a claim, and on each new connection in the reply to the minion's first message under its session |
 | [Feedback](sessions/#feedback) | with its next check-in, at once | as it comes | in its answer to core's next call | as it comes |
 | [Max tasks](tasks-and-results/#max-tasks) (`max_tasks`) | in every reply until the minion has it | pushed, then in every reply until it has it | in the next call, and every one after until it has it | pushed, then in every reply until it has it |
 | [Long tasks](tasks-and-results/#resuming-a-task) (`resume`) | answers a part | answers a part | every call carries it | answers a part |
