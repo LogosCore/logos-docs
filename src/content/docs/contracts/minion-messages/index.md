@@ -41,7 +41,7 @@ answer back), or a connection socket (one message per frame, both ways).
 | [Identity](identity/) | Who a minion's work runs as when not its process's own: the `identity` item, its order with the acks, and what core keeps and shows. |
 | [Tasks and results](tasks-and-results/) | How an exchange goes, asking for tasks, a task and its arguments, cancelling, results, and listings of the host's file system. |
 | [File transfers](file-transfers/) | Files both ways, kept in core or streamed through it: chunks, acks, resuming, and what core keeps. |
-| [Tunnels](tunnels/) (draft) | TCP streams the minion opens from its host, carried in messages; core's SOCKS proxy on an operational port in front. |
+| [Tunnels](tunnels/) | TCP streams and UDP associations the minion opens from its host, carried in messages; core's SOCKS proxy, or a port forward, on an operational port in front. |
 
 ## A minion's life at a glance
 
@@ -172,7 +172,7 @@ them, first.
 | [Long tasks](tasks-and-results/#resuming-a-task) (`resume`) | answers a part | answers a part | every call carries it | answers a part |
 | [Files](file-transfers/) either way | the minion checks in at once while one moves | as it goes | a chunk a call, core calling again at once | as it goes |
 | [Streams](file-transfers/#streaming-a-file) that hold | core's `poll`: back within a second | pushed when they may go on | called when they may go on | pushed when they may go on |
-| [Tunnels](tunnels/) (draft) | core's `poll`: at once while items go, 250 ms with a stream idle, 1 s with none; the minion checks in at once with items of its own | pushed both ways as they come | only a minion that keeps its sockets between calls: called again while items go | pushed both ways as they come |
+| [Tunnels](tunnels/) | core's `poll`: at once while items go, 250 ms with a stream idle, 1 s with none; the minion checks in at once with items of its own | pushed both ways as they come | only a minion that keeps its sockets between calls: called again while items go | pushed both ways as they come |
 | [Switching](sessions/#connections) | the minion moves | the minion moves | a page has one connection | core dials, the minion moves through the dial |
 | [Failover](../channel-core-connections/#failover) | the minion's | the minion's | none | none: core has to dial it |
 | [Replays](wire-format/#freshness-and-replay) of core's messages | none: replies match `re` | the minion may remember ids | the page refuses an `at` out of its window | the minion may remember ids |

@@ -2,14 +2,6 @@
 title: "Tunnels"
 ---
 
-:::caution[Draft]
-A design, being built: the protocol package has the items, their checks and
-the tunnel actions (`socks_proxy`, `port_forward`), core has its side
-(operational ports, SOCKS with UDP, port forwards, the streams and their
-records, the web app's views), and BOB's minion its own (its
-`socks_proxy` and `port_forward` commands), none of it released yet.
-:::
-
 A **tunnel** is a TCP connection the minion makes from its host, whose bytes
 core and the minion carry inside their messages: core opens a **stream** to
 `host:port`, the minion connects there, and each side relays what its end

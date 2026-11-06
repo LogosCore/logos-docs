@@ -89,8 +89,8 @@ A command names them in the [build schema](../minion-build/#commands):
 | [`walk_dir`](#walk_dir) | `path` (string) | `dir_walk` | a listing's or the file browser's folder: Walk from here |
 | [`list_volumes`](#list_volumes) | nothing | `volumes` | the file browser's roots: Refresh, and once by itself |
 | [`switch_connection`](#switch_connection) | `conn` (int) | none | a session's connection: Switch to |
-| [`socks_proxy`](#socks_proxy) (draft) | `port` (int) | none | the session's commands: core opens a SOCKS proxy on an operational port |
-| [`port_forward`](#port_forward) (draft) | `port` (int), `host` (string), `to` (int) | none | the session's commands: core opens an operational port onto `host:to` |
+| [`socks_proxy`](#socks_proxy) | `port` (int) | none | the session's commands: core opens a SOCKS proxy on an operational port |
+| [`port_forward`](#port_forward) | `port` (int), `host` (string), `to` (int) | none | the session's commands: core opens an operational port onto `host:to` |
 
 More come as commands need them (a process list, a screenshot); each gets
 a section here first, and a release of the protocol and core. Planned:
@@ -765,8 +765,8 @@ Moves the minion to another of its build's connections: what a session's
 
 ## socks_proxy
 
-A tunnel with core's SOCKS proxy in front ([Tunnels](../minion-messages/tunnels/),
-a draft): core takes an operational port when the task is queued (`port`,
+A tunnel with core's SOCKS proxy in front ([Tunnels](../minion-messages/tunnels/)):
+core takes an operational port when the task is queued (`port`,
 an `int`: 0 for any free one, which the minion needs nothing of) and the
 task runs until stopped, its streams going as tunnel items. No result: the
 task's view is core's. Its command's other params, each with a default, are
@@ -775,8 +775,8 @@ minion's max tasks, nor does a `port_forward`'s.
 
 ## port_forward
 
-A tunnel with a port forward in front ([Tunnels](../minion-messages/tunnels/#port-forward),
-a draft): as `socks_proxy`, and every connection to the port a stream to `host`
+A tunnel with a port forward in front ([Tunnels](../minion-messages/tunnels/#port-forward)):
+as `socks_proxy`, and every connection to the port a stream to `host`
 (a `string`: a name, which the minion resolves, or an address) and `to` (an
 `int`, the destination's port), which core reads and checks; the minion
 needs nothing of them, each stream's tunnel item naming its destination.
