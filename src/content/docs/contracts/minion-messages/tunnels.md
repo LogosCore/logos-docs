@@ -4,10 +4,9 @@ title: "Tunnels"
 
 :::caution[Draft]
 A design, being built: the protocol package has the items, their checks and
-the `tunnel` action, core has its side (operational ports, SOCKS, the
-streams and their records), and BOB's minion its own (the `socks`
-command), none of it released yet. The web app has no view of a tunnel yet:
-the task's args show its port. UDP is not built.
+the `tunnel` action, core has its side (operational ports, SOCKS with UDP,
+the streams and their records, the web app's views), and BOB's minion its
+own (the `socks` command), none of it released yet.
 :::
 
 A **tunnel** is a TCP connection the minion makes from its host, whose bytes
@@ -258,31 +257,35 @@ fills its own the same way.
 Core answers SOCKS on the task's port:
 
 - **SOCKS5** ([RFC 1928](https://www.rfc-editor.org/rfc/rfc1928)) `CONNECT`
-  to an IPv4 or IPv6 address or a domain name, and **SOCKS4** / **4a**
-  `CONNECT`. A name goes to the minion as it came: the minion resolves it.
-  `UDP ASSOCIATE` comes [next](#udp); `BIND` is refused (command not
+  to an IPv4 or IPv6 address or a domain name, and `UDP ASSOCIATE`
+  ([UDP](#udp)); **SOCKS4** / **4a** `CONNECT`. A name goes to the minion as
+  it came: the minion resolves it. `BIND` is refused (command not
   supported, 7).
 - **No credentials.** Core offers SOCKS5's "no authentication" method only:
   any tool reaching the port uses it ([Operational
   ports](#operational-ports)).
-- The reply's `BND.ADDR` is the minion's `bound` address, so a tool sees the
-  address its connection leaves the host from.
+- A `CONNECT` reply's `BND.ADDR` is the minion's `bound` address, so a tool
+  sees the address its connection leaves the host from; a `UDP ASSOCIATE`
+  reply's is core's relay.
 
 ## UDP
 
-Right after the TCP streams: SOCKS5 **`UDP ASSOCIATE`**, for what speaks
-UDP to the minion's networks (DNS to an internal server, SNMP, NTP).
+SOCKS5 **`UDP ASSOCIATE`**, for what speaks UDP to the minion's networks
+(DNS to an internal server, SNMP, NTP).
 
 1. A tool asks for an association over its SOCKS connection. Core opens a
    stream for it with `tunnel` and `udp: true` (key 6) and no host or port;
    the minion opens a UDP socket and answers `tunnel_reply` with its
    `bound` address.
 2. Core answers the tool with its UDP relay: the same operational port
-   number, UDP. Datagrams the tool sends there (the SOCKS UDP header, then
-   the payload) go to the minion as `tunnel_datagram` items: the
-   destination, the payload. The minion sends each from its socket, and
-   sends what comes back to it as `tunnel_datagram` with the source; core
-   wraps it in the header and sends it to the tool.
+   number, UDP, at core's `OPERATIONAL_ADDRESS` when it is an IP, else the
+   address the tool reached core at (tools such as PySocks send to the
+   proxy's host they know, and the reply's port). Datagrams the tool sends
+   there (the SOCKS UDP header, then the payload) go to the minion as
+   `tunnel_datagram` items: the destination, the payload. The minion sends
+   each from its socket, and sends what comes back to it as
+   `tunnel_datagram` with the source; core wraps it in the header and
+   sends it to the tool.
 3. The association lasts as long as the tool's SOCKS connection: when that
    closes, core sends `tunnel_close`, and the minion closes its socket.
 
@@ -309,6 +312,18 @@ tunnel_datagram = {     ; both: one datagram of a UDP stream
   as most SOCKS servers do.
 - **The same task**, the same `max_streams` (an association counts as one),
   and the same ending.
+- **Whose datagram.** The relay is one socket for the port's associations:
+  a datagram is the association's whose tool sent it, the first that comes
+  from the tool's address (its SOCKS connection's) binding the association
+  to its source, port and all. What the request says the tool sends from
+  is not checked: NAT, and Docker's proxy for a published port, change it.
+  A port whose UDP is taken has no relay: its `UDP ASSOCIATE`s are refused
+  (command not supported, 7).
+- **Once each.** Each side takes a `seq` once (the latest and the 64
+  before it), so a message sent again doubles no datagram.
+- **Its record** is a stream's, with `udp` and no destination (each
+  datagram names its own), the payloads' bytes each way. The Proxy tab
+  shows it as UDP.
 
 ## On each connection kind
 
@@ -330,8 +345,14 @@ command's `kinds` say where it works.
 ## What core keeps and shows
 
 - **The task** in the session's Tasks, running, with **Stop**; its args show
-  the port core took. Its view (to come): the proxy's address and port to
-  copy, a `proxychains` line, and its streams, live.
+  the port core took. Its **Proxy** tab: the proxy's address (core's
+  `OPERATIONAL_ADDRESS`, else the web app's host) to copy as `host:port`, as
+  a `socks5h://` URL (for `curl -x`, `ALL_PROXY` or a browser) and as a
+  `proxychains` line; whether core listens (and that tools wait until the
+  minion has the task); its streams counted and its bytes each way; and its
+  streams, live, the latest first, searched (the tool, the destination) and
+  filtered (open, ended) by the server. The task's live updates carry the
+  numbers, once a second at most while its streams move.
 - **Each stream's record** (`minion_tunnel_streams`): the task and the
   stream's number, the client's address, the destination as the tool named
   it, when it opened, the minion's reply (result, `bound`, `msg`), when and
@@ -339,8 +360,11 @@ command's `kinds` say where it works.
   `lost`, `task_ended`, `core_stopped`) and the bytes each way: who reached
   what through the minion, as the operation's record, deleted with the
   operation. The bytes themselves are never kept.
-- **The operation's Ports** (to come): every operational port in use, by
-  whom, for which session, since when.
+- **The operation's Ports** (a page of its own): every operational port in
+  use, the latest opened first: what it serves, its session, who opened it
+  and when, its streams; searched by the port, the session's number and
+  who opened it; live, by the operation's port events (opened, its streams'
+  numbers once a second at most, closed).
 
 ## Limits
 
