@@ -89,8 +89,9 @@ and [Channel ↔ Core: Connections](../contracts/channel-core-connections/).
   accepts any method on any path (`reverse-call`), and WebSocket connections
   whose binary frames are messages (`reverse-persistent`, over a connection
   socket to core). Its connection schema gives each kind its own fields.
-- PHP pages: `logos-dumbo-channel` calls the pages the Dumbo factory builds
-  (`bind-call`), over its control link to core.
+- PHP pages: the Dumbo channel (`logos-dumbo`, with the Dumbo factory in one
+  repo and image) calls the pages the factory builds (`bind-call`), over its
+  control link to core.
 - Listening minions: `logos-tcp-channel` dials a minion that listens on a
   TCP port, directly or through a proxy (`bind-persistent`), and relays its
   length-prefixed frames over a connection socket.
@@ -136,9 +137,9 @@ Planned, with the factory command contract:
 
 - BOB (`logos-bob-factory`), the reference factory: it builds dummy minions, a
   JSON description of what the minion would be built with.
-- Dumbo (`logos-dumbo-factory`): PHP pages, `bind-call` minions core reaches
-  through the Dumbo channel (`logos-dumbo-channel`); a proof of concept with
-  one command, `hello`.
+- Dumbo (`logos-dumbo`, the factory and its channel in one repo and image):
+  PHP pages, `bind-call` minions core reaches through the Dumbo channel; a
+  proof of concept with eight commands (hello, files, listings, walks).
 - Go, .NET or Python factories: possible, none built yet.
 
 ### Optional Translator Hooks
