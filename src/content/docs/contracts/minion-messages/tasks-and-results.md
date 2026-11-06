@@ -238,6 +238,12 @@ A minion acks the tasks it received with `tasks`, in its next message: core
 stops sending them. `xfer`, `next` and `hold` move a file transfer along
 ([File transfers](../file-transfers/#chunks)).
 
+The ack is also where core records who a task runs as: the session's
+identity when the ack came, unless the task said its own. A message may
+carry several acks, in the order the minion took the tasks, so a change of
+the session's identity between them covers only those after it
+([Identity](../identity/#message-order)).
+
 ## Cancelling a task
 
 ```cddl

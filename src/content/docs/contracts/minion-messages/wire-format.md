@@ -257,6 +257,7 @@ given in its CDDL on the page that defines it.
 | | | 17 | [`max_tasks`](../tasks-and-results/#max-tasks) |
 | | | 18 | [`feedback`](../sessions/#feedback) |
 | | | 19 | [`reack`](../tasks-and-results/#tasks-the-minion-lost) |
+| | | 20 | [`identity`](../identity/) |
 
 **The message**: `v` 0, `id` 1, `re` 2, `items` 3, and core's `at` 4, as [above](#message).
 
@@ -273,6 +274,8 @@ keys](../sessions/#stage), and the data of each of core's
 |---|---|---|
 | Err codes | `bad_message` 1 … `stale` 7 | [Errors](#errors) |
 | Integrity levels | `low` 1, `medium` 2, `high` 3, `system` 4, `root` 5, `user` 6 | [Sessions](../sessions/#hello) |
+| Identity scopes | the session's 1, one task's 2 | [Identity](../identity/) |
+| Identity ways (`how`) | impersonation 1, network 2, become 3 | [Identity](../identity/) |
 | Machine id sources | `smbios-uuid` 1 … `ephemeral` 10 | [Sessions](../sessions/#machine-identity) |
 | Entry types | `dir` 1, `file` 2, `link` 3, `other` 4 | [Listings](../tasks-and-results/#listings) |
 | Listing errors | denied 1, not found 2, other 3 | [Listings](../tasks-and-results/#listings) |

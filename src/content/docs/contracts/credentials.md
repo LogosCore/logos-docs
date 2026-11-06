@@ -135,6 +135,10 @@ One refused is noted on the target only, not marked invalid: a key may open
 one server and not another. Core takes logins only for the credentials it
 gave the call: a channel naming any other is ignored.
 
+A minion's [`identity`](../minion-messages/identity/#credentials) that
+names a credential (one its task gave, used and accepted: a become's
+password) marks it valid the same way.
+
 ## Design notes
 
 - **Ids where the values are kept, credentials beside them when sent.** The

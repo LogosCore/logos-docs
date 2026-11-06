@@ -38,6 +38,7 @@ answer back), or a connection socket (one message per frame, both ways).
 |---|---|
 | [Wire format](wire-format/) | The sealed frame, the message envelope, CBOR rules, replay, errors and limits: what every message is. |
 | [Sessions](sessions/) | How a minion process gets keys and a session (staging, `hello`), what identifies its machine, how long a session lives, persisted and late sessions, and what a minion does when an exchange fails. |
+| [Identity](identity/) | Who a minion's work runs as when not its process's own: the `identity` item, its order with the acks, and what core keeps and shows. |
 | [Tasks and results](tasks-and-results/) | How an exchange goes, asking for tasks, a task and its arguments, cancelling, results, and listings of the host's file system. |
 | [File transfers](file-transfers/) | Files both ways, kept in core or streamed through it: chunks, acks, resuming, and what core keeps. |
 
@@ -125,6 +126,8 @@ everything as it comes, so operators never see the numbers.
 | 16 | `poll` | core | come back sooner than the schedule: something may go on any moment | [Tasks and Results](tasks-and-results/#coming-back-sooner) |
 | 17 | `max_tasks` | both | how many tasks the minion runs at once: core sets it, the minion says what it has | [Tasks and Results](tasks-and-results/#max-tasks) |
 | 18 | `feedback` | minion | a warning or an error for its operators | [Sessions](sessions/#feedback) |
+| 19 | `reack` | core | which of the tasks core thinks the minion runs it still has | [Tasks and results](tasks-and-results/#tasks-the-minion-lost) |
+| 20 | `identity` | minion | who its tasks, or a task, run as when not its process's own | [Identity](identity/) |
 
 ## Mechanics by connection kind
 
@@ -163,6 +166,7 @@ them, first.
 | [`cancel`](tasks-and-results/#cancelling-a-task) | at the next check-in | pushed | in the next call (a task inside a running call ends first) | pushed |
 | [Lost tasks](tasks-and-results/#tasks-the-minion-lost) (`reack`) | after a claim, at the next check-in | after a claim, pushed | none: a call's tasks end within it, long ones go on through `resume` | after a claim, and on each new connection in the reply to the minion's first message under its session |
 | [Feedback](sessions/#feedback) | with its next check-in, at once | as it comes | in its answer to core's next call | as it comes |
+| [Identity](identity/) | with its next check-in, in order with its acks | as it comes, in order with its acks | in its answer to core's call, in order with its acks | as it comes, in order with its acks |
 | [Max tasks](tasks-and-results/#max-tasks) (`max_tasks`) | in every reply until the minion has it | pushed, then in every reply until it has it | in the next call, and every one after until it has it | pushed, then in every reply until it has it |
 | [Long tasks](tasks-and-results/#resuming-a-task) (`resume`) | answers a part | answers a part | every call carries it | answers a part |
 | [Files](file-transfers/) either way | the minion checks in at once while one moves | as it goes | a chunk a call, core calling again at once | as it goes |

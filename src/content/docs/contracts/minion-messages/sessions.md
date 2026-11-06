@@ -150,6 +150,10 @@ shows the numbered values by name: the integrity level, the machine id as
 - `integrity` is the Windows integrity level (`low`, `medium`, `high`,
   `system`), or elsewhere `root` or `user`. A level core does not know shows
   as its number.
+- `user`, `domain` and `integrity` are the **process's own**, and only that.
+  Who its work runs as instead (a stolen token, a become) is an
+  [`identity`](../identity/)'s; a rehello says the process itself changed (an
+  in-process `setuid`).
 - `conn` names the connection the minion uses by its place in the build's
   connections (1 for the first): a minion carries no connection names, and
   core knows each one's name, kind and channel from the build. When it
@@ -425,6 +429,13 @@ command that crashed (`task_panic`, an error: the task fails, the minion goes
 on). It keeps at most 100 unsent, folds the same one into a count, and says
 how many it dropped. Its `feedback` command (op 14) sends a warning or an
 error of the operator's words, to try it.
+
+## Identity
+
+Who a minion's work runs as when not its process's own (a stolen token, a
+become) is not the hello's: the minion says it with an `identity` item.
+[Identity](../identity/) has the item, the order it goes in with the acks,
+and what core keeps and shows.
 
 ## When an exchange fails
 
