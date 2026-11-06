@@ -3,9 +3,9 @@ title: "Tunnels"
 ---
 
 :::caution[Draft]
-A design to agree on, not built yet. Nothing here is in the protocol package,
-core or a minion; the item numbers and the action are proposed, and the open
-questions at the end are to settle first.
+A design, being built: the protocol package has the items, their checks and
+the `tunnel` action (not released yet); core and the minions do not have
+them yet.
 :::
 
 A **tunnel** is a TCP connection the minion makes from its host, whose bytes
@@ -123,12 +123,14 @@ tunnel_reply = {        ; minion → core: opened, or why not
   0: 22,                ; t: tunnel_reply
   1: task-id,           ; task
   2: uint,              ; stream
-  3: uint,              ; result: 0 open, else why (below)
+  3: uint,              ; result: 0 open, else why (below); one the
+                        ;   receiver does not know reads as 6
   ? 4: tstr,            ; bound: the local address of the minion's socket,
-                        ;   "ip:port", when open
+                        ;   "ip:port", when open; 128 bytes at most
   ? 5: uint,            ; room: what the minion takes past an ack, 262144
                         ;   when absent
-  ? 6: tstr,            ; msg: why, for a person, when not open
+  ? 6: tstr,            ; msg: why, for a person, when not open; 256
+                        ;   bytes at most
 }
 
 tunnel_data = {         ; both: bytes of the stream, one direction
@@ -139,7 +141,8 @@ tunnel_data = {         ; both: bytes of the stream, one direction
   ? 4: bstr,            ; data: at most 64 KiB, within the connection's
                         ;   max_message
   ? 5: bool,            ; eof: the sender sends no more after data (its
-                        ;   end closed for writing)
+                        ;   end closed for writing); an item has data, an
+                        ;   eof, or both
 }
 
 tunnel_ack = {          ; both: how far the receiver has a direction
@@ -148,15 +151,17 @@ tunnel_ack = {          ; both: how far the receiver has a direction
   2: uint,              ; stream
   3: uint,              ; next: it has every byte before next
   ? 4: uint,            ; room: it takes this many past next, unchanged
-                        ;   when absent
+                        ;   when absent; 0 stops the sender until an ack
+                        ;   gives room; 16 MiB at most
 }
 
 tunnel_close = {        ; both: the stream is over
   0: 25,                ; t: tunnel_close
   1: task-id,           ; task
   2: uint,              ; stream
-  3: uint,              ; reason (below)
-  ? 4: tstr,            ; msg: for a person
+  3: uint,              ; reason (below); one the receiver does not know
+                        ;   reads as a reset
+  ? 4: tstr,            ; msg: for a person, 256 bytes at most
 }
 ```
 
@@ -175,7 +180,7 @@ tunnel_close = {        ; both: the stream is over
 | 1 | done: both directions reached `eof` and were acked |
 | 2 | reset: one end aborted (the operator's tool, or the host) |
 | 3 | no such stream here: the receiver does not have it (a stream of a connection that went) |
-| 4 | the task ended, or is ending |
+| 4 | the task ended, or is ending, or the minion runs no such tunnel task |
 
 **Opening.** Core sends `tunnel` once a SOCKS client asked for a
 destination; the minion connects (resolving a name on its own host, so
@@ -190,14 +195,20 @@ sent again is not kept twice. The receiver answers with `tunnel_ack`: `next`,
 and the `room` it has past it. A sender keeps every byte it sends until an
 ack covers it, and sends no byte past `next + room`: a stream whose reader is
 slow stops its writer, on both sides, and neither holds more than its window
-of it.
+of it. An ack whose `next` is below the last one taken is ignored; one with
+the same `next` updates `room`. A receiver takes every byte within the room
+it gave, even when a later ack gives less.
 
 **Closing.** A direction ends with `eof` (a half close: the other may go on).
-When both have ended and been acked, either side sends `tunnel_close` with
-`done`. An end that aborts (the tool closed its socket, the host reset)
-sends `reset`, and the other side drops the stream at once. An item about a
-stream the receiver does not have is answered with `tunnel_close` reason 3,
-and the sender drops it.
+The eof takes one place in the offsets, after the last byte, as TCP's FIN
+does: an ack of `off + len(data) + 1` says the receiver has it, so even an
+eof with no data is acked. When both directions have ended and each side has
+the other's eof, the side that sees it sends `tunnel_close` with `done` and
+drops the stream. An end that aborts (the tool closed its socket, the host
+reset) sends `reset`, and the other side drops the stream at once. An item
+about a stream the receiver does not have (other than a close) is answered
+with `tunnel_close` reason 3, and the sender drops it; a `tunnel` for a task
+the minion does not run as a tunnel, with reason 4.
 
 **Sent twice, safely.** `tunnel` for a stream the minion has is answered with
 its `tunnel_reply` again; `tunnel_data` before `next` is dropped (and acked
@@ -312,7 +323,9 @@ command's `kinds` say where it works.
 | | |
 |---|---|
 | A `tunnel_data`'s data | 64 KiB, and within the connection's `max_message` |
-| A stream's window (`room`), as opened | 256 KiB each way, unless a side says another |
+| A stream's window (`room`), as opened | 256 KiB each way, unless a side says another; 16 MiB at most |
+| A destination's (or a datagram source's) host | 255 bytes, printable |
+| A datagram's payload | 65 535 bytes, and within the connection's `max_message` |
 | Streams open at once in a task | the command's `max_streams` (256 by default); core refuses more SOCKS clients with not allowed |
 | A SOCKS client waiting for its stream to open | the command's `timeout` and the minion's way back: on `reverse-call`, within its `interval` |
 
