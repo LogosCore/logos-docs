@@ -93,8 +93,10 @@ get_tasks = {
 
 ## Max tasks
 
-Every minion has a limit of tasks at once. Its factory sets it in one of
-two ways:
+Every minion has a limit of tasks at once. A task of a tunnel action
+([Tunnels](../tunnels/), a draft: a SOCKS proxy, a port forward) holds no
+place in it, on either side, as long as it runs. Its factory sets it in one
+of two ways:
 
 - **The factory's own** (one at a time, say): the minion may say it in its
   `hello`, and the session shows it ("max 1 · set by its factory"); nothing

@@ -4,9 +4,10 @@ title: "Tunnels"
 
 :::caution[Draft]
 A design, being built: the protocol package has the items, their checks and
-the `tunnel` action, core has its side (operational ports, SOCKS with UDP,
-the streams and their records, the web app's views), and BOB's minion its
-own (the `socks` command), none of it released yet.
+the tunnel actions (`socks_proxy`, `port_forward`), core has its side
+(operational ports, SOCKS with UDP, port forwards, the streams and their
+records, the web app's views), and BOB's minion its own (its
+`socks_proxy` and `port_forward` commands), none of it released yet.
 :::
 
 A **tunnel** is a TCP connection the minion makes from its host, whose bytes
@@ -73,18 +74,25 @@ others (a port forward to a host behind a minion) take ports the same way.
   task; every member sees which are open, and the operation's **Ports**
   lists them.
 
-## The tunnel command
+## The tunnel commands
 
 A minion tunnels only when its build has a command for it, as for any other
 work: the factory declares a command whose
-[action](../../task-results-and-actions/) is **`tunnel`**, and the operator
-picks it into the build. A minion built without one carries nothing of
-tunnels, and takes no tunnel item.
+[action](../../task-results-and-actions/) is a **tunnel action**, and the
+operator picks it into the build. A minion built without one carries
+nothing of tunnels, and takes no tunnel item. The action says what core puts
+in front of the port; the minion's side is the same for each: it opens the
+streams core asks for, wherever each goes, and relays them.
 
-| `tunnel` action | |
+| Action | Core gives | In front of the port |
+|---|---|---|
+| **`socks_proxy`** | `port` | core's [SOCKS](#socks) proxy: each tool says where each of its connections goes |
+| **`port_forward`** | `port`, `host` (string), `to` (int) | a [port forward](#port-forward): every connection a stream to `host:to` |
+
+| Both | |
 |---|---|
-| Core gives | `port`, an `int`: the operational port core listens on for the task, 0 for any free one. The minion needs nothing of it. |
-| Needs result | none: the task's view is core's (the proxy's address and its streams). |
+| `port` | an `int`: the operational port core listens on for the task, 0 for any free one. The minion needs nothing of it, nor of a forward's `host` and `to`: each stream's `tunnel` item names its destination. |
+| Needs result | none: the task's view is core's (the port's address and its streams). |
 | `kinds` | The command's [`kinds`](../../minion-build/#commands) leave out those its minion cannot keep a socket open over between messages: a `bind-call` page keeps nothing between calls, so its factory leaves `bind-call` out. |
 
 A command may take more, each with a default: how long the minion waits for
@@ -95,7 +103,8 @@ long and 30 s more for its stream to open, and refuses one past
 say ([On each connection kind](#on-each-connection-kind)).
 
 **The task is the tunnel.** Core opens the port when it queues the task, and
-holds it while the task runs: one SOCKS proxy, any number of streams.
+holds it while the task runs: one SOCKS proxy or one forward, any number of
+streams.
 
 **Shared by the operation.** A port serves its task, not the operator who
 started it: any number of tools, of any number of operators, use it at once,
@@ -107,6 +116,14 @@ minion acks the task and keeps it running, taking `tunnel` items for it,
 until core cancels it. **Stop** cancels the task: core closes the port and
 its streams, and the minion closes its sockets and ends the task ok. A task
 that ends on the minion's side (it exited, it lost the task) closes the port.
+
+**No place in max tasks.** A tunnel task runs as long as its tunnel is
+open: a capability the minion lends, not work it does. It holds no place in
+the minion's [max tasks](../tasks-and-results/#max-tasks): the minion leaves
+it out of the room its `get_tasks` asks for, and core out of a standing
+allowance, so a SOCKS proxy and any number of forwards leave the minion all
+its places. The session's Tasks line counts them apart ("2 running · 1
+tunnel beside the limit · max 5").
 
 ## Streams
 
@@ -267,6 +284,25 @@ Core answers SOCKS on the task's port:
 - A `CONNECT` reply's `BND.ADDR` is the minion's `bound` address, so a tool
   sees the address its connection leaves the host from; a `UDP ASSOCIATE`
   reply's is core's relay.
+
+## Port forward
+
+A `port_forward` task opens its port onto one destination, as `ssh -L` does:
+what reaches `core:41001` reaches `10.0.0.5:3389` from the minion's host
+(`mstsc /v:core:41001`). Its command's `host` and `to` are core's: core
+checks them as a stream's destination when it queues the task (a name, or
+an address; a port from 1 to 65535), and refuses the task otherwise.
+
+- **No handshake.** Each connection to the port is a stream to `host:to` at
+  once. A client that connects before the minion has the task waits, as a
+  SOCKS client does; one past `max_streams`, or whose connect the minion
+  could not make, has its connection reset, as the destination refusing it
+  would.
+- **TCP only:** the port has no UDP relay.
+- **The same streams and records** as a proxy's: the same items, each
+  stream's destination the forward's.
+- Its task's **Forward** tab says `core:41001 → 10.0.0.5:3389` and copies
+  the address; the operation's Ports page says what each port forwards to.
 
 ## UDP
 
