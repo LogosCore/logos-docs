@@ -258,6 +258,8 @@ given in its CDDL on the page that defines it.
 | | | 18 | [`feedback`](../sessions/#feedback) |
 | | | 19 | [`reack`](../tasks-and-results/#tasks-the-minion-lost) |
 | | | 20 | [`identity`](../identity/) |
+| | | 21–25 | proposed (draft): [`tunnel`, `tunnel_reply`, `tunnel_data`, `tunnel_ack`, `tunnel_close`](../tunnels/#streams) |
+| | | 26 | proposed (draft): [`tunnel_datagram`](../tunnels/#udp) |
 
 **The message**: `v` 0, `id` 1, `re` 2, `items` 3, and core's `at` 4, as [above](#message).
 

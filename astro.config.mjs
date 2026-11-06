@@ -105,6 +105,7 @@ export default defineConfig({
                 { slug: "contracts/minion-messages/identity" },
                 { slug: "contracts/minion-messages/tasks-and-results" },
                 { slug: "contracts/minion-messages/file-transfers" },
+                { slug: "contracts/minion-messages/tunnels" },
               ],
             },
             { slug: "contracts/task-results-and-actions" },
