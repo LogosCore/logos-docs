@@ -4,8 +4,10 @@ title: "Tunnels"
 
 :::caution[Draft]
 A design, being built: the protocol package has the items, their checks and
-the `tunnel` action (not released yet); core and the minions do not have
-them yet.
+the `tunnel` action, and core has its side (operational ports, SOCKS, the
+streams and their records), none of it released yet. The minions do not
+have them yet, nor the web app the task's view: a tunnel task's args show
+its port.
 :::
 
 A **tunnel** is a TCP connection the minion makes from its host, whose bytes
@@ -61,8 +63,13 @@ others (a port forward to a host behind a minion) take ports the same way.
   port to the instance that holds it.
 - **Kept, and opened again.** Core keeps which port serves which task
   (`operational_ports`: the port, its purpose, operation, session, task, who
-  opened it and when). A restart opens again the ports of tasks still
-  running.
+  opened it and when, the task's `max_streams` and `timeout`, and how many
+  streams it has opened, so a stream's number is never used twice, a
+  restart's neither). A restart opens again the ports of tasks still
+  running; one that does not open ends its task, as Stop does. Streams do
+  not outlive a restart: their clients' connections close, and the minion's
+  sockets for them close when it next says anything of them (core answers
+  `tunnel_close` 3).
 - **Who.** An operator of the operation opens and closes them, through the
   task; every member sees which are open, and the operation's **Ports**
   lists them.
@@ -81,10 +88,12 @@ tunnels, and takes no tunnel item.
 | Needs result | none: the task's view is core's (the proxy's address and its streams). |
 | `kinds` | The command's [`kinds`](../../minion-build/#commands) leave out those its minion cannot keep a socket open over between messages: a `bind-call` page keeps nothing between calls, so its factory leaves `bind-call` out. |
 
-A command may take more, each with a default, which only the minion reads:
-how long it waits for a connect (`timeout`, 10 s), how many streams it keeps
-open at once (`max_streams`, 256), and, for a minion that polls, how often it
-checks in while the task runs and no stream is open (`interval`, 1 s).
+A command may take more, each with a default: how long the minion waits for
+a connect (`timeout`, 10 s), and how many streams may be open at once
+(`max_streams`, 256). Core reads both as well: it holds a SOCKS client that
+long and 30 s more for its stream to open, and refuses one past
+`max_streams` itself. How often a minion that polls checks in is core's to
+say ([On each connection kind](#on-each-connection-kind)).
 
 **The task is the tunnel.** Core opens the port when it queues the task, and
 holds it while the task runs: one SOCKS proxy, any number of streams.
@@ -183,26 +192,37 @@ tunnel_close = {        ; both: the stream is over
 | 4 | the task ended, or is ending, or the minion runs no such tunnel task |
 
 **Opening.** Core sends `tunnel` once a SOCKS client asked for a
-destination; the minion connects (resolving a name on its own host, so
+destination and the minion has the task (its ack: a client that comes
+sooner waits); the minion connects (resolving a name on its own host, so
 internal names work) and answers with `tunnel_reply`. Core holds the SOCKS
-client until the reply comes, or the command's `timeout` and the minion's way
-back have passed, then answers it with the reply's code.
+client until the reply comes, or the command's `timeout` and 30 s more have
+passed, then answers it with the reply's code (TTL expired when none came,
+and sends `reset`, should the minion open it late). A `tunnel` with no
+reply goes again after 5 s.
 
 **Bytes, in order, within a window.** Each direction is a byte stream from 0,
-as a file is in [chunks](../file-transfers/#chunks): a `tunnel_data` is kept
-only when its `off` is where the receiver has the stream (its `next`), so one
-sent again is not kept twice. The receiver answers with `tunnel_ack`: `next`,
-and the `room` it has past it. A sender keeps every byte it sends until an
-ack covers it, and sends no byte past `next + room`: a stream whose reader is
-slow stops its writer, on both sides, and neither holds more than its window
-of it. An ack whose `next` is below the last one taken is ignored; one with
-the same `next` updates `room`. A receiver takes every byte within the room
-it gave, even when a later ack gives less.
+as a file is in [chunks](../file-transfers/#chunks): a receiver takes a
+`tunnel_data` from its `next` (the part before it, it has), so one sent
+again is not kept twice. One that starts past `next` (two messages crossing,
+or one lost before it) it may keep, within the room it gave, until the bytes
+before it come; core does, and a minion should, as its messages and core's
+may cross over a persistent connection. The receiver answers every
+`tunnel_data` with `tunnel_ack`: `next`, and the `room` it has past it. A
+sender keeps every byte it sends until an ack covers it, sends again from
+the ack what stays unacked for a while (core: 5 s), and sends no byte past
+`next + room`: a stream whose reader is slow stops its writer, on both
+sides, and neither holds more than its window of it. A window shut that
+long with bytes waiting gets a probe, one byte past it, as TCP probes a
+zero window: the ack that gave room may have been lost, and the receiver,
+taking the byte or dropping it, acks. An ack whose `next` is below the last
+one taken is ignored; one with the same `next` updates `room`. A receiver
+takes every byte within the room it gave, even when a later ack gives
+less.
 
 **Closing.** A direction ends with `eof` (a half close: the other may go on).
 The eof takes one place in the offsets, after the last byte, as TCP's FIN
 does: an ack of `off + len(data) + 1` says the receiver has it, so even an
-eof with no data is acked. When both directions have ended and each side has
+eof with no data is acked. It needs no room. When both directions have ended and each side has
 the other's eof, the side that sees it sends `tunnel_close` with `done` and
 drops the stream. An end that aborts (the tool closed its socket, the host
 reset) sends `reset`, and the other side drops the stream at once. An item
@@ -219,17 +239,19 @@ connection loses no byte and doubles none.
 **Back over a new connection.** The streams are the minion's sockets and
 core's clients: they outlive a connection that drops when both ends do. When
 the minion comes back (its next check-in, or a new persistent connection),
-each side sends again from the other's last ack. A minion whose sockets go
+each side sends again from the other's last ack, as it does with anything
+unacked for a while. A minion whose sockets go
 with its connection (a channel that acts as the minion, its state per
 connection) answers the first item about each with reason 3, and core closes
 its SOCKS client.
 
 **In a message.** Tunnel items share messages with everything else, within
-the connection's `max_message` ([Limits](../wire-format/#limits)): core puts
-its acks and cancels first, then tasks, then tunnel acks, then tunnel data,
-one item per stream in turn while the message has room, so a busy stream
-does not starve the others or the tasks. A minion fills its own the same
-way.
+the connection's `max_message` ([Limits](../wire-format/#limits)) and its
+256 items: core puts its acks and cancels first, then tasks, then the
+tunnels': closes, opens, acks, then data, one item per stream in turn while
+the message has room (half of it when the reply also carries an upload's
+chunks), so a busy stream does not starve the others or the tasks. A minion
+fills its own the same way.
 
 ## SOCKS
 
@@ -292,8 +314,8 @@ tunnel_datagram = {     ; both: one datagram of a UDP stream
 
 | Kind | A tunnel's items go |
 |---|---|
-| `reverse-call` | in the minion's check-ins and core's replies, as fast as they go: **while a stream is open the minion skips its sleep**, checking in again as soon as a reply comes; while the task runs with no stream open, it checks in every `interval` (1 s), so a new stream opens within about a second; with no tunnel task, on its schedule. Core answers at once when it has tunnel items, and holds an empty reply up to 250 ms for bytes to come, so an idle stream does not spin. |
-| `reverse-persistent` | as they come, pushed both ways |
+| `reverse-call` | in the minion's check-ins and core's replies, as fast as they go: core's replies say when to come back ([`poll`](../#mechanics-by-connection-kind)): at once while tunnel items go either way, within 250 ms with a stream open and nothing under way, within 1 s while the task runs (or waits for its ack) with no stream open, so a new stream opens within about a second. A minion with tunnel items of its own (its host's bytes, an ack) checks in at once, skipping its sleep. With no tunnel task, on its schedule. |
+| `reverse-persistent` | as they come, pushed both ways (core waits 5 ms for more of a client's bytes, to send them as one message) |
 | `bind-call` | in core's calls, called again at once while a stream has bytes either way: only for a minion that keeps its sockets between calls. A page does not, and leaves the kind out of the command's `kinds`. |
 | `bind-persistent` | as `reverse-persistent`, while connected |
 
@@ -307,16 +329,18 @@ command's `kinds` say where it works.
 
 ## What core keeps and shows
 
-- **The task** in the session's Tasks: *SOCKS on core:41000*, running, with
-  **Stop**. Its view: the proxy's address and port to copy, a `proxychains`
-  line, and its streams, live: the
-  client's address, the destination, bytes each way, when it opened, how it
-  ended.
-- **Each stream's destination**, in the task's output as it opens and ends
-  (`10.0.0.5:445 open … closed, 3.2 KB up, 18.4 KB down`): who reached what
-  through the minion, as the operation's record. The bytes are never kept.
-- **The operation's Ports**: every operational port in use, by whom, for
-  which session, since when.
+- **The task** in the session's Tasks, running, with **Stop**; its args show
+  the port core took. Its view (to come): the proxy's address and port to
+  copy, a `proxychains` line, and its streams, live.
+- **Each stream's record** (`minion_tunnel_streams`): the task and the
+  stream's number, the client's address, the destination as the tool named
+  it, when it opened, the minion's reply (result, `bound`, `msg`), when and
+  how it ended (`done`, `not_opened`, `no_reply`, `client_reset`, `reset`,
+  `lost`, `task_ended`, `core_stopped`) and the bytes each way: who reached
+  what through the minion, as the operation's record, deleted with the
+  operation. The bytes themselves are never kept.
+- **The operation's Ports** (to come): every operational port in use, by
+  whom, for which session, since when.
 
 ## Limits
 
@@ -327,7 +351,10 @@ command's `kinds` say where it works.
 | A destination's (or a datagram source's) host | 255 bytes, printable |
 | A datagram's payload | 65 535 bytes, and within the connection's `max_message` |
 | Streams open at once in a task | the command's `max_streams` (256 by default); core refuses more SOCKS clients with not allowed |
-| A SOCKS client waiting for its stream to open | the command's `timeout` and the minion's way back: on `reverse-call`, within its `interval` |
+| A SOCKS client's greeting and request | 10 s |
+| A SOCKS client waiting for its stream to open | the command's `timeout` (10 s by default) and 30 s more |
+| What core reads of a client ahead of the minion's ack | the minion's room, 1 MiB at most |
+| Sent and not acked, or a window shut, before core sends again (or probes) | 5 s |
 
 ## Open questions
 
