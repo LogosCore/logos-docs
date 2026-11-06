@@ -4,10 +4,10 @@ title: "Tunnels"
 
 :::caution[Draft]
 A design, being built: the protocol package has the items, their checks and
-the `tunnel` action, and core has its side (operational ports, SOCKS, the
-streams and their records), none of it released yet. The minions do not
-have them yet, nor the web app the task's view: a tunnel task's args show
-its port.
+the `tunnel` action, core has its side (operational ports, SOCKS, the
+streams and their records), and BOB's minion its own (the `socks`
+command), none of it released yet. The web app has no view of a tunnel yet:
+the task's args show its port. UDP is not built.
 :::
 
 A **tunnel** is a TCP connection the minion makes from its host, whose bytes
