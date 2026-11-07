@@ -2,12 +2,6 @@
 title: "Agentless Channels"
 ---
 
-:::caution[Draft]
-An agreed design, not built yet. The first agentless channel is the SSH
-module (`logos-ssh`): an SSH factory and an SSH channel that reach SSH
-servers with nothing installed on them.
-:::
-
 A channel normally carries a minion's sealed messages without reading them:
 the minion runs on the target, and core is its peer. An SSH server runs no
 minion and speaks no Logos. An **agentless** channel acts as the minion
@@ -23,7 +17,7 @@ sequenceDiagram
     participant S as SSH server
     C->>CH: call {target's values, rehello, the build's keys}
     CH->>S: SSH login (a password or a key)
-    CH->>S: uname, id; /etc/machine-id over SFTP
+    CH->>S: uname and id in an exec, /etc/machine-id over SFTP
     CH->>C: answer {hello}
     C->>CH: call {task: ls /etc}, under the session id
     CH->>S: SFTP: read the directory
@@ -32,8 +26,8 @@ sequenceDiagram
 
 | Part | What changes |
 |---|---|
-| Protocol | `agentless` on a `bind` kind of a connection schema; `keys` (key 11) on a call or an open to such a kind: the keys of its id; an `open`'s `under` (key 10): the id the minion speaks under; the link failure kinds `login` (5) and `host_key` (6); the machine id source `ssh-host-key` (11); a hello's `pid` optional (0: no process of its own) |
-| Core | a call or an open to an agentless kind carries its id's keys (the build's under the build id, the session's under the session id); an `open` says the id the minion speaks under (core never speaks first); the session's connection taken from its target; the failures `login` and `host_key` shown as refused, not retried, for calls and opens |
+| Protocol | `agentless` on a `bind` kind of a connection schema; `keys` (key 11) on a call or an open to such a kind: the keys of its id; `acting` (key 14) on them too: the task that made the session's acting identity; an `open`'s `under` (key 10): the id the minion speaks under; the link failure kinds `login` (5) and `host_key` (6); the machine id source `ssh-host-key` (11); a hello's `pid` optional (0: no process of its own) |
+| Core | a call or an open to an agentless kind carries its id's keys (the build's under the build id, the session's under the session id), and the task that made its session's acting identity while it has one; an `open` says the id the minion speaks under (core never speaks first); the session's connection taken from its target; the failures `login` and `host_key` shown as refused, not retried, for calls and opens |
 | SSH module | `logos-ssh`, new: the `ssh` factory, and the `ssh` channel with its own minion (for calls as the Dumbo page answers, for a persistent connection as a listening minion) |
 | Unchanged | Targets and their states, sessions, tasks, results, file transfers, streams, the file browser, the console |
 
@@ -65,6 +59,41 @@ agentless channel, which holds the keys, the seal hides nothing from the
 channel; it still means only a holder of the keys (core and that channel)
 can speak under a build's or a session's id.
 
+## The acting task
+
+A minion keeps who its work runs as: after a become, its shells run as the
+user until it goes back ([Identity](../minion-messages/identity/)). A
+channel acting as the minion keeps nothing between calls, nor past a
+connection, so core gives it back, with every call and open, the task that
+made the session's identity, beside the keys:
+
+- **`acting`** (key 14) on a `call` or an `open` to an agentless kind:
+  `{1: task id, 2: cmd, ? 3: args}`, the task that made the session's
+  acting identity (the `identity` that set it names its task), with its
+  command and args as its [task item](../minion-messages/tasks-and-results/#tasks)
+  carried them. Its credentials are in its args, as core resolved them
+  when the task was queued ([Credentials](../credentials/#what-core-checks)):
+  a become's password goes with every call and open while it holds.
+- **While the session has one.** From the `identity` that sets it to the
+  one that clears it (back to the process's own: an `unbecome`), every
+  call and open under the session's id carries the task. A change replaces
+  it, so it is always the last. None while the session runs as its
+  process, for an acting identity that names no task, and under a build
+  id, where there is no session yet: a new target's first call, an open for
+  a target with no open session.
+- **Only beside `keys`.** `LinkFrame.Validate` refuses `acting` on a call
+  or an open without `keys`, and on an answer. A channel from before
+  `acting` decodes the frame and skips the key.
+- **The channel takes it up again** as its minion would have kept it: the
+  command is its own, so it reads the task as when it ran it (the SSH
+  channel: [Become](#become)). An open's is where the connection starts:
+  on it, the minion keeps its identity itself, as any persistent minion
+  does, until the connection closes.
+- **Core still records what the minion says**: a task runs as the session's
+  identity said when the task's ack came, whatever the channel made of
+  `acting`, and one that ran as another says so itself ([Message
+  order](../minion-messages/identity/#message-order)).
+
 ## Agentless kinds
 
 A channel says it per kind, in its [connection schema](../minion-connection/#the-schema):
@@ -77,8 +106,10 @@ A channel says it per kind, in its [connection schema](../minion-connection/#the
   `bind-persistent` only (core refuses it on a `reverse` kind). It means
   the channel answers for the minion: no minion runs on the target, and the
   channel reads and writes the messages of that kind. Core therefore gives
-  it the keys of each call's and open's id ([keys](#keys-for-the-channel)):
-  that is all `agentless` changes in what core does.
+  it what a minion would keep: the keys of each call's and open's id
+  ([keys](#keys-for-the-channel)), and the task that made its session's
+  identity ([the acting task](#the-acting-task)). That is all `agentless`
+  changes in what core does.
 - **`fields`** are what a build's connection gives the channel (how it
   calls), kept in endpoints as for any `bind` kind; nothing is built into
   a minion, as there is none. **`target`** is what each target gives it.
@@ -133,27 +164,30 @@ Its build schema:
   and open; the artifact (a description) holds none. No `max_tasks`: a minion that keeps nothing between
   calls could not keep a limit core sets. Through `bind-call` a call
   brings 4 tasks at most; on a persistent connection the minion runs 4 at
-  once, each in an SSH channel of its own, and its `hello` says so
+  once, each in an SSH channel of its own (shell commands after a
+  [become](#become) take turns in its shell), and its `hello` says so
   ([Max tasks](../minion-messages/tasks-and-results/#max-tasks)).
 - One target, `ssh` ("SSH server"), format `json`, platform `any/any`.
 - One channel, `ssh`, with `bind-call` and `bind-persistent`, and no
   connection parameters of the factory's.
 - Commands with BOB's ids, params and actions, so core's actions, the file
   browser and the console work with them as they do with BOB's (the `op`
-  numbers are the SSH factory's own). All are `default`; none is
-  `required`:
+  numbers are the SSH factory's own), and two of its own, `become` and
+  `unbecome`. All are `default`; none is `required`:
 
   | Command | Action | Result | Over SSH |
   |---|---|---|---|
-  | `shell` | | | The command line in `/bin/sh`, in an exec channel (as BOB's runs it on Unix); its output and exit status. A stop kills its process group: what it started too. On a [Windows server](#windows-servers), the line as typed in its default shell, and a stop ends all it started |
+  | `shell` | | | The command line in `/bin/sh`, in an exec channel (as BOB's runs it on Unix); its output and exit status. A stop kills its process group: what it started too. After a [become](#become), in the shell it elevated. On a [Windows server](#windows-servers), the line as typed in its default shell, and a stop ends all it started |
   | `ls` | `list_dir` | `dir_listing` | An SFTP directory read (a Windows server's with its attributes, from cmd's `dir`) |
   | `walk` | `walk_dir` | `dir_walk` | SFTP directory reads, resumed through `ctx`; `one_fs` by the server's mount table (`/proc/self/mounts`, else `df`), as SFTP says no file systems; on Windows, by drive |
   | `download` | `download_file` | `file_download` | SFTP reads, a chunk a message |
   | `stream_download` | `stream_file` | `file_stream` | SFTP reads, as the downloader takes them |
   | `upload` | `upload_file` | `file_upload` | SFTP writes |
-  | `stream_upload` | `upload_stream` | | SFTP writes, as the bytes come |
+  | `stream_upload` | `upload_stream` | `file_upload` | SFTP writes, as the bytes come |
   | `rm` | `delete_path` | | SFTP removes, as BOB's `rm` |
   | `volumes` | `list_volumes` | `volumes` | `df -kPT` (GNU's, with types), else `df -kP`; on Windows, the drives |
+  | `become` | | | [Become](#become): shell commands from then on run as another user (`user`, `root` by default), through sudo or su (`method`), with `password` given only when the server asks |
+  | `unbecome` | | | Shell commands run as the login again: the elevated shell closes |
 
   No `sleep` and no `exit`. Without a schedule, core calls only when it
   has something to send. A session ends when an operator archives it, and
@@ -243,6 +277,85 @@ Its connection schema (`ssh`, version 1), both kinds agentless:
   leave an open unanswered for good on a connection that went away under
   it. A connection that broke this way is not kept for `call_reuse`.
 
+### Become
+
+To core, `become` and `unbecome` are commands like any other: it learns who
+the session runs as from the minion's [`identity`](../minion-messages/identity/)
+items. The rest is the channel's. An SSH connection stays its login's:
+every channel sshd opens on it runs as the login. So a become keeps a shell
+elevated on the connection, started once by sudo or su, and the minion
+types shell commands into it, as a person types into the shell `sudo su`
+gave them.
+
+- **The params**: `user` (`root` by default; a name, or `#uid` through
+  sudo), `method`, and `password`, a `PLAINTEXT`
+  [credential](../credentials/) given only when the server asks for one:
+
+  | `method` | Starts the shell with | The password the server may ask |
+  |---|---|---|
+  | `sudo` (the default) | `sudo -u <user>` | sudo's: `password`, else the login's own (a key's login has none) |
+  | `sudo-su` | `sudo su <user>`, for sudoers that allow only su | the same |
+  | `su` | `su <user>`, in a terminal `script(1)` makes on the server (su reads a password only from one) | the user's: `password`, needed unless the login is root |
+
+- **Elevating** runs the method in an exec channel of the login's, gives
+  the password at sudo's or su's prompt, once (asked again, it was
+  refused), and takes the shell's first words, `id -u` and `id -un`, as who
+  it became. Sudoers that require a terminal get one of `script(1)`'s. It
+  takes 15 seconds at most, the prompt and the password included.
+- **The task's answer** says who the shell runs as and what still runs as
+  the login (`root (uid 0), through sudo: shell commands run as root until
+  unbecome. File commands still run as alice.`), with what sudo said that
+  is not a prompt (a warning). A become that fails says why (`become: sudo
+  refused the password (the login's)`) and changes nothing.
+- **The identity**: a become that worked says the session's (scope 1):
+  `how` become, `user` as `id -un` says, `integrity` `root` for uid 0 (else
+  `user`), `task` the become's, and `credential` its `password` when the
+  server asked for it and took it (core marks it valid). An `unbecome`
+  says the process's own (scope 1, no `how`), naming its task, and the
+  elevated shell closes once what runs in it ends. The `hello` stays the
+  login's.
+- **Only `shell` becomes.** The file commands go over the login's SFTP, and
+  `volumes` runs as the login. While the session runs as another user,
+  each of their tasks says so: an `identity` of its own (scope 2, no
+  `how`) before its ack.
+- **A shell command in the elevated shell** goes in as one line: in a
+  subshell in the background, in a process group of its own (`setsid`),
+  stdin `/dev/null`, stderr into stdout, between markers random to the
+  connection. Its output and exit status come as without a become. Shell
+  commands take turns in it (one shell a connection), so a long one holds
+  the next. A stop is another line to the shell: a `kill` of the command's
+  process group as the user it became, which the login could not do. A
+  command that outlives the kill by 5 seconds takes the shell with it.
+- **A become while elevated** goes on inside the shell: sudo or su started
+  from it, so su from root asks nothing. One that fails leaves the shell as
+  it was. The shell it started from waits under the new one: should the
+  new one end (killed, say), that one takes no command as its own user,
+  but exits, and the next command goes to a shell elevated again. When the
+  become in effect does not elevate on the connection, a new one goes from
+  the login, as with none in effect.
+- **In order.** In a call the tasks run one after another, so a shell
+  after a become runs as its user. On a persistent connection the minion
+  runs its tasks at once, but a shell waits for the becomes and unbecomes
+  before it, and a become for the shells before it to have what they run
+  in. The minion acks in the order it took the tasks, the identity between
+  ([Message order](../minion-messages/identity/#message-order)), and a
+  shell acked before a become it waited for says who it ran as (scope 2).
+- **Each connection elevates again.** The elevated shell lives as long as
+  its connection: a call's, kept for `call_reuse`, or a persistent one. A
+  new connection takes up core's [`acting`](#the-acting-task): a become,
+  elevated as it says at the first shell command, or none, and shell
+  commands run as the login. A call that reuses a connection keeps its
+  shell.
+- **Elevating again can fail.** Core gives the last become alone, so one
+  made from another (su from root, which asked nothing) is made again from
+  the login; a password that worked may no longer. Shell commands then fail
+  rather than run as the login, and the minion tells its operators, once
+  a connection: a [feedback](../minion-messages/sessions/#feedback) error,
+  `become_failed`. A become (from the login, as above) or an `unbecome`
+  gets the session past it.
+- **Unix servers only**: a [Windows server](#windows-servers) has no sudo
+  or su, and a become fails saying so.
+
 ### Windows servers
 
 Windows's OpenSSH (Win32-OpenSSH) is served as BOB's minion runs on
@@ -315,25 +428,6 @@ channel authentication: mTLS or a shared secret, planned, not built
 built, run an agentless channel only where its link to core is private:
 core's Docker network, or a VPN.
 
-## The work
-
-In order:
-
-1. This page.
-2. **Protocol**: `agentless` on `bind` kinds, `keys` and `under` on calls
-   and opens, the link failure kinds and the machine id source.
-3. **`logos-ssh`** (a new repo): the factory, the channel, and the
-   channel's own minion: for calls as the Dumbo page answers them (a
-   call's tasks run in it, walks and transfers going on from their ctx),
-   for a persistent connection as a listening minion runs (tasks in the
-   background, pushed as they come), acting on the server over SSH and
-   SFTP (`golang.org/x/crypto/ssh`, `github.com/pkg/sftp`).
-4. **Core**: the suite, agentless kinds, an open's `under`,
-   the session's connection from its target, the UI.
-5. **Docs**: the pages this changes (Wire Format, Sessions, Minion Build,
-   Minion Connection Schema, Connections, Module Types, Architecture), and
-   this page's draft notice dropped.
-
 ## Open questions
 
 - **Channel authentication**: mTLS or a shared secret, needed before an
@@ -360,10 +454,17 @@ In order:
   (unsealed messages, no keys, no staging, its own marks in the UI), while
   a page and an SSH server are reached the same way. With keys, core seals
   every message alike, and `agentless` means one thing: the channel gets
-  the keys. The keys travel with the messages they seal over the link, so
+  what a minion would keep (the keys, and [the acting task](#the-acting-task)).
+  The keys travel with the messages they seal over the link, so
   they hide nothing from whoever reads that link; what they keep is that
   only core and the channel can speak under a build's or a session's id,
   which a suite of no crypto gave to anyone who knew the id.
+- **Why core gives back the task, not the identity.** The identity says
+  who the session runs as; making it again takes how: the method, the
+  user, the password. Only the task says that, and its command is the
+  factory's, which core does not read ([Identity](../minion-messages/identity/)).
+  So core gives the task back as it came, and the channel, whose command it
+  is, reads it as it did the first time.
 - **Why still a factory.** A build is a factory's from start to finish:
   offered to one of its instances, made of its schema's commands and flags,
   finished by its artifact, built again from its form. A build that core

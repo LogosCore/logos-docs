@@ -116,7 +116,7 @@ persistent minion's message as it comes.
 
 An agentless channel keeps nothing between calls, so core gives it the task
 that made the session's acting identity with every call and open
-([agentless channels](../../agentless-channels/#keys-for-the-channel)), and
+([the acting task](../../agentless-channels/#the-acting-task)), and
 the channel takes it up again on a new connection.
 
 ## Example
