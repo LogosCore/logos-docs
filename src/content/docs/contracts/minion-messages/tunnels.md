@@ -98,6 +98,9 @@ The form and the console's command line take them as any param.
 | `front` | one of its action's fronts (an enum): what core puts in front |
 | `port` | a `tunnel`'s: the operational port core listens on, 0 for any free one |
 | `host`, `to` | a forward's destination: reached from the minion's host (a `tunnel`), or from core's network (a `reverse_tunnel`); a name or an address, a port from 1 to 65535. The minion never learns a reverse one's; a `tunnel`'s each stream's `tunnel` item names. |
+| `path` | a `tunnel`'s forward to a [unix socket or a named pipe](#unix-sockets-and-named-pipes), instead of `host` and `to`: offered where the command opens `unix` or `pipe` |
+| `source` | a `tunnel`'s: the address of the minion's host its TCP streams go from (an IP), on a host with two networks: offered where the command opens `source` |
+| `tls` | a `tunnel`'s forward to a host and a port: the minion speaks TLS to the destination, the tools plain: offered where the command opens `tls` |
 | `cap` | the [bandwidth cap](#bandwidth-cap): bytes a second each way, 0 (the default) for none |
 
 | The command's | |
@@ -105,7 +108,7 @@ The form and the console's command line take them as any param.
 | `bind`, `listen`, `udp` | a `reverse_tunnel`'s, numbered: where the minion listens, and whether for UDP datagrams, which it reads from its task |
 | `timeout`, `max_streams` | each with a default: how long a connect may take, how many streams at once (below) |
 | `stop_idle` | optional, core's alone (no `num`): a duration after which, with no stream open, core [stops the task](#the-tunnel-commands) (Stop when idle, below); absent or 0, never |
-| `opens` | what its minion opens: `tcp`, and `udp` (a `tunnel`'s UDP associations, a `reverse_tunnel`'s UDP listener); a command that says none, `tcp` alone. Core opens nothing else through it: a SOCKS `UDP ASSOCIATE` through one that opens no `udp` is refused (command not supported), and a reverse tunnel's `udp` as the task is queued. |
+| `opens` | what its minion opens, and how: `tcp`, and `udp` (a `tunnel`'s UDP associations, a `reverse_tunnel`'s UDP listener); a `tunnel`'s `unix` and `pipe` (a forward to a path), `source` and `tls`; a command that says none, `tcp` alone. A build's target narrows it (its own `opens`: a Linux build has no pipes). Core opens nothing else through it, and offers only the params it opens: a SOCKS `UDP ASSOCIATE` through one that opens no `udp` is refused (command not supported), and a reverse tunnel's `udp` as the task is queued. |
 | Needs result | none: the task's view is core's (the port's address and its streams) |
 | `kinds` | The command's [`kinds`](../../minion-build/#commands) leave out those its minion cannot keep a socket open over between messages: a `bind-call` page keeps nothing between calls, so its factory leaves `bind-call` out. |
 
@@ -189,6 +192,16 @@ tunnel = {              ; open a stream: core → minion, or minion → core
                         ;   an ack (its window), 262144 when absent
   ? 6: bool,            ; udp: a UDP association, not a TCP connection
                         ;   (see UDP)
+  ? 7: uint,            ; kind: 1 a unix socket, 2 a named pipe, to its
+                        ;   path, instead of a host and a port; none: TCP
+                        ;   (or UDP by udp)
+  ? 8: tstr,            ; path: the socket's ("/var/run/docker.sock",
+                        ;   "@name") or the pipe's ("\\.\pipe\name",
+                        ;   "\\host\pipe\name"); 1024 bytes at most
+  ? 9: tstr,            ; source: the address of the minion's host a TCP
+                        ;   connection goes from (an IP)
+  ? 10: bool,           ; tls: TLS to the destination once connected, its
+                        ;   host the name it says; no certificate checked
 }
 
 tunnel_reply = {        ; the other way: opened, or why not
@@ -248,6 +261,8 @@ tunnel_close = {        ; both: the stream is over
 | 5 | not allowed: `max_streams` open already | not allowed (2) |
 | 6 | another failure (`msg` says) | general failure (1) |
 | 7 | unsupported: the receiver does not take the open as it is (below) | command not supported (7) |
+| 8 | not found: no such unix socket or pipe | – |
+| 9 | denied: the minion may not open it (its rights, its host's firewall; a remote pipe's logon) | not allowed (2) |
 
 | `reason` | Means |
 |---|---|
@@ -270,8 +285,8 @@ tunnel](#reverse-tunnel)).
 **Read strictly.** A receiver ignores the keys it does not know in every
 item but the open: a `tunnel` with a key it does not know, or one that does
 not read though its `task` and `stream` do, it answers with result 7,
-**unsupported**, and opens nothing. Ignored, a later version's key (TLS to
-the destination, a source address, a socket that is not TCP) would have it
+**unsupported**, and opens nothing. Ignored, a later version's key (a kind
+of open it does not know, an option it does not take) would have it
 connect plainly, from the default address, and say nothing; refused, the
 tool hears at once (SOCKS: command not supported). One with no task or
 stream to answer by is an `err`, as any item that does not read. The
@@ -380,7 +395,7 @@ tools that speak no SOCKS (WinHTTP's, npm's, an `HTTPS_PROXY`):
   bytes go with the stream's open.
 - **What does not open** is answered as a proxy does: refused, unreachable
   or failed `502`, timed out (or no reply in time) `504`, `max_streams`
-  reached `503`, unsupported `501`; a request a proxy does not take (no URL,
+  reached `503`, unsupported `501`, denied `403`; a request a proxy does not take (no URL,
   an `https://` one) `400`.
 - **No credentials**, as SOCKS: a port is as private as the network in
   front of it. No UDP.
@@ -404,6 +419,33 @@ an address; a port from 1 to 65535), and refuses the task otherwise.
 - **TCP only:** the port has no UDP relay.
 - **The same streams** as a proxy's: the same items, each stream's
   destination the forward's.
+- **Over TLS** (`tls`): the minion speaks TLS to the destination once
+  connected, saying the host's name (no name for an address), and checks no
+  certificate: the operator reaches what is there, a tool that speaks plain
+  (`curl http://core:41001`, a client with no TLS) reaching an HTTPS or
+  LDAPS service. A handshake that fails is said as the stream's failure.
+- **From a source address** (`source`, every front's): each TCP stream goes
+  from that address of the minion's host, on a host with two networks; one
+  the host does not have fails the stream, saying why.
+
+### Unix sockets and named pipes
+
+A forward to a `path` instead of a host and a port: each stream opens the
+path on the minion's host, its kind said (`kind`, key 7), and is a stream
+as a TCP one is, its bytes both ways. Where its command opens it:
+
+- **A unix socket** (`unix`): `/var/run/docker.sock` (`docker -H
+  tcp://core:41003 ps`), an SSH agent's socket, a database's local one, or
+  an abstract name (`@name`, Linux's). Linux's and Windows' alike.
+- **A named pipe** (`pipe`), Windows': `\\.\pipe\name` on the minion's host,
+  or another host's `\\host\pipe\name`, over SMB as the minion's user. A
+  message-mode pipe's messages go as bytes: their ends are not kept. A pipe
+  whose every instance is busy is tried again until the command's
+  `timeout`.
+- **What fails there** is said as not found (8), denied (9: its rights, a
+  remote pipe's logon), or timed out; the forward's client is reset, as a
+  refused connect resets it. A path's kind is a pipe's when it starts
+  `\\`, else a unix socket's (`protocol.TunnelPathKind`).
 - Its task's **Forward** tab says `core:41001 → 10.0.0.5:3389` and copies
   the address; the operation's Ports page says what each port forwards to.
 
@@ -684,6 +726,8 @@ restart goes on with it. Core enforces it alone, the minion unchanged:
 | Stream numbers core takes for a port's task at a time | 1000 (`StreamBlock`): one write for a thousand streams |
 | A capped tunnel's burst | a second of its cap, 64 KiB at least |
 | A reverse SOCKS proxy's password | 24 hex digits, made for its task |
+| A unix socket's path or a pipe's name | 1024 bytes, printable |
+| A pipe whose every instance is busy | tried again, every 50 ms, until the command's `timeout` |
 | A reverse port forward's connect, core's | the command's `timeout` (10 s by default) |
 | A connection waiting at the minion for core's reply | the command's `timeout` and 30 s more; its `tunnel` again every 5 s |
 | A UDP reverse forward's stream with no datagram either way | 2 minutes, then the minion closes it (core: 3 minutes) |
@@ -697,8 +741,10 @@ restart goes on with it. Core enforces it alone, the minion unchanged:
 A review of the tunnel items against the cases past SOCKS, port forwards and
 reverse port forwards (2026-11-07): what each takes, and a change for each
 gap. Wave 1 is released (protocol v0.38.0, BOB v0.28.0): changes 1, 2, 3
-and 8, and core's halves of 7 and 9, which the rest of this page says. The
-others are not built.
+and 8, and core's halves of 7 and 9. Wave 2 is released (protocol v0.39.0,
+BOB v0.29.0): change 4's unix sockets and named pipes, and the options of a
+stream. The rest of
+this page says them; the others are not built.
 :::
 
 **What holds.** A stream is general already: bytes in order each way,
@@ -708,10 +754,11 @@ pipe as it carries TCP. And core speaks the front while the minion only
 opens and relays, so a new front is core's work alone, now that the front
 is core's to pick ([The tunnel commands](#the-tunnel-commands)).
 
-**What is narrow.** What a stream can open: a TCP host and port, or a UDP
-association; and what it says besides its bytes. Fronts bound to build
-commands, and an older minion misreading an open it did not fully
-understand rather than refusing it, were narrow too: wave 1 changed both.
+**What is narrow.** What a stream says besides its bytes (a shell's
+controls), and the kinds of open still to come (a process, ICMP, an
+accept). Fronts bound to build commands, an older minion misreading an
+open it did not fully understand, and an open to a TCP host and port alone
+were narrow too: waves 1 and 2 changed them.
 
 ### The cases
 
@@ -728,11 +775,11 @@ how it ended. **Front**: what core puts in front. **Needs**: the
 | Reverse dynamic SOCKS | ✓ | ✓ | – | – | ✓ | none: built ([Reverse SOCKS](#reverse-socks)) |
 | A VPN front | ✓ TCP | ✓ | ~ UDP ✓, ICMP ✗ | – | ~ a front of core's | [6](#6-icmp), and the front |
 | Scans through SOCKS | ✓ | ✓ | – | – | ✓ | none: [8](#8-stream-numbers-without-a-write-each) built |
-| Unix sockets | ✗ | ✓ | – | – | ~ a forward to a path | [4](#4-opens-of-more-kinds) ([2](#2-what-a-command-opens), [3](#3-an-open-refused-not-misread) built) |
-| Named pipes | ✗ | ✓ byte mode | – | – | ~ a forward to a pipe | [4](#4-opens-of-more-kinds) |
+| Unix sockets | ✓ | ✓ | – | – | ✓ a forward to a path | none: built ([Unix sockets and named pipes](#unix-sockets-and-named-pipes)) |
+| Named pipes | ✓ | ✓ byte mode | – | – | ✓ a forward to a pipe | none: built; a message's end, a key to come |
 | An interactive shell | ✗ a process | ✓ | – | ✗ size, signals, exit code | ~ a terminal | [4](#4-opens-of-more-kinds), [5](#5-controls-and-an-end-for-shells) |
 | ICMP | – | – | ✗ a port is required | – | ~ the VPN front | [6](#6-icmp) |
-| Options of a stream | ~ refused, not misread | ✓ | – | – | ✓ | each a key ([3](#3-an-open-refused-not-misread) built) |
+| Options of a stream | ✓ source, TLS | ✓ | – | – | ✓ | none: built; a socket's options, keys to come |
 | Reverse minions behind a minion | ✓ | ✓ | – | – | ✓ | none |
 | Bind minions behind a minion | ✓ | ✓ | – | – | ✓ | the channel's own: a proxy setting |
 | One front over several minions | ✓ | ✓ | – | – | ~ fronts are core's | a front over several tasks, core's alone |
@@ -768,10 +815,9 @@ how it ended. **Front**: what core puts in front. **Needs**: the
   thousand at a time); a round trip opens it, and `max_streams` bounds how
   many go at once.
 - **Unix sockets** (`/var/run/docker.sock`, an SSH agent's socket, a
-  database's local one): a stream to a path, a kind of open (change
-  [4](#4-opens-of-more-kinds)), which the command says it opens ([2](#2-what-a-command-opens), built) and a minion that
-  does not refuses ([3](#3-an-open-refused-not-misread), built). In front, a forward whose destination is
-  the path: `docker -H tcp://core:41003 ps`.
+  database's local one): built (wave 2, [Unix sockets and named
+  pipes](#unix-sockets-and-named-pipes)): a forward whose destination is the
+  path, `docker -H tcp://core:41003 ps`, where the command opens `unix`.
 - **Named pipes** (`\\.\pipe\name`, or another host's over SMB,
   `\\host\pipe\name`): as a unix socket, a pipe kind of open. A byte-mode
   pipe is a stream as it is; a message-mode one would need each message's
@@ -792,11 +838,11 @@ how it ended. **Front**: what core puts in front. **Needs**: the
   kind of stream (change [6](#6-icmp)), its datagrams echo messages with no port,
   sent from an unprivileged ICMP socket of the minion's. SOCKS carries no
   ICMP: the VPN front is what would use it.
-- **Options of a stream** (the source address on a host with two networks,
-  TLS to the destination, a socket's options): each a key of the open,
-  which a minion now refuses when it does not know it, rather than connect
-  plainly from the default address ([3](#3-an-open-refused-not-misread) built). Each option is then a key
-  the command says it takes ([2](#2-what-a-command-opens)).
+- **Options of a stream**: built (wave 2): a source address on a host with
+  two networks (`source`, every front's) and TLS to a forward's destination
+  (`tls`), keys of the open where the command opens them; an older minion
+  refuses them, never connects plainly ([3](#3-an-open-refused-not-misread)). A socket's own options
+  (keep-alive, no delay) would be keys the same way.
 - **Reverse minions behind a minion**: today. A reverse port forward on
   minion A whose destination is core's HTTP channel, and minion B, built
   with A's address and the forward's port as its connection, checks in
@@ -871,9 +917,12 @@ that has the host act.
 
 #### 4. Opens of more kinds
 
-A `tunnel` names a host and a port (1 to 65535), or a UDP association.
+Built in part (wave 2): an open's `kind`, `unix` and `pipe`, to its `path`
+([Unix sockets and named pipes](#unix-sockets-and-named-pipes)), with results
+not found (8) and denied (9), and a target narrowing what its tunnel
+commands open (a Linux build has no pipes).
 
-Proposed: the open says its kind, behind [2](#2-what-a-command-opens) and [3](#3-an-open-refused-not-misread): `tcp` (none said:
+Proposed, the rest: the open says its kind, behind [2](#2-what-a-command-opens) and [3](#3-an-open-refused-not-misread): `tcp` (none said:
 today's), `udp` (today's `udp`), `unix` (a path), `pipe`
 (`\\.\pipe\name` or `\\host\pipe\name`), `process` ([5](#5-controls-and-an-end-for-shells)), `icmp` ([6](#6-icmp))
 and `accept` (the minion listens for one connection, SOCKS5's `BIND`); with
@@ -937,9 +986,9 @@ to each side: no item changes.
 - **Pacing is core's.** Each side fills its own messages, so the
   [bandwidth cap](#bandwidth-cap) is core's alone.
 
-**In order**, the waves: 1 built (the fronts and the rules, the HTTP proxy
-and reverse SOCKS, core's halves of [7](#7-bytes-with-the-open) and [9](#9-timing-that-follows-the-link), [8](#8-stream-numbers-without-a-write-each), the cap); 2, unix
-sockets, named pipes and stream options ([4](#4-opens-of-more-kinds): the protocol, BOB); 3,
+**In order**, the waves: 1 released (the fronts and the rules, the HTTP
+proxy and reverse SOCKS, core's halves of [7](#7-bytes-with-the-open) and [9](#9-timing-that-follows-the-link), [8](#8-stream-numbers-without-a-write-each), the cap); 2 released
+(unix sockets, named pipes and stream options, [4](#4-opens-of-more-kinds) in part); 3,
 shells and SOCKS5 `BIND` ([4](#4-opens-of-more-kinds), [5](#5-controls-and-an-end-for-shells)); 4, a VPN front with ICMP ([6](#6-icmp)), and
 BOB's half of [9](#9-timing-that-follows-the-link); 5, pivots (the TCP channel through a SOCKS port, BOB
 listening on a pipe), the SSH channel's tunnels, one front over several

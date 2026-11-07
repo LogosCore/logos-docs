@@ -777,13 +777,16 @@ tunnel items. No result: the task's view is core's.
   `port` (an `int`: 0 for any free one), `host` (a `string`: a name, which
   the minion resolves, or an address) and `to` (an `int`: the port), a
   forward's destination, which core checks, and `cap` (bytes a second each
-  way, 0 for none). They carry no `num`, so the minion never sees them, and
+  way, 0 for none); where the command opens them, `path` (a forward to a
+  unix socket or a named pipe, instead of `host` and `to`), `source` (the
+  address of the minion's host its TCP streams go from) and `tls` (TLS to a
+  forward's destination). They carry no `num`, so the minion never sees them, and
   a build schema that declares one is refused. Each stream's tunnel item
   names where it goes.
 - Its command's own params, each with a default, are the minion's
   (`timeout`, `max_streams`), and it says what its minion opens (`opens`:
-  `tcp`, `udp`; none said, `tcp` alone): core opens nothing else through
-  it.
+  `tcp`, `udp`, `unix`, `pipe`, `source`, `tls`; none said, `tcp` alone; a
+  target narrows it): core opens nothing else through it.
 - Its task holds no place in the minion's max tasks. A command may take
   `stop_idle` (a duration, no `num`: core's alone), as every tunnel action's
   optional param: core stops the task once no stream has been open that long
