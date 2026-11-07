@@ -85,7 +85,7 @@ it. They are layered by module type:
 |---|---|---|
 | `logos-golang-module-core` | every module type | The control plane: session, lifecycle, management, log tail, logging. |
 | `logos-golang-channel-core` (v3) | channels | `channel.Run` (the session as a channel, with the [connection schema](../contracts/minion-connection/)) and the channel data-plane helpers (profiles, transforms, sync client). |
-| `logos-golang-factory-core` | factories | `factory.Run` (the session as a factory, declaring the [build schema](../contracts/minion-build/) and serving its builds), the `Builder` and `Job` a factory builds with, and `factorytest` to run a builder in its tests. It adds a [builds section](../contracts/minion-build/#managing-a-factory) to the factory's management. See [Writing a factory](#writing-a-factory). Unreleased: v0.1.0 comes with the next release. |
+| `logos-golang-factory-core` | factories | `factory.Run` (the session as a factory, declaring the [build schema](../contracts/minion-build/) and serving its builds), the `Builder` and `Job` a factory builds with, and `factorytest` to run a builder in its tests. It adds a [builds section](../contracts/minion-build/#managing-a-factory) to the factory's management. See [Writing a factory](#writing-a-factory). |
 
 The module-core packages:
 

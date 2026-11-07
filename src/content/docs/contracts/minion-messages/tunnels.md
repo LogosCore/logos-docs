@@ -9,7 +9,9 @@ sends. Core speaks the protocol of the operator's tools in front of it; the
 first is a **SOCKS proxy** on one of core's **operational ports**, so an
 operator's browser, scanner or `proxychains` reaches what the minion's host
 reaches. The minion never sees SOCKS: it opens, relays and closes TCP
-streams, whatever core put in front.
+streams, whatever core put in front. A **reverse port forward** goes the
+other way: the minion listens on its host, and core connects each
+connection that comes there to a destination on its side.
 
 ```mermaid
 sequenceDiagram
@@ -36,6 +38,7 @@ Core keeps a **range of ports** it may listen on for operators: the
 operational ports. Each one in use serves one purpose for one task, and goes
 back to the range when the task ends. A SOCKS proxy is the first purpose;
 others (a port forward to a host behind a minion) take ports the same way.
+A reverse port forward takes none: the port it serves is the minion's.
 
 | Setting | Meaning |
 |---|---|
@@ -80,10 +83,13 @@ streams core asks for, wherever each goes, and relays them.
 |---|---|---|
 | **`socks_proxy`** | `port` | core's [SOCKS](#socks) proxy: each tool says where each of its connections goes |
 | **`port_forward`** | `port`, `host` (string), `to` (int) | a [port forward](#port-forward): every connection a stream to `host:to` |
+| **`reverse_port_forward`** | `bind` (string), `listen` (int), `udp` (bool), `host` (string), `to` (int) | nothing of core's: the minion listens at `bind:listen`, and core connects each connection there to `host:to`, or with `udp` sends on each source's datagrams ([Reverse port forward](#reverse-port-forward)) |
 
-| Both | |
+| All | |
 |---|---|
-| `port` | an `int`: the operational port core listens on for the task, 0 for any free one. The minion needs nothing of it, nor of a forward's `host` and `to`: each stream's `tunnel` item names its destination. |
+| `port` | a proxy's and a forward's: an `int`, the operational port core listens on for the task, 0 for any free one. The minion needs nothing of it, nor of a forward's `host` and `to`: each stream's `tunnel` item names its destination. |
+| `bind`, `listen`, `udp` | a reverse port forward's: where the minion listens, and whether for UDP datagrams, which it reads from its task. Its `host` and `to` are core's alone: they carry no `num`, and never go to the minion. |
+| `stop_idle` | optional, core's alone (no `num`): a duration after which, with no stream open, core [stops the task](#the-tunnel-commands) (Stop when idle, below); absent or 0, never. |
 | Needs result | none: the task's view is core's (the port's address and its streams). |
 | `kinds` | The command's [`kinds`](../../minion-build/#commands) leave out those its minion cannot keep a socket open over between messages: a `bind-call` page keeps nothing between calls, so its factory leaves `bind-call` out. |
 
@@ -91,23 +97,50 @@ A command may take more, each with a default: how long the minion waits for
 a connect (`timeout`, 10 s), and how many streams may be open at once
 (`max_streams`, 256). Core reads both as well: it holds a SOCKS client that
 long and 30 s more for its stream to open, and refuses one past
-`max_streams` itself. How often a minion that polls checks in is core's to
+`max_streams` itself. A reverse port forward's `timeout` is core's connect:
+the minion holds a connection that long and 30 s more for core's reply. How often a minion that polls checks in is core's to
 say ([On each connection kind](#on-each-connection-kind)).
 
 **The task is the tunnel.** Core opens the port when it queues the task, and
 holds it while the task runs: one SOCKS proxy or one forward, any number of
-streams.
+streams. A reverse port forward's minion listens as it takes the task, and
+stops when the task ends.
 
 **Shared by the operation.** A port serves its task, not the operator who
 started it: any number of tools, of any number of operators, use it at once,
 their connections streams of the same task. They share its `max_streams` and
-its Stop; each stream's record says the client's address (who started the
-task is the task's). An operator who wants a tunnel of their own starts
+its Stop; each stream says the client's address (who started the task is
+the task's). An operator who wants a tunnel of their own starts
 another tunnel task on the session, on another port. The
 minion acks the task and keeps it running, taking `tunnel` items for it,
 until core cancels it. **Stop** cancels the task: core closes the port and
 its streams, and the minion closes its sockets and ends the task ok. A task
 that ends on the minion's side (it exited, it lost the task) closes the port.
+
+**Stop when idle.** A command may take `stop_idle`, a duration, as an
+optional param of every tunnel action, which core alone reads. Core stops
+the task, as Stop does, once no stream has been open that long:
+
+- **Idle means no stream open**, not no bytes: an open stream holds the
+  clock however quiet it is (an SSH session left at its prompt). The clock
+  runs from when core sees the minion has the task (its ack), and starts
+  again each time the last open stream ends. A core restart starts it
+  again.
+- **Per task, with the command's default**: BOB's `socks_proxy` and
+  `port_forward` stop after `1h`, its `reverse_port_forward` never (`0s`:
+  one often waits hours for a callback). The operator changes it when
+  starting the tunnel; a command line that leaves it out gets the default,
+  which core then writes into the task's args, as the form's are; a
+  command without it never stops on its own, as before.
+- **Said where it shows**: the task's Proxy or Forward tab says when it
+  stops unless a stream opens (`stopsAt`), as the Ports page does. A task
+  core stopped keeps why (`cancelReason`: "stopped by core: no stream open
+  for 1h (stop_idle)"), shown under its title and in its state ("stopped by
+  core"), so it reads as neither an operator's Stop nor a failure.
+- **Core alone**: the minion sees a cancel, as on Stop, and nothing on the
+  wire changes. Why: a running tunnel keeps a polling minion checking in
+  every second, holds one of core's operational ports, or keeps a listener
+  open on the target, long after anyone uses it.
 
 **No place in max tasks.** A tunnel task runs as long as its tunnel is
 open: a capability the minion lends, not work it does. It holds no place in
@@ -119,35 +152,41 @@ tunnel beside the limit · max 5").
 
 ## Streams
 
-Every item names its task and the **stream** in it: a number core gives
-from 1, never reused within the task. Five items, one CDDL each:
+Every item names its task and the **stream** in it: a number the side that
+opens it gives from 1, never reused within the task: core, but the minion
+in a [reverse port forward](#reverse-port-forward). A task's streams are
+all one side's. Five items, one CDDL each:
 
 ```cddl
-tunnel = {              ; core → minion: open a stream
+tunnel = {              ; open a stream: core → minion, or minion → core
+                        ;   in a reverse port forward
   0: 21,                ; t: tunnel
   1: task-id,           ; task: the tunnel task
   2: uint,              ; stream: its number in the task, from 1
   ? 3: tstr,            ; host: a name, which the minion resolves, or an
-                        ;   IPv4 or IPv6 address; not for udp
-  ? 4: uint,            ; port: 1 to 65535; not for udp
-  ? 5: uint,            ; room: what core takes of the stream past an ack
-                        ;   (its window), 262144 when absent
+                        ;   IPv4 or IPv6 address; none for a udp
+                        ;   association core opens. From the minion: the
+                        ;   address that connected, or a UDP stream's source
+  ? 4: uint,            ; port: 1 to 65535, beside a host
+  ? 5: uint,            ; room: what its sender takes of the stream past
+                        ;   an ack (its window), 262144 when absent
   ? 6: bool,            ; udp: a UDP association, not a TCP connection
                         ;   (see UDP)
 }
 
-tunnel_reply = {        ; minion → core: opened, or why not
+tunnel_reply = {        ; the other way: opened, or why not
   0: 22,                ; t: tunnel_reply
   1: task-id,           ; task
   2: uint,              ; stream
   3: uint,              ; result: 0 open, else why (below); one the
                         ;   receiver does not know reads as 6
   ? 4: tstr,            ; bound: the local address of the minion's socket,
-                        ;   "ip:port", when open; 128 bytes at most
-  ? 5: uint,            ; room: what the minion takes past an ack, 262144
+                        ;   "ip:port", when open; 128 bytes at most. Core's
+                        ;   say none
+  ? 5: uint,            ; room: what its sender takes past an ack, 262144
                         ;   when absent
   ? 6: tstr,            ; msg: why, for a person, when not open; 256
-                        ;   bytes at most
+                        ;   bytes at most. Core's say none
 }
 
 tunnel_data = {         ; both: bytes of the stream, one direction
@@ -206,7 +245,8 @@ internal names work) and answers with `tunnel_reply`. Core holds the SOCKS
 client until the reply comes, or the command's `timeout` and 30 s more have
 passed, then answers it with the reply's code (TTL expired when none came,
 and sends `reset`, should the minion open it late). A `tunnel` with no
-reply goes again after 5 s.
+reply goes again after 5 s. A reverse port forward's streams open the other
+way, the same ([Reverse port forward](#reverse-port-forward)).
 
 **Bytes, in order, within a window.** Each direction is a byte stream from 0,
 as a file is in [chunks](../file-transfers/#chunks): a receiver takes a
@@ -236,10 +276,11 @@ drops the stream. An end that aborts (the tool closed its socket, the host
 reset) sends `reset`, and the other side drops the stream at once. An item
 about a stream the receiver does not have (other than a close) is answered
 with `tunnel_close` reason 3, and the sender drops it; a `tunnel` for a task
-the minion does not run as a tunnel, with reason 4.
+its receiver does not run as a tunnel whose streams the sender opens, with
+reason 4.
 
-**Sent twice, safely.** `tunnel` for a stream the minion has is answered with
-its `tunnel_reply` again; `tunnel_data` before `next` is dropped (and acked
+**Sent twice, safely.** `tunnel` for a stream its receiver has is answered
+with its `tunnel_reply` again; `tunnel_data` before `next` is dropped (and acked
 again); an ack below the last is ignored; `tunnel_close` for a stream gone is
 nothing. A message sent again, a lost reply, or the minion back over another
 connection loses no byte and doubles none.
@@ -291,10 +332,100 @@ an address; a port from 1 to 65535), and refuses the task otherwise.
   could not make, has its connection reset, as the destination refusing it
   would.
 - **TCP only:** the port has no UDP relay.
-- **The same streams and records** as a proxy's: the same items, each
-  stream's destination the forward's.
+- **The same streams** as a proxy's: the same items, each stream's
+  destination the forward's.
 - Its task's **Forward** tab says `core:41001 → 10.0.0.5:3389` and copies
   the address; the operation's Ports page says what each port forwards to.
+
+## Reverse port forward
+
+A `reverse_port_forward` task goes the other way, as `ssh -R` does: the
+minion listens on its host, and core connects each connection that comes
+there to `host:to` from its own network. What reaches `10.0.0.7:8080` from
+a host behind the minion reaches the operator's `10.8.0.2:4444` (a
+handler, a web server serving a payload).
+
+```mermaid
+sequenceDiagram
+  participant P as 10.0.0.12 (behind the minion)
+  participant M as Minion (listens on :8080)
+  participant C as Core
+  participant D as 10.8.0.2:4444
+  C->>M: task {bind 0.0.0.0, listen 8080}
+  M->>C: ack, then tunnel_listen {bound 0.0.0.0:8080}
+  P->>M: TCP connect to :8080
+  M->>C: tunnel {stream 1, host 10.0.0.12, port 50122}
+  C->>D: TCP connect
+  C->>M: tunnel_reply {stream 1, open}
+  P->>M: bytes
+  M->>C: tunnel_data {stream 1, off 0, data}
+  C->>D: bytes
+```
+
+- **The minion listens** as it takes the task, at `bind:listen` (`listen`
+  0: any free port), and says where with a `tunnel_listen` (below). A
+  listen that fails (the port in use, one below 1024 without root) ends the
+  task, failed, saying why, and sends none.
+- **Its streams are the minion's.** Each connection that comes there is a
+  stream the minion opens: a `tunnel` from the minion, numbered by it from
+  1, its `host` and `port` the address that connected. Core connects it to
+  `host:to` within the command's `timeout`, and answers with a
+  `tunnel_reply` that says its result alone: no `bound`, no `msg`, no
+  `room` (core's is the default). From then on the stream is any other: the
+  same items, windows and closes. A result other than open resets the
+  connection, as the destination refusing it would.
+- **The destination is core's alone.** `host` and `to` carry no `num`: the
+  task the minion gets says where to listen, never where core sends what
+  comes. Core checks them as a destination when it queues the task, and
+  connects to whatever the operator typed: a reverse port forward reaches
+  what core's network reaches, core's own services among them.
+- **Limits on both sides.** The minion resets a connection past
+  `max_streams` without opening a stream; core answers one past it not
+  allowed (5). A `tunnel` with `udp` is answered failed (6): TCP only.
+- **Sent twice, safely.** The minion sends its `tunnel` again after 5 s
+  with no reply, and gives up after `timeout` and 30 s more, resetting the
+  connection and sending a reset close. A `tunnel` again for a stream core
+  has gets its reply again, never a second connect; one for a stream that
+  went (its number at or below the last core kept) a close, reason 3. Core
+  takes no `tunnel_reply` from the minion for a stream of the minion's.
+- **No operational port.** Core keeps the listener (`minion_listeners`: the
+  task, its session and operation, where the minion is to listen and where
+  it says it does, the destination, the last stream number, the task's
+  `max_streams` and `timeout`, who opened it and when) while the task runs.
+  A restart takes up the tasks still running: their streams went (the
+  minion's next word of each is answered with a close), new ones open, and
+  an old one is never connected again.
+- **Stop** cancels the task: the minion closes its listener and every
+  stream, and ends the task ok; core closes its connections.
+
+**UDP.** With `udp`, the minion listens for datagrams (`ListenPacket`), and
+says where with the same `tunnel_listen`. Each address that sends one there
+is a stream: the minion opens it with a `tunnel` that says `udp` and names
+that source (`host`, `port`), and holds its datagrams (256 KiB at most,
+dropping past it) until core's reply. Core opens a UDP socket of its own to
+`host:to` for the stream, so what comes back is that source's, and answers.
+Then `tunnel_datagram` goes both ways ([UDP](#udp): each `seq` taken once,
+no acks), naming the source both ways: the minion's from it, core's to it,
+which the minion sends from its listener whatever address the item names.
+UDP has no close: a stream with no datagram either way for 2 minutes
+(`protocol.TunnelUDPIdle`) ends, the minion sending `tunnel_close` done;
+core ends one idle a minute longer still, telling the minion, should that
+close go missing. A source's next datagram opens a new stream. Past
+`max_streams`, a new source's datagrams are dropped, as UDP drops what does
+not fit. A TCP stream of a UDP forward, or a UDP one of a TCP forward, or
+one that names no source, core answers failed.
+
+```cddl
+tunnel_listen = {       ; minion → core: the task's listener is up
+  0: 27,                ; t: tunnel_listen
+  1: task-id,           ; task: the reverse port forward's
+  2: tstr,              ; bound: where the minion listens, "ip:port";
+                        ;   128 bytes at most
+}
+```
+
+The minion sends it once its listener is up, after the task's ack; again,
+it changes nothing.
 
 ## UDP
 
@@ -349,7 +480,7 @@ tunnel_datagram = {     ; both: one datagram of a UDP stream
   (command not supported, 7).
 - **Once each.** Each side takes a `seq` once (the latest and the 64
   before it), so a message sent again doubles no datagram.
-- **Its record** is a stream's, with `udp` and no destination (each
+- **It is listed** as a stream, with `udp` and no destination (each
   datagram names its own), the payloads' bytes each way. The Proxy tab
   shows it as UDP.
 
@@ -376,23 +507,38 @@ command's `kinds` say where it works.
   the port core took. Its **Proxy** tab: the proxy's address (core's
   `OPERATIONAL_ADDRESS`, else the web app's host) to copy as `host:port`, as
   a `socks5h://` URL (for `curl -x`, `ALL_PROXY` or a browser) and as a
-  `proxychains` line; whether core listens (and that tools wait until the
-  minion has the task); its streams counted and its bytes each way; and its
-  streams, live, the latest first, searched (the tool, the destination) and
-  filtered (open, ended) by the server. The task's live updates carry the
-  numbers, once a second at most while its streams move.
-- **Each stream's record** (`minion_tunnel_streams`): the task and the
-  stream's number, the client's address, the destination as the tool named
-  it, when it opened, the minion's reply (result, `bound`, `msg`), when and
-  how it ended (`done`, `not_opened`, `no_reply`, `client_reset`, `reset`,
-  `lost`, `task_ended`, `core_stopped`) and the bytes each way: who reached
-  what through the minion, as the operation's record, deleted with the
-  operation. The bytes themselves are never kept.
+  `proxychains` line (a forward's **Forward** tab, its destination; a
+  reverse port forward's, where its minion listens, as the task asks until
+  the minion says, and the destination); whether core listens (and that tools wait until the
+  minion has the task); its streams counted and its bytes each way; and,
+  while the task runs, its streams, live, the latest first, searched (the
+  tool, the destination) and filtered (open, ended) by the server. The
+  task's live updates carry the numbers, once a second at most while its
+  streams move.
+- **Each stream, in core's memory alone** and only while its task runs:
+  every open one and the latest 1000 that ended (the tunnel's `kept`). Each
+  says its number, the client's address (a reverse port forward's: who
+  connected at the minion), the destination as the tool named it, when it
+  opened, the minion's reply (result, `bound`, `msg`; a reverse port
+  forward's, core's connect, its own address and why, which the minion
+  never hears), when and how it ended (`done`, `not_opened`, `no_reply`,
+  `client_reset`, `reset`, `lost`, `task_ended`, `core_stopped`) and the
+  bytes each way. None is stored: once the task ends, or is stopped, its
+  streams go and the tab says so. The bytes themselves are never kept.
+- **What a tunnel came to**, kept with its task as its tunnel closes (the
+  task's `tunnel`: its streams counted, the bytes each way): what its tab
+  shows once it ended. While it runs its port or listener keeps its bytes
+  so far (every 15 s, and as core stops), so a restart counts on from them;
+  its streams' list starts again empty. An older core kept each stream in
+  `minion_tunnel_streams`: core drops that collection as it starts.
 - **The operation's Ports** (a page of its own): every operational port in
   use, the latest opened first: what it serves, its session, who opened it
   and when, its streams; searched by the port, the session's number and
   who opened it; live, by the operation's port events (opened, its streams'
-  numbers once a second at most, closed).
+  numbers once a second at most, closed). **Minions' ports**, beside it,
+  lists the reverse port forwards the same way: where each one's minion
+  listens, what to, and the rest (live by the operation's listener events,
+  `minionListenerChanged`).
 
 ## Limits
 
@@ -407,6 +553,12 @@ command's `kinds` say where it works.
 | A SOCKS client waiting for its stream to open | the command's `timeout` (10 s by default) and 30 s more |
 | What core reads of a client ahead of the minion's ack | the minion's room, 1 MiB at most |
 | Sent and not acked, or a window shut, before core sends again (or probes) | 5 s |
+| A reverse port forward's connect, core's | the command's `timeout` (10 s by default) |
+| A connection waiting at the minion for core's reply | the command's `timeout` and 30 s more; its `tunnel` again every 5 s |
+| A UDP reverse forward's stream with no datagram either way | 2 minutes, then the minion closes it (core: 3 minutes) |
+| A UDP reverse forward's datagrams held for core's reply, per source | 256 KiB |
+| Ended streams a running tunnel lists | the latest 1000 (every open one too); none once its task ended |
+| A tunnel with no stream open, before core stops it | the command's `stop_idle` (BOB: `1h` for a proxy or a forward, never for a reverse forward); checked every 15 s |
 
 ## Open questions
 
@@ -419,6 +571,10 @@ command's `kinds` say where it works.
   over every stream of the task together. UDP datagrams over the cap are
   dropped.
 
+- **The SSH channel's tunnels**: none yet; a reverse port forward would be
+  SSH's own remote forwarding (`tcpip-forward`), over `bind-persistent`
+  only, as the server's `AllowTcpForwarding` and `GatewayPorts` allow.
+
 ## Design notes
 
 **Core speaks SOCKS; the minion speaks TCP.** Forwarding the SOCKS bytes for
@@ -426,7 +582,7 @@ the minion to parse would put a SOCKS server in every minion (and a SOCKS4,
 and UDP's headers, and each one's quirks), and leave core blind to what is
 reached. With core in front, a minion implements a few small items once,
 and the same items serve every front core adds later (a port forward, a
-browser's own proxy); core sees and records each destination.
+browser's own proxy); core sees each destination.
 
 **A task, not a session's setting.** A tunnel is work the minion does, so it
 goes as work goes: built in only when picked (a minion built without it
@@ -434,6 +590,33 @@ carries none of it), held to the kinds it works over, stopped by a cancel,
 found or lost by [`reack`](../tasks-and-results/#tasks-the-minion-lost) after
 a reconnect, recorded in the session's history, and its streams end with it,
 as a transfer ends with its task.
+
+**Streams are not stored.** A tunnel used for hours has streams by the
+hundred thousand: a scan through a proxy makes one a probe (every port of
+a /24, 16.7 million), a browser hundreds a page. Stored, they cost writes
+on every connect, and a search that matches nothing, the open ones, or the
+totals read every stream the task had (1.4 s a million, measured), while an
+operation runs many such tunnels and keeps little of value in them. What
+an operator looks at is what goes on now: the open streams and the latest
+that ended, a search away. So core keeps those in memory while the task
+runs, and what the tunnel came to with its task.
+
+**A reverse forward's streams are the minion's.** A connection comes to the
+minion's listener with no one asking: the minion opens it at once, rather
+than ask core for a number and wait. Each task's streams stay one side's,
+so neither side numbers a stream the other does, and every other rule
+holds as it was.
+
+**A UDP source is a stream.** Core sends a source's datagrams from a
+socket of the stream's own, so what the destination answers is that
+source's, and goes back to it alone. Two minutes of quiet ends the stream,
+as a NAT forgets a UDP flow; the minion decides, since its listener is
+where sources come and go, and core only cleans up after it.
+
+**The destination stays with core.** The minion needs to know where to
+listen, never where what comes goes: `host` and `to` carry no `num`, and
+core's replies say nothing of its side, so a minion found on a host
+gives away no operator's address.
 
 **Offsets and windows, as files have.** A stream is a file with no end yet,
 in both directions at once: `off` and `next` make every item safe to send

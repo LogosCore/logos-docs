@@ -89,8 +89,9 @@ A command names them in the [build schema](../minion-build/#commands):
 | [`walk_dir`](#walk_dir) | `path` (string) | `dir_walk` | a listing's or the file browser's folder: Walk from here |
 | [`list_volumes`](#list_volumes) | nothing | `volumes` | the file browser's roots: Refresh, and once by itself |
 | [`switch_connection`](#switch_connection) | `conn` (int) | none | a session's connection: Switch to |
-| [`socks_proxy`](#socks_proxy) | `port` (int) | none | the session's commands: core opens a SOCKS proxy on an operational port |
-| [`port_forward`](#port_forward) | `port` (int), `host` (string), `to` (int) | none | the session's commands: core opens an operational port onto `host:to` |
+| [`socks_proxy`](#socks_proxy) | `port` (int); optional `stop_idle` (duration) | none | the session's commands: core opens a SOCKS proxy on an operational port |
+| [`port_forward`](#port_forward) | `port` (int), `host` (string), `to` (int); optional `stop_idle` (duration) | none | the session's commands: core opens an operational port onto `host:to` |
+| [`reverse_port_forward`](#reverse_port_forward) | `bind` (string), `listen` (int), `udp` (bool), `host` (string), `to` (int); optional `stop_idle` (duration) | none | the session's commands: the minion listens at `bind:listen`, core connects each connection there to `host:to` (with `udp`, sends each source's datagrams on) |
 
 More come as commands need them (a process list, a screenshot); each gets
 a section here first, and a release of the protocol and core. Planned:
@@ -771,7 +772,10 @@ an `int`: 0 for any free one, which the minion needs nothing of) and the
 task runs until stopped, its streams going as tunnel items. No result: the
 task's view is core's. Its command's other params, each with a default, are
 the minion's (`timeout`, `max_streams`). Its task holds no place in the
-minion's max tasks, nor does a `port_forward`'s.
+minion's max tasks, nor does a `port_forward`'s. A command may take
+`stop_idle` (a duration, no `num`: core's alone), as every tunnel action's
+optional param: core stops the task once no stream has been open that long
+([Stop when idle](../minion-messages/tunnels/#the-tunnel-commands)).
 
 ## port_forward
 
@@ -783,12 +787,35 @@ needs nothing of them, each stream's tunnel item naming its destination.
 The command may require them (they are the action's own); its other params
 need defaults.
 
+## reverse_port_forward
+
+A tunnel the other way ([Tunnels](../minion-messages/tunnels/#reverse-port-forward)),
+as `ssh -R` does: the minion listens on its host at `bind` (a `string`: an
+address of its host, `0.0.0.0` for all of them, or a name it resolves) and
+`listen` (an `int`: a port, 0 for any free one), and opens each connection
+that comes there as a stream, which core connects to `host` (a `string`)
+and `to` (an `int`) from its own network. With `udp` (a `bool`), it listens
+for datagrams instead: a stream for each address they come from, whose
+datagrams core sends on to `host:to`. No operational port, no result.
+
+- **`host` and `to` are core's alone.** They carry no `num`, so a task never
+  takes them to the minion: it never learns where core sends its
+  connections. A build schema that gives either a `num` is refused (the
+  protocol's `CommandAction.CoreParams`). Core checks them as a
+  destination, and `bind` and `listen` as an address to listen at, when it
+  queues the task.
+- The command may require all five (they are the action's own); its other
+  params need defaults (`timeout`, `max_streams`). Its task holds no place
+  in the minion's max tasks.
+
 ## Changing the vocabulary
 
 A result only grows: a later version may add optional keys to its `data` or
 its entries, never remove one, change its meaning, or make it required. Core
 ignores keys it does not know, so a minion newer than core still fits. An
-action may only gain optional params. A change that cannot be made that way
+action may only gain optional params (the protocol's
+`CommandAction.Optional`: a command takes one or leaves it out, and core
+does without when it is out), so factories built before stay valid. A change that cannot be made that way
 is a new name (`dir_listing_v2`), and the old one stays for the minions
 already built.
 
