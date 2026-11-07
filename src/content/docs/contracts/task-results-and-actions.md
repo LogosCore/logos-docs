@@ -89,9 +89,8 @@ A command names them in the [build schema](../minion-build/#commands):
 | [`walk_dir`](#walk_dir) | `path` (string) | `dir_walk` | a listing's or the file browser's folder: Walk from here |
 | [`list_volumes`](#list_volumes) | nothing | `volumes` | the file browser's roots: Refresh, and once by itself |
 | [`switch_connection`](#switch_connection) | `conn` (int) | none | a session's connection: Switch to |
-| [`socks_proxy`](#socks_proxy) | `port` (int); optional `stop_idle` (duration) | none | the session's commands: core opens a SOCKS proxy on an operational port |
-| [`port_forward`](#port_forward) | `port` (int), `host` (string), `to` (int); optional `stop_idle` (duration) | none | the session's commands: core opens an operational port onto `host:to` |
-| [`reverse_port_forward`](#reverse_port_forward) | `bind` (string), `listen` (int), `udp` (bool), `host` (string), `to` (int); optional `stop_idle` (duration) | none | the session's commands: the minion listens at `bind:listen`, core connects each connection there to `host:to` (with `udp`, sends each source's datagrams on) |
+| [`tunnel`](#tunnel) | nothing of the command's; core adds `front`, `port`, `host`, `to`, `cap`; optional `stop_idle` (duration) | none | the session's commands: core opens an operational port, a SOCKS proxy, an HTTP proxy or a forward to `host:to` in front |
+| [`reverse_tunnel`](#reverse_tunnel) | `bind` (string), `listen` (int), `udp` (bool); core adds `front`, `host`, `to`, `cap`; optional `stop_idle` (duration) | none | the session's commands: the minion listens at `bind:listen`, core connects each connection there to `host:to` (with `udp`, sends each source's datagrams on), or serves SOCKS5 on it |
 
 More come as commands need them (a process list, a screenshot); each gets
 a section here first, and a release of the protocol and core. Planned:
@@ -764,49 +763,54 @@ Moves the minion to another of its build's connections: what a session's
 - It goes as tasks go, within the minion's `get_tasks` allowance: a minion
   that takes no tasks takes no switch.
 
-## socks_proxy
+## tunnel
 
-A tunnel with core's SOCKS proxy in front ([Tunnels](../minion-messages/tunnels/)):
-core takes an operational port when the task is queued (`port`,
-an `int`: 0 for any free one, which the minion needs nothing of) and the
-task runs until stopped, its streams going as tunnel items. No result: the
-task's view is core's. Its command's other params, each with a default, are
-the minion's (`timeout`, `max_streams`). Its task holds no place in the
-minion's max tasks, nor does a `port_forward`'s. A command may take
-`stop_idle` (a duration, no `num`: core's alone), as every tunnel action's
-optional param: core stops the task once no stream has been open that long
-([Stop when idle](../minion-messages/tunnels/#the-tunnel-commands)).
+A tunnel through the minion's host ([Tunnels](../minion-messages/tunnels/)):
+core opens an operational port when the task is queued, and puts the
+task's front in front of it, the operator's pick: `socks` (core's SOCKS
+proxy, the default), `http` (its HTTP proxy) or `forward` (every connection
+a stream to `host:to`). The task runs until stopped, its streams going as
+tunnel items. No result: the task's view is core's.
 
-## port_forward
+- **Core adds its own params** to every command of the action, beside the
+  command's (the protocol's `CommandAction.Adds`): `front` (an enum),
+  `port` (an `int`: 0 for any free one), `host` (a `string`: a name, which
+  the minion resolves, or an address) and `to` (an `int`: the port), a
+  forward's destination, which core checks, and `cap` (bytes a second each
+  way, 0 for none). They carry no `num`, so the minion never sees them, and
+  a build schema that declares one is refused. Each stream's tunnel item
+  names where it goes.
+- Its command's own params, each with a default, are the minion's
+  (`timeout`, `max_streams`), and it says what its minion opens (`opens`:
+  `tcp`, `udp`; none said, `tcp` alone): core opens nothing else through
+  it.
+- Its task holds no place in the minion's max tasks. A command may take
+  `stop_idle` (a duration, no `num`: core's alone), as every tunnel action's
+  optional param: core stops the task once no stream has been open that long
+  ([Stop when idle](../minion-messages/tunnels/#the-tunnel-commands)).
 
-A tunnel with a port forward in front ([Tunnels](../minion-messages/tunnels/#port-forward)):
-as `socks_proxy`, and every connection to the port a stream to `host`
-(a `string`: a name, which the minion resolves, or an address) and `to` (an
-`int`, the destination's port), which core reads and checks; the minion
-needs nothing of them, each stream's tunnel item naming its destination.
-The command may require them (they are the action's own); its other params
-need defaults.
+## reverse_tunnel
 
-## reverse_port_forward
-
-A tunnel the other way ([Tunnels](../minion-messages/tunnels/#reverse-port-forward)),
+A tunnel the other way ([Tunnels](../minion-messages/tunnels/#reverse-tunnel)),
 as `ssh -R` does: the minion listens on its host at `bind` (a `string`: an
 address of its host, `0.0.0.0` for all of them, or a name it resolves) and
 `listen` (an `int`: a port, 0 for any free one), and opens each connection
-that comes there as a stream, which core connects to `host` (a `string`)
-and `to` (an `int`) from its own network. With `udp` (a `bool`), it listens
-for datagrams instead: a stream for each address they come from, whose
-datagrams core sends on to `host:to`. No operational port, no result.
+that comes there as a stream. With `udp` (a `bool`), it listens for
+datagrams instead: a stream for each address they come from (through a
+command that opens `udp`). What core does with each stream is the task's
+front: `forward` (the default) connects it to `host` and `to` from core's
+own network, sending a UDP one's datagrams on; `socks` speaks SOCKS5 on it,
+behind a password core makes for the task, and connects where its client
+asks (TCP alone). No operational port, no result.
 
-- **`host` and `to` are core's alone.** They carry no `num`, so a task never
-  takes them to the minion: it never learns where core sends its
-  connections. A build schema that gives either a `num` is refused (the
-  protocol's `CommandAction.CoreParams`). Core checks them as a
-  destination, and `bind` and `listen` as an address to listen at, when it
-  queues the task.
-- The command may require all five (they are the action's own); its other
-  params need defaults (`timeout`, `max_streams`). Its task holds no place
-  in the minion's max tasks.
+- **The front, `host`, `to` and `cap` are core's alone**, added to every
+  command of the action. They carry no `num`, so a task never takes them to
+  the minion: it never learns where core sends its connections. Core checks
+  them as a destination, and `bind` and `listen` as an address to listen
+  at, when it queues the task.
+- The command may require `bind`, `listen` and `udp` (the action's own);
+  its other params need defaults (`timeout`, `max_streams`). Its task holds
+  no place in the minion's max tasks.
 
 ## Changing the vocabulary
 

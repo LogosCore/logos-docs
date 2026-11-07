@@ -187,6 +187,10 @@ them, first.
   ([Registry](wire-format/#registry)).
 - **An item type it does not know** gets an `err` with `unknown_item` and is
   skipped; the rest of the message is taken.
+- **An open is the exception**: a `tunnel` with a key its receiver does not
+  know is refused (result 7, unsupported), never read as a plain connect,
+  since the open has the host act ([Tunnels](tunnels/#streams), Read
+  strictly).
 - A change that breaks either rule needs a new `v`, and a protocol release
   both sides adopt.
 
