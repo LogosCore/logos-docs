@@ -41,7 +41,7 @@ answer back), or a connection socket (one message per frame, both ways).
 | [Identity](identity/) | Who a minion's work runs as when not its process's own: the `identity` item, its order with the acks, and what core keeps and shows. |
 | [Tasks and results](tasks-and-results/) | How an exchange goes, asking for tasks, a task and its arguments, cancelling, results, and listings of the host's file system. |
 | [File transfers](file-transfers/) | Files both ways, kept in core or streamed through it: chunks, acks, resuming, and what core keeps. |
-| [Tunnels](tunnels/) | TCP streams and UDP associations the minion opens from its host, carried in messages; core's SOCKS proxy, or a port forward, on an operational port in front; or a reverse port forward, the minion listening and core connecting each of its streams. |
+| [Tunnels](tunnels/) | TCP streams and UDP associations the minion opens from its host (unix sockets, named pipes, processes, a listener for one connection too), carried in messages; core's SOCKS or HTTP proxy, a port forward, or a terminal, on an operational port in front; or a reverse tunnel, the minion listening and core forwarding each of its streams or speaking SOCKS on it. |
 
 ## A minion's life at a glance
 

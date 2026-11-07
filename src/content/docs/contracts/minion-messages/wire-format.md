@@ -261,6 +261,7 @@ given in its CDDL on the page that defines it.
 | | | 21–25 | [`tunnel`, `tunnel_reply`, `tunnel_data`, `tunnel_ack`, `tunnel_close`](../tunnels/#streams) |
 | | | 26 | [`tunnel_datagram`](../tunnels/#udp) |
 | | | 27 | [`tunnel_listen`](../tunnels/#reverse-port-forward) |
+| | | 28 | [`tunnel_ctl`](../tunnels/#controls) |
 
 **The message**: `v` 0, `id` 1, `re` 2, `items` 3, and core's `at` 4, as [above](#message).
 
