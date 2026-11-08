@@ -194,7 +194,7 @@ them, first.
 - A change that breaks either rule needs a new `v`, and a protocol release
   both sides adopt.
 
-**A new mechanic** (an interactive shell, a tunnel, an `event` stream)
+**A new mechanic** (a tunnel's new kind of stream, an `event` stream)
 fits every kind when it answers these, and adds its row to the table above:
 
 1. **Items that can go twice.** Each step is an item, numbered, that does
@@ -215,6 +215,7 @@ fits every kind when it answers these, and adds its row to the table above:
    connection's `max_message` ([Wire format](wire-format/#limits)): what is
    larger goes in parts, sized by the connection, not by a constant.
 5. **Kinds it needs.** A mechanic that cannot work, or work well, over
-   some kinds (an interactive shell needs both sides speaking at once)
+   some kinds (a tunnel needs a minion that keeps its sockets between
+   messages, which a page does not)
    says so in its command's [`kinds`](../minion-build/#commands): core
    refuses its task on a session on another kind, and `help` says so.

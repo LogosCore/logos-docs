@@ -283,6 +283,10 @@ keys](../sessions/#stage), and the data of each of core's
 | Machine id sources | `smbios-uuid` 1 … `ephemeral` 10 | [Sessions](../sessions/#machine-identity) |
 | Entry types | `dir` 1, `file` 2, `link` 3, `other` 4 | [Listings](../tasks-and-results/#listings) |
 | Listing errors | denied 1, not found 2, other 3 | [Listings](../tasks-and-results/#listings) |
+| Tunnel results | open 0, refused 1, host unreachable 2, network unreachable 3, timed out 4, not allowed 5, failed 6, unsupported 7, not found 8, denied 9, in use 10 (from 0) | [Tunnels](../tunnels/#streams) |
+| Tunnel close reasons | done 1, reset 2, no such stream 3, task ended 4 | [Tunnels](../tunnels/#streams) |
+| Tunnel open kinds | unix socket 1, named pipe 2, process 3, accept 4 | [Tunnels](../tunnels/#streams) |
+| Tunnel signals | interrupt 1, terminate 2, kill 3 | [Tunnels](../tunnels/#controls) |
 
 A value a receiver does not know is taken and shown by its number (core
 reads an entry type it does not know as `other`).

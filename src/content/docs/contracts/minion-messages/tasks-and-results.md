@@ -94,7 +94,7 @@ get_tasks = {
 ## Max tasks
 
 Every minion has a limit of tasks at once. A task of a tunnel action
-([Tunnels](../tunnels/): a SOCKS proxy, a port forward) holds no
+([Tunnels](../tunnels/): a proxy, a forward, a terminal, either way) holds no
 place in it, on either side, as long as it runs. Its factory sets it in one
 of two ways:
 

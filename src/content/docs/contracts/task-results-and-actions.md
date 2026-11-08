@@ -89,7 +89,7 @@ A command names them in the [build schema](../minion-build/#commands):
 | [`walk_dir`](#walk_dir) | `path` (string) | `dir_walk` | a listing's or the file browser's folder: Walk from here |
 | [`list_volumes`](#list_volumes) | nothing | `volumes` | the file browser's roots: Refresh, and once by itself |
 | [`switch_connection`](#switch_connection) | `conn` (int) | none | a session's connection: Switch to |
-| [`tunnel`](#tunnel) | nothing of the command's; core adds `front`, `port`, `host`, `to`, `cap`; optional `stop_idle` (duration) | none | the session's commands: core opens an operational port, a SOCKS proxy, an HTTP proxy or a forward to `host:to` in front |
+| [`tunnel`](#tunnel) | nothing of the command's; core adds `front`, `port`, `host`, `to`, `cap`, and where the command opens them `path`, `source`, `tls`, `program`, `args`, `rows`, `cols`; optional `stop_idle` (duration) | none | the session's commands: core opens an operational port, a SOCKS proxy, an HTTP proxy, a forward to `host:to` or a terminal in front |
 | [`reverse_tunnel`](#reverse_tunnel) | `bind` (string), `listen` (int), `udp` (bool); core adds `front`, `host`, `to`, `cap`; optional `stop_idle` (duration) | none | the session's commands: the minion listens at `bind:listen`, core connects each connection there to `host:to` (with `udp`, sends each source's datagrams on), or serves SOCKS5 on it |
 
 More come as commands need them (a process list, a screenshot); each gets
@@ -768,8 +768,10 @@ Moves the minion to another of its build's connections: what a session's
 A tunnel through the minion's host ([Tunnels](../minion-messages/tunnels/)):
 core opens an operational port when the task is queued, and puts the
 task's front in front of it, the operator's pick: `socks` (core's SOCKS
-proxy, the default), `http` (its HTTP proxy) or `forward` (every connection
-a stream to `host:to`). The task runs until stopped, its streams going as
+proxy, the default; `BIND` too where the command opens `accept`), `http`
+(its HTTP proxy), `forward` (every connection a stream to `host:to`) or
+`terminal` (every connection a process on the minion's host, raw on the
+port or in the web app). The task runs until stopped, its streams going as
 tunnel items. No result: the task's view is core's.
 
 - **Core adds its own params** to every command of the action, beside the
