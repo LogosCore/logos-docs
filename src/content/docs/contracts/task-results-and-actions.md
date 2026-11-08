@@ -90,7 +90,7 @@ A command names them in the [build schema](../minion-build/#commands):
 | [`list_volumes`](#list_volumes) | nothing | `volumes` | the file browser's roots: Refresh, and once by itself |
 | [`switch_connection`](#switch_connection) | `conn` (int) | none | a session's connection: Switch to |
 | [`tunnel`](#tunnel) | nothing of the command's; core adds `front`, `port`, `host`, `to`, `stop_idle`, `cap`, and where the command opens them `path`, `source`, `tls`, `program`, `args`, `rows`, `cols` | none | the session's commands: core opens an operational port, a SOCKS proxy, an HTTP proxy, a forward to `host:to` or a terminal in front |
-| [`reverse_tunnel`](#reverse_tunnel) | `bind` (string), `listen` (int), `udp` (bool); core adds `front`, `host`, `to`, `stop_idle`, `cap` | none | the session's commands: the minion listens at `bind:listen`, core connects each connection there to `host:to` (with `udp`, sends each source's datagrams on), or serves SOCKS5 on it |
+| [`reverse_tunnel`](#reverse_tunnel) | `bind` (string), `listen` (int), `udp` (bool); core adds `front`, `host`, `to`, `stop_idle`, `cap` | none | the session's commands: the minion listens at `bind:listen`, core connects each connection there to `host:to` (with `udp`, sends each source's datagrams on) |
 
 More come as commands need them (a process list, a screenshot); each gets
 a section here first, and a release of the protocol and core. Planned:
@@ -805,10 +805,9 @@ address of its host, `0.0.0.0` for all of them, or a name it resolves) and
 that comes there as a stream. With `udp` (a `bool`), it listens for
 datagrams instead: a stream for each address they come from (through a
 command that opens `udp`). What core does with each stream is the task's
-front: `forward` (the default) connects it to `host` and `to` from core's
-own network, sending a UDP one's datagrams on; `socks` speaks SOCKS5 on it,
-behind a password core makes for the task, and connects where its client
-asks (TCP alone). No operational port, no result.
+front, `forward`, its one: core connects it to `host` and `to` from its
+own network, sending a UDP one's datagrams on (reverse SOCKS was dropped in
+wave 3.2). No operational port, no result.
 
 - **The front, `host`, `to`, `stop_idle` (never by default) and `cap` are
   core's alone**, added to every command of the action. They carry no `num`, so a task never takes them to

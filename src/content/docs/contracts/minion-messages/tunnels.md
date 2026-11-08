@@ -15,8 +15,7 @@ connection, raw on the port or in the web app. The minion never sees any of
 them: it opens, relays and closes streams (TCP connections, sockets, pipes,
 processes), whatever core put in front. A **reverse tunnel** goes the
 other way: the minion listens on its host, and core forwards each
-connection that comes there to a destination on its side, or speaks
-**SOCKS** on it, behind a password, and connects where its client asks.
+connection that comes there to a destination on its side.
 
 ```mermaid
 sequenceDiagram
@@ -99,7 +98,7 @@ tunnel goes, what the minion lends; what core puts in front is the task's
 | Action | The minion | Fronts (`front`), the first the default |
 |---|---|---|
 | **`tunnel`** | connects from its host wherever each stream's `tunnel` says, or runs the process it says | `socks`: core's [SOCKS](#socks) proxy · `http`: its [HTTP proxy](#http-proxy) · `forward`: a [port forward](#port-forward) to `host:to` · `terminal`: a [terminal](#terminal), a process for each connection |
-| **`reverse_tunnel`** | listens at `bind:listen`, TCP or (`udp`) UDP, and opens a stream for each connection that comes there | `forward`: core connects each to `host:to` from its network ([Reverse port forward](#reverse-port-forward)) · `socks`: a [reverse SOCKS](#reverse-socks) proxy into core's network, behind a password |
+| **`reverse_tunnel`** | listens at `bind:listen`, TCP or (`udp`) UDP, and opens a stream for each connection that comes there | `forward`, its one front: core connects each to `host:to` from its network ([Reverse port forward](#reverse-port-forward)); reverse SOCKS was dropped ([Design notes](#design-notes)) |
 
 **Core's params.** Core adds its own to every command of a tunnel action,
 beside the command's: they carry no `num`, so they never go to the minion,
@@ -584,9 +583,10 @@ terminal's, both ways, and its close hangs the process up.
 
 A `reverse_tunnel` task goes the other way, as `ssh -R` does: the minion
 listens on its host, and each connection that comes there is a stream the
-minion opens. What core does with it is the task's front: `forward` (a
-reverse port forward) connects it to `host:to` from core's own network,
-`socks` speaks SOCKS5 on it ([Reverse SOCKS](#reverse-socks)).
+minion opens. What core does with it is the task's front, `forward`, its
+one: a reverse port forward connects it to `host:to` from core's own
+network. A reverse SOCKS front was dropped in wave 3.2 ([Design
+notes](#design-notes)).
 
 ### Reverse port forward
 
@@ -640,13 +640,15 @@ sequenceDiagram
   takes no `tunnel_reply` from the minion for a stream of the minion's.
 - **No operational port.** Core keeps the listener (`minion_listeners`: the
   task, its session and operation, where the minion is to listen and where
-  it says it does, its front and the destination (a reverse SOCKS proxy's
-  user and password), the last stream number and how many streams it
+  it says it does, its front and the destination, the last stream number
+  and how many streams it
   opened, the task's `max_streams`, `timeout` and bandwidth cap, who opened
   it and when) while the task runs.
   A restart takes up the tasks still running: their streams went (the
   minion's next word of each is answered with a close), new ones open, and
-  an old one is never connected again.
+  an old one is never connected again. One kept from a reverse SOCKS proxy,
+  from before core dropped them, is not taken up: its task is stopped,
+  saying why.
 - **Stop** cancels the task: the minion closes its listener and every
   stream, and ends the task ok; core closes its connections.
 
@@ -678,31 +680,6 @@ tunnel_listen = {       ; minion → core: the task's listener is up
 
 The minion sends it once its listener is up, after the task's ack; again,
 it changes nothing.
-
-### Reverse SOCKS
-
-A reverse tunnel whose front is `socks` makes core a SOCKS5 proxy into its
-own network, reached at the minion's port: a tool on the minion's side (an
-implant, a scanner on a host there) connects to `bind:listen` on the
-minion's host, and goes where it asks from core's network, as `ssh -R` with
-no destination does.
-
-- **Behind a password.** Core makes one for the task as it is queued (user
-  `logos`, 24 hex digits) and shows it on the task's Proxy tab, with the
-  proxy's URL (`socks5h://logos:…@10.0.0.7:1080`); a client that does not
-  give it gets nothing, so a host that finds the port does not reach core's
-  network, core's own services among it. The password crosses the minion's
-  network in the clear, as SOCKS5's does: it keeps strangers out, not
-  someone who watches that network.
-- **SOCKS5 `CONNECT` alone.** No SOCKS4 (it has no password), no `UDP
-  ASSOCIATE`, no `BIND`; the listener is TCP (`udp` is refused as the task
-  is queued, and a UDP stream of its minion's is answered failed).
-- **Core takes each stream at once** (its `tunnel_reply` open), reads the
-  client's greeting, password and request from the stream's bytes, connects
-  within the task's `timeout`, and answers in the stream's bytes; its reply
-  names no address of core's (`0.0.0.0:0`). The minion never sees SOCKS, nor
-  where its streams go: each stream's record says the destination its
-  client asked for, core's connect's result and core's own address.
 
 ## UDP
 
@@ -807,8 +784,7 @@ restart goes on with it. Core enforces it alone, the minion unchanged:
   `proxychains` line (an HTTP proxy's, `http://` and an `http` line; a
   forward's **Forward** tab, its destination; a reverse port forward's,
   where its minion listens, as the task asks until the minion says, and the
-  destination; a reverse SOCKS proxy's, where its minion listens, its user
-  and password, and its URL; a terminal's, what it runs, a `socat` line for
+  destination; a terminal's, what it runs, a `socat` line for
   its raw port, and its web terminals); its bandwidth cap, changed there while it
   runs; whether core listens (and that tools wait until the
   minion has the task); its streams counted and its bytes each way; and,
@@ -859,7 +835,6 @@ restart goes on with it. Core enforces it alone, the minion unchanged:
 | A stream's window core gives, as it grows | 4 MiB; 32 MiB over a tunnel's streams together; a capped tunnel's, not at all |
 | Stream numbers core takes for a port's task at a time | 1000 (`StreamBlock`): one write for a thousand streams |
 | A capped tunnel's burst | a second of its cap, 64 KiB at least |
-| A reverse SOCKS proxy's password | 24 hex digits, made for its task |
 | A unix socket's path or a pipe's name, a process's program | 1024 bytes, printable |
 | A process's args | 64, 8 KiB together |
 | A terminal's size | 1 to 1000 rows and columns |
@@ -882,7 +857,8 @@ reverse port forwards (2026-11-07): what each takes, and a change for each
 gap. Wave 1 is released (protocol v0.38.0, BOB v0.28.0): changes 1, 2, 3
 and 8, and core's halves of 7 and 9. Wave 2 is released (protocol v0.39.0,
 BOB v0.29.0): change 4's unix sockets and named pipes, and the options of a
-stream. Wave 3 is released (protocol v0.40.0, BOB v0.30.0): change 4's
+stream. Wave 3.2 is released (protocol v0.42.0, BOB v0.30.2): reverse
+SOCKS was dropped. Wave 3 is released (protocol v0.40.0, BOB v0.30.0): change 4's
 process and accept, and change 5 (the
 [terminal](#terminal) front, SOCKS5 [`BIND`](#socks)). Wave 3.1 is released
 (protocol v0.41.0, BOB v0.30.1): `stop_idle` became one of core's params,
@@ -915,7 +891,7 @@ how it ended. **Front**: what core puts in front. **Needs**: the
 | Case | Open | Bytes | Datagrams | Control | Front | Needs |
 |---|---|---|---|---|---|---|
 | HTTP proxy | ✓ | ✓ | – | – | ✓ | none: built ([HTTP proxy](#http-proxy)) |
-| Reverse dynamic SOCKS | ✓ | ✓ | – | – | ✓ | none: built ([Reverse SOCKS](#reverse-socks)) |
+| Reverse dynamic SOCKS | ✓ | ✓ | – | – | ✗ dropped | built in wave 1, dropped in 3.2: too dangerous ([Design notes](#design-notes)) |
 | A VPN front | ✓ TCP | ✓ | ~ UDP ✓, ICMP ✗ | – | ~ a front of core's | [6](#6-icmp), and the front |
 | Scans through SOCKS | ✓ | ✓ | – | – | ✓ | none: [8](#8-stream-numbers-without-a-write-each) built |
 | Unix sockets | ✓ | ✓ | – | – | ✓ a forward to a path | none: built ([Unix sockets and named pipes](#unix-sockets-and-named-pipes)) |
@@ -938,10 +914,12 @@ how it ended. **Front**: what core puts in front. **Needs**: the
 - **HTTP proxy**: built ([HTTP proxy](#http-proxy)): `CONNECT`, and plain
   requests (`GET http://…`), for the tools that speak no SOCKS (WinHTTP,
   npm); the minion's side a SOCKS proxy's.
-- **Reverse dynamic SOCKS** (`ssh -R` with no destination): built
-  ([Reverse SOCKS](#reverse-socks)): a host behind the minion reaches core's
-  networks through it, behind a password core makes. The minion never sees
-  SOCKS.
+- **Reverse dynamic SOCKS** (`ssh -R` with no destination): built in wave
+  1, dropped in wave 3.2. A host behind the minion reached core's networks
+  through it, behind a password core made, which crossed the minion in the
+  clear: whoever held the minion's host learned it, and reached all of
+  core's network ([Design notes](#design-notes)). What stays is a reverse
+  port forward to one destination the operator picks.
 - **A VPN front** (a TUN with a user-space TCP/IP stack, as ligolo-ng's
   proxy has, so the operator's whole system routes into the minion's
   networks): each TCP connection the stack sees is a stream to its
@@ -1133,9 +1111,9 @@ to each side: no item changes.
   [bandwidth cap](#bandwidth-cap) is core's alone.
 
 **In order**, the waves: 1 released (the fronts and the rules, the HTTP
-proxy and reverse SOCKS, core's halves of [7](#7-bytes-with-the-open) and [9](#9-timing-that-follows-the-link), [8](#8-stream-numbers-without-a-write-each), the cap); 2 released
+proxy and reverse SOCKS (since dropped), core's halves of [7](#7-bytes-with-the-open) and [9](#9-timing-that-follows-the-link), [8](#8-stream-numbers-without-a-write-each), the cap); 2 released
 (unix sockets, named pipes and stream options, [4](#4-opens-of-more-kinds) in part); 3 released
-(shells and SOCKS5 `BIND`, [4](#4-opens-of-more-kinds), [5](#5-controls-and-an-end-for-shells)); 3.1 released (`stop_idle` core's); 4, a VPN front with ICMP ([6](#6-icmp)), and
+(shells and SOCKS5 `BIND`, [4](#4-opens-of-more-kinds), [5](#5-controls-and-an-end-for-shells)); 3.1 released (`stop_idle` core's); 3.2 released (reverse SOCKS dropped); 4, a VPN front with ICMP ([6](#6-icmp)), and
 BOB's half of [9](#9-timing-that-follows-the-link); 5, pivots (the TCP channel through a SOCKS port, BOB
 listening on a pipe), the SSH channel's tunnels, one front over several
 minions; 6, the host's HTTP stack and a factory of JSP or ASPX pages, each
@@ -1159,7 +1137,7 @@ network one way or the other, or a process on it. It opens what each
 `tunnel` names, or listens and opens a stream for each connection. What the tools speak in
 front of that is core's, so the action names the direction and the front is
 a param of core's, which a factory never declares: a new front (the HTTP
-proxy, reverse SOCKS, a VPN) is core's work alone, with no factory release
+proxy, a terminal, a VPN) is core's work alone, with no factory release
 and no minion built again. Actions named after fronts (`socks_proxy`,
 `port_forward`) had a command serve one front, a minion that could carry a
 forward unable to, and every new front a protocol action and a rebuild.
@@ -1197,6 +1175,17 @@ size or a signal must not wait behind a full window.
 a program and relays its terminal; the raw port and the web terminal are
 core's, as SOCKS is: another front (a recorded session, a terminal shared
 by two operators) would need no minion built again.
+
+**No reverse SOCKS.** A reverse SOCKS front (wave 1, dropped in wave 3.2)
+let a tool on the minion's side reach anywhere in core's network, behind a
+password core made for the task. The password crossed the minion's network
+in the clear, as SOCKS5's does, and every byte of it crossed the minion:
+whoever held the minion's host learned it at a client's first use, and
+could then reach all of core's network, core's own services (its
+database, its broker) among it, while the task ran. A minion is a
+stranger's host by design, so core takes nothing from it that reaches
+further than the operator chose: a reverse port forward reaches one
+destination, the operator's pick, and nothing else.
 
 **Streams are not stored.** A tunnel used for hours has streams by the
 hundred thousand: a scan through a proxy makes one a probe (every port of
