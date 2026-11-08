@@ -108,6 +108,7 @@ export default defineConfig({
                 { slug: "contracts/minion-messages/tunnels" },
               ],
             },
+            { slug: "contracts/vpn-front" },
             { slug: "contracts/task-results-and-actions" },
             { slug: "contracts/file-browser" },
             { slug: "implementing-a-module" },

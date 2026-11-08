@@ -875,7 +875,10 @@ process and accept, and change 5 (the
 [terminal](#terminal) front, SOCKS5 [`BIND`](#socks)). Wave 3.1 is released
 (protocol v0.41.0, BOB v0.30.1): `stop_idle` became one of core's params,
 as change 1 made the front. The rest of
-this page says them; the others are not built.
+this page says them; the others are not built. Wave 4 is released
+(protocol v0.44.0, BOB v0.31.0): the [VPN Front](../../vpn-front/) (a
+client of core's on the operator's machine, `logos-vpn`), ICMP
+([6](#6-icmp)) and BOB's half of [9](#9-timing-that-follows-the-link).
 :::
 
 **What holds.** A stream is general already: bytes in order each way,
@@ -904,12 +907,12 @@ how it ended. **Front**: what core puts in front. **Needs**: the
 |---|---|---|---|---|---|---|
 | HTTP proxy | ✓ | ✓ | – | – | ✓ | none: built ([HTTP proxy](#http-proxy)) |
 | Reverse dynamic SOCKS | ✓ | ✓ | – | – | ✗ dropped | built in wave 1, dropped in 3.2: too dangerous ([Design notes](#design-notes)) |
-| A VPN front | ✓ TCP | ✓ | ~ UDP ✓, ICMP ✗ | – | ~ a front of core's | [6](#6-icmp), and the front |
+| A VPN front | ✓ TCP | ✓ | ✓ UDP, ICMP | – | ✓ a front of core's | none: built ([VPN Front](../../vpn-front/)) |
 | Scans through SOCKS | ✓ | ✓ | – | – | ✓ | none: [8](#8-stream-numbers-without-a-write-each) built |
 | Unix sockets | ✓ | ✓ | – | – | ✓ a forward to a path | none: built ([Unix sockets and named pipes](#unix-sockets-and-named-pipes)) |
 | Named pipes | ✓ | ✓ byte mode | – | – | ✓ a forward to a pipe | none: built; a message's end, a key to come |
 | An interactive shell | ✓ a process | ✓ | – | ✓ size, signals, exit code | ✓ a terminal | none: built ([Terminal](#terminal)) |
-| ICMP | – | – | ✗ a port is required | – | ~ the VPN front | [6](#6-icmp) |
+| ICMP | ✓ an icmp stream | – | ✓ echo messages, port 0 | – | ✓ the VPN front | none: built ([6](#6-icmp)) |
 | Options of a stream | ✓ source, TLS | ✓ | – | – | ✓ | none: built; a socket's options, keys to come |
 | Reverse minions behind a minion | ✓ | ✓ | – | – | ✓ | none |
 | Bind minions behind a minion | ✓ | ✓ | – | – | ✓ | the channel's own: a proxy setting |
@@ -938,10 +941,10 @@ how it ended. **Front**: what core puts in front. **Needs**: the
   address, the minion's reply deciding the stack's answer (open: the
   handshake completes; refused: a reset; unreachable: ICMP's unreachable;
   timed out: nothing). Each UDP flow is an association. ICMP takes change
-  [6](#6-icmp). The front is core's alone now ([1](#1-the-front-a-core-param) built); where its TUN lives is
-  the front's design: a WireGuard peer in core (wireguard-go with gVisor's
-  stack) on a UDP operational port, the operator importing its config into
-  any WireGuard app; or a client of core's on the operator's machine.
+  [6](#6-icmp). The front is core's alone now ([1](#1-the-front-a-core-param) built). Its TUN is a client of
+  core's on the operator's machine, `logos-vpn`, decided 2026-11-08 over a
+  WireGuard peer in core and Headscale: a draft ([VPN
+  Front](../../vpn-front/)).
 - **Scans through SOCKS** (`nmap -sT`, netexec, proxychains sweeps): work,
   each probe a stream, its reply the port's state (refused: closed; timed
   out: filtered). A stream's number costs no write now ([8](#8-stream-numbers-without-a-write-each) built: a
@@ -969,7 +972,8 @@ how it ended. **Front**: what core puts in front. **Needs**: the
   too): `tunnel_datagram` names a port, which ICMP has none of. An ICMP
   kind of stream (change [6](#6-icmp)), its datagrams echo messages with no port,
   sent from an unprivileged ICMP socket of the minion's. SOCKS carries no
-  ICMP: the VPN front is what would use it.
+  ICMP: the VPN front is what would use it (a draft: [VPN
+  Front](../../vpn-front/#icmp)).
 - **Options of a stream**: built (wave 2): a source address on a host with
   two networks (`source`, every front's) and TLS to a forward's destination
   (`tls`), keys of the open where the command opens them; an older minion
@@ -1062,7 +1066,7 @@ Built (wave 3): `process` (kind 3, the [terminal](#terminal)
 front: keys 11 to 13 and the reply's `terminal`) and `accept` (kind 4,
 SOCKS5's [`BIND`](#socks)), with result 10, in use.
 
-Proposed, the rest: `icmp` ([6](#6-icmp)). OpenSSH's
+Built (wave 4): `icmp` (kind 5, [6](#6-icmp)). OpenSSH's
 `direct-streamlocal@openssh.com` would open the SSH channel's `unix`.
 
 #### 5. Controls and an end, for shells
@@ -1080,9 +1084,10 @@ before its eof, and an accept's who came.
 
 `tunnel_datagram` names a port, which ICMP has none of.
 
-Proposed: an `icmp` stream ([4](#4-opens-of-more-kinds)), its datagrams ICMP echo messages with
+Built (wave 4, [VPN Front](../../vpn-front/#icmp), where its items are): an `icmp` stream
+(kind 5, [4](#4-opens-of-more-kinds)), its datagrams ICMP echo messages with
 no port. The minion sends them from an unprivileged ICMP socket (Linux's
-ping sockets, where the host allows them; Windows' `IcmpSendEcho`), and
+ping sockets, where the host allows them; Windows' `IcmpSendEcho2`), and
 sends back what answers, an unreachable among them.
 
 #### 7. Bytes with the open
@@ -1107,9 +1112,10 @@ trip (5 s at least), it wakes the session itself when something is to go
 again, and the room it gives a stream grows while the minion fills it and
 the client keeps up ([Streams](#streams)).
 
-Proposed, the minion's half: the same in BOB, its wait its own measured
-round trip, the room it gives core grown while its host keeps up, and what
-it holds ahead of core's ack (1 MiB now) with it. The contract leaves both
+The minion's half built in BOB (wave 4): its wait its own measured round
+trip (RFC 6298, 5 s at least, a minute at most), the room it gives core
+doubling while its host keeps up (4 MiB a stream, 32 MiB a tunnel), and
+up to 4 MiB of its host read ahead of core's ack. The contract leaves both
 to each side: no item changes.
 
 ### What needs no change
@@ -1125,18 +1131,14 @@ to each side: no item changes.
 **In order**, the waves: 1 released (the fronts and the rules, the HTTP
 proxy and reverse SOCKS (since dropped), core's halves of [7](#7-bytes-with-the-open) and [9](#9-timing-that-follows-the-link), [8](#8-stream-numbers-without-a-write-each), the cap); 2 released
 (unix sockets, named pipes and stream options, [4](#4-opens-of-more-kinds) in part); 3 released
-(shells and SOCKS5 `BIND`, [4](#4-opens-of-more-kinds), [5](#5-controls-and-an-end-for-shells)); 3.1 released (`stop_idle` core's); 3.2 released (reverse SOCKS dropped); 3.3 released (each param by the front, More options, the reverse tunnel's `front` gone, the console in the form's order); 4, a VPN front with ICMP ([6](#6-icmp)), and
-BOB's half of [9](#9-timing-that-follows-the-link); 5, pivots (the TCP channel through a SOCKS port, BOB
+(shells and SOCKS5 `BIND`, [4](#4-opens-of-more-kinds), [5](#5-controls-and-an-end-for-shells)); 3.1 released (`stop_idle` core's); 3.2 released (reverse SOCKS dropped); 3.3 released (each param by the front, More options, the reverse tunnel's `front` gone, the console in the form's order); 4 released (a VPN front with ICMP, [6](#6-icmp), [VPN Front](../../vpn-front/), and
+BOB's half of [9](#9-timing-that-follows-the-link)); 5, pivots (the TCP channel through a SOCKS port, BOB
 listening on a pipe), the SSH channel's tunnels, one front over several
 minions; 6, the host's HTTP stack and a factory of JSP or ASPX pages, each
 to be decided.
 
 ## Open questions
 
-- **The VPN front's TUN** (wave 4): a WireGuard peer inside core
-  (wireguard-go with gVisor's stack, on a UDP operational port; the operator
-  imports its config into any WireGuard app), or a client of core's on the
-  operator's machine ([Each case](#each-case)).
 - **The SSH channel's tunnels**: none yet; a reverse port forward would be
   SSH's own remote forwarding (`tcpip-forward`), over `bind-persistent`
   only, as the server's `AllowTcpForwarding` and `GatewayPorts` allow; core's
