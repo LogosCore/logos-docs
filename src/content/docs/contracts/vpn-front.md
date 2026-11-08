@@ -6,7 +6,7 @@ title: "VPN Front"
 Wave 4 of the tunnels' [Future cases](../minion-messages/tunnels/#future-cases),
 released 2026-11-08: protocol v0.44.0, BOB v0.31.0 (ICMP, and its half of
 the timing, [change 9](../minion-messages/tunnels/#9-timing-that-follows-the-link)),
-core, and `logos-vpn` v0.1.0. Not yet run on a real network: the user
+core, and `logos-vpn` v0.1.1 (v0.1.0's tag released no binaries). Not yet run on a real network: the user
 tests it once a machine with networks of its own is at hand.
 :::
 
@@ -341,10 +341,12 @@ tunnel_datagram = {     ; of an icmp stream
   /api/v1/vpn/client/{os}-{arch}` (from `VPN_CLIENT_DIR`, `/app/vpn-clients`
   by default: `logos-vpn-{os}-{arch}`, `.exe` on Windows), for anyone signed
   in, which the VPN tab links. A hello of another link version is refused
-  (4001), saying where core's is. The deployment puts them in
-  `VPN_CLIENT_DIR`: core's image carries none yet (it will take a
-  `logos-vpn` release's once the repository is published). In the release
-  chain it goes after the protocol, before core.
+  (4001), saying where core's is. Core's image carries the release
+  `core/vpn-client.version` names (`scripts/fetch-vpn-clients.sh` at the
+  image's build: every binary checked against the release's `SHA256SUMS`,
+  all six required, or the build fails); the dev image fetches the same
+  into `/opt/vpn-clients`. A new `logos-vpn` release is that one line. In
+  the release chain it goes after the protocol, before core.
 
 ## Limits
 
