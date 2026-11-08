@@ -95,7 +95,7 @@ Every contract in this section, regardless of surface, follows the same baseline
 |---|---|---|---|
 | [HTTP Sync](../channel-core-sync/) | Data plane | Channel ↔ Core | Implemented; the channel is not authenticated yet |
 | [Connections](../channel-core-connections/) | Data plane: the connection kinds where core starts exchanges, the control link and connection sockets | Channel ↔ Core | `reverse-persistent`, `bind-call` (the control link's `call`, targets) and `bind-persistent` (the link's `open`, policies) implemented; fallback and `add_connection` a draft |
-| [Agentless Channels](../agentless-channels/) | Data plane: `bind` kinds whose channel acts as the minion, and gets the keys and the session's acting task with each call and open | Channel ↔ Core; Factory → Core | Implemented: the SSH module (`logos-ssh`) |
+| [Agentless Channels](../agentless-channels/) | Data plane: `bind` kinds whose channel acts as the minion, and gets the keys and the session's acting task with each call and open | Channel ↔ Core; Factory → Core | Implemented: the SSH module (`logos-ssh`); its tunnels since v0.6.0 (wave 5) |
 | [Module Lifecycle](../module-lifecycle/) | Control plane | Module (client) → Core (server) | Implemented |
 | [Module Management](../module-management/) | Control plane | Core (client) → Module (server) | Prototype |
 | [Module Logs](../module-logs/) | Control plane | Core ↔ Module | Prototype |

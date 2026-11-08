@@ -188,6 +188,8 @@ Its build schema:
   | `volumes` | `list_volumes` | `volumes` | `df -kPT` (GNU's, with types), else `df -kP`; on Windows, the drives |
   | `become` | | | [Become](#become): shell commands from then on run as another user (`user`, `root` by default), through sudo or su (`method`), with `password` given only when the server asks |
   | `unbecome` | | | Shell commands run as the login again: the elevated shell closes |
+  | `tunnel` | `tunnel` | | [Tunnels](#tunnels): SOCKS, HTTP proxy, forward, terminal and VPN (TCP) fronts, over the session's SSH connection; `bind-persistent` only |
+  | `reverse_tunnel` | `reverse_tunnel` | | [Tunnels](#tunnels): the server listens (a remote forward), TCP only; `bind-persistent` only |
 
   No `sleep` and no `exit`. Without a schedule, core calls only when it
   has something to send. A session ends when an operator archives it, and
@@ -356,6 +358,68 @@ gave them.
 - **Unix servers only**: a [Windows server](#windows-servers) has no sudo
   or su, and a become fails saying so.
 
+### Tunnels
+
+Since `logos-ssh` v0.6.0 (wave 5 of [tunnels](../minion-messages/tunnels/);
+no change to the protocol or to core). The channel runs BOB's tunnel items itself (its own copy of the engine:
+minions share the protocol, not their insides), and each stream goes over
+the session's own SSH connection, as `ssh -L`, `-D` and `-R` do. Core needs
+nothing new: its fronts and the items are the same as for BOB.
+
+- **Over `bind-persistent` only** (the commands' `kinds`): a tunnel lives
+  as long as the connection it goes over, and a call's connection lives a
+  call. A tunnel task in a call fails, saying so.
+- **One connection**: every stream is a channel on the session's SSH
+  connection, so nothing else logs in. The tunnel tasks run beside the
+  others, not counted against `max_tasks`.
+- **As the login**: a [become](#become) elevates shell tasks only. A
+  terminal is the login's shell, and a forward is sshd's, as its
+  `AllowTcpForwarding`, `PermitOpen` and `GatewayPorts` allow.
+- **They end with the connection**: when the channel's connection to core
+  drops, or the SSH connection does, every stream and listener closes. Core
+  then gets `unknown_task` for the tunnel tasks, as it does for any task
+  that ran in a connection that went, and ends them.
+
+What each open is over SSH (the `tunnel` command's `opens`: `tcp`, `unix`,
+`tls`, `process`, `accept`; the `reverse_tunnel` command's: `tcp`):
+
+| Open | Over SSH |
+|---|---|
+| TCP (SOCKS, HTTP proxy, forward, the VPN front's TCP) | A `direct-tcpip` channel: the server connects; TLS on top is the channel's, as BOB's |
+| Unix socket | OpenSSH's `direct-streamlocal@openssh.com` (its `AllowStreamLocalForwarding`); a socket it cannot open is `failed`, OpenSSH saying no more than "open failed" |
+| Process (the terminal front) | A session of its own: a pty of the open's size (`pty-req`, `window-change`) when the server gives one, else pipes; the program and args, or the login's shell (`$SHELL -l`); its exit status, as a `tunnel_ctl` |
+| Accept (SOCKS5 `BIND`) | A remote forward (`tcpip-forward`) for one connection |
+| Reverse tunnel | A remote forward (`tcpip-forward`); each connection, a `forwarded-tcpip` channel. On the server's loopback unless its `GatewayPorts` allows the bind address |
+| UDP, ICMP, a named pipe, a source address | `unsupported`: SSH carries none of them; the commands do not say they open them, so core does not send them |
+
+A terminal's signals: `interrupt` is Ctrl-C (`0x03`) written into the pty,
+as a key pressed (on pipes, `SIGINT` to the session). `terminate` and
+`kill` go to the whole session through a session of their own (`pkill -s`,
+else the process group, as a shell task's stop), and `kill` ends the
+channel too. On a [Windows server](#windows-servers), `terminate` and
+`kill` are SSH's `KILL` signal, which ends the process tree.
+
+What a server refuses comes back as the result its words say: `denied`
+for "administratively prohibited" (forwarding off, `PermitOpen`) and for a
+refused remote forward, `unsupported` for an unknown channel type, and
+OpenSSH's words for a connect that failed (`refused`, `host unreachable`
+for a name it does not find or a host that does not answer, `net
+unreachable`, `timed out`); anything else is `failed`, with the server's
+words. A connect that takes longer than the task's `timeout` is `timed out`
+on the channel's side.
+
+On a [Windows server](#windows-servers) (checked against Windows's OpenSSH
+9.5): a terminal is a ConPTY (`cmd.exe`, or the server's default shell),
+`interrupt` a Ctrl-C written into it (on pipes there is none); `terminate`
+and `kill` end the process tree. Its terminals say exit 0 whatever their
+shell exits with (on pipes the code comes through). A port that refuses the
+connection opens after about 2 s and ends at once (Windows retries the
+connect), and a unix socket's forward fails.
+
+The `reverse_tunnel` command has a `udp` param, as the action needs every
+command to have; over SSH it stays off (core refuses `udp` on a command
+that does not open UDP).
+
 ### Windows servers
 
 Windows's OpenSSH (Win32-OpenSSH) is served as BOB's minion runs on
@@ -434,9 +498,7 @@ core's Docker network, or a VPN.
   agentless channel runs outside core's own network.
 - **A schedule** for SSH targets: periodic logins that show a server is
   still there.
-- **Later**: jump hosts (a target reached through another), tunnels through
-  a session, an interactive shell (a PTY) in the console over a persistent
-  connection.
+- **Later**: jump hosts (a target reached through another).
 
 ## Design notes
 
