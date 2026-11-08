@@ -98,30 +98,40 @@ tunnel goes, what the minion lends; what core puts in front is the task's
 | Action | The minion | Fronts (`front`), the first the default |
 |---|---|---|
 | **`tunnel`** | connects from its host wherever each stream's `tunnel` says, or runs the process it says | `socks`: core's [SOCKS](#socks) proxy · `http`: its [HTTP proxy](#http-proxy) · `forward`: a [port forward](#port-forward) to `host:to` · `terminal`: a [terminal](#terminal), a process for each connection |
-| **`reverse_tunnel`** | listens at `bind:listen`, TCP or (`udp`) UDP, and opens a stream for each connection that comes there | `forward`, its one front: core connects each to `host:to` from its network ([Reverse port forward](#reverse-port-forward)); reverse SOCKS was dropped ([Design notes](#design-notes)) |
+| **`reverse_tunnel`** | listens at `bind:listen`, TCP or (`udp`) UDP, and opens a stream for each connection that comes there | a forward, its one front, which no param names: core connects each to `host:to` from its network ([Reverse port forward](#reverse-port-forward)); reverse SOCKS was dropped ([Design notes](#design-notes)) |
 
 **Core's params.** Core adds its own to every command of a tunnel action,
 beside the command's: they carry no `num`, so they never go to the minion,
 and a factory declares none of them (the protocol's `CommandAction.Adds`).
 The form and the console's command line take them as any param.
 
-| Core's | |
-|---|---|
-| `front` | one of its action's fronts (an enum): what core puts in front |
-| `port` | a `tunnel`'s: the operational port core listens on, 0 for any free one |
-| `host`, `to` | a forward's destination: reached from the minion's host (a `tunnel`), or from core's network (a `reverse_tunnel`); a name or an address, a port from 1 to 65535. The minion never learns a reverse one's; a `tunnel`'s each stream's `tunnel` item names. |
-| `path` | a `tunnel`'s forward to a [unix socket or a named pipe](#unix-sockets-and-named-pipes), instead of `host` and `to`: offered where the command opens `unix` or `pipe` |
-| `source` | a `tunnel`'s: the address of the minion's host its TCP streams go from (an IP), on a host with two networks: offered where the command opens `source` |
-| `tls` | a `tunnel`'s forward to a host and a port: the minion speaks TLS to the destination, the tools plain: offered where the command opens `tls` |
-| `program`, `args` | a [terminal](#terminal)'s: the program each connection runs on the minion's host (empty: its shell), and its args as one command line, split as a shell splits words (quotes and backslashes; nothing expanded: `protocol.TunnelArgs`): offered where the command opens `process` |
-| `rows`, `cols` | a terminal's size on its raw port, 24×80 by default, 1 to 1000 each (a web terminal says its own): offered where the command opens `process` |
-| `stop_idle` | a duration after which, with no stream open, core [stops the task](#the-tunnel-commands) (Stop when idle, below): `1h` by default for a `tunnel`, never (`0s`) for a `reverse_tunnel`; 0 never |
-| `cap` | the [bandwidth cap](#bandwidth-cap): bytes a second each way, 0 (the default) for none |
+A `tunnel`'s apply by its front (each one's [`when`](../../module-management/#fields)):
+the form shows only those of the front picked, and one given with another
+front is refused as the task is queued (`host: only when front is
+forward`), with no default filled in. Those seldom changed (`advanced`) are
+under the form's **More options**, folded. On the console's command line,
+words fill the params in the form's order, passing over those that do not
+apply, and an optional one takes a word only when it is one of its values:
+`tunnel forward 8080 db.local 5432`, `tunnel terminal 2222 bash`, and
+`tunnel 1080` (a SOCKS proxy on port 1080: the word is no front).
+
+| Core's | With front | |
+|---|---|---|
+| `front` | (a `tunnel`'s) | one of `socks`, `http`, `forward`, `terminal` (an enum): what core puts in front. A `reverse_tunnel` has none: its one front is a forward. |
+| `port` | any | a `tunnel`'s: the operational port core listens on, 0 for any free one |
+| `host`, `to` | `forward` | a forward's destination: reached from the minion's host (a `tunnel`), or from core's network (a `reverse_tunnel`'s, both required); a name or an address, a port from 1 to 65535. The minion never learns a reverse one's; a `tunnel`'s each stream's `tunnel` item names. |
+| `path` | `forward` | a `tunnel`'s forward to a [unix socket or a named pipe](#unix-sockets-and-named-pipes), instead of `host` and `to`: offered where the command opens `unix` or `pipe` |
+| `source` | `socks`, `http`, `forward` | a `tunnel`'s: the address of the minion's host its TCP streams go from (an IP), on a host with two networks: offered where the command opens `source`. More options. |
+| `tls` | `forward` | a `tunnel`'s forward to a host and a port: the minion speaks TLS to the destination, the tools plain: offered where the command opens `tls` |
+| `program`, `args` | `terminal` | a [terminal](#terminal)'s: the program each connection runs on the minion's host (empty: its shell), and its args as one command line, split as a shell splits words (quotes and backslashes; nothing expanded: `protocol.TunnelArgs`): offered where the command opens `process` |
+| `rows`, `cols` | `terminal` | a terminal's size on its raw port, 24×80 by default, 1 to 1000 each (a web terminal says its own): offered where the command opens `process`. More options. |
+| `stop_idle` | any | a duration after which, with no stream open, core [stops the task](#the-tunnel-commands) (Stop when idle, below): `1h` by default for a `tunnel`, never (`0s`) for a `reverse_tunnel`; 0 never. More options. |
+| `cap` | any | the [bandwidth cap](#bandwidth-cap): bytes a second each way, 0 (the default) for none. More options. |
 
 | The command's | |
 |---|---|
 | `bind`, `listen`, `udp` | a `reverse_tunnel`'s, numbered: where the minion listens, and whether for UDP datagrams, which it reads from its task |
-| `timeout`, `max_streams` | each with a default: how long a connect may take, how many streams at once (below) |
+| `timeout`, `max_streams` | each with a default: how long a connect may take, how many streams at once (below). BOB's are under More options (`advanced`), and its `tunnel`'s `timeout` applies with `socks`, `http` and `forward` alone: a terminal connects to nothing. |
 | `opens` | what its minion opens, and how: `tcp`, and `udp` (a `tunnel`'s UDP associations, a `reverse_tunnel`'s UDP listener); a `tunnel`'s `unix` and `pipe` (a forward to a path), `source` and `tls`, `process` (the [terminal](#terminal) front) and `accept` (SOCKS5 [`BIND`](#socks)); a command that says none, `tcp` alone. A build's target narrows it (its own `opens`: a Linux build has no pipes). Core opens nothing else through it, and offers only the params it opens: a SOCKS `UDP ASSOCIATE` through one that opens no `udp` is refused (command not supported), and a reverse tunnel's `udp` as the task is queued. |
 | Needs result | none: the task's view is core's (the port's address and its streams) |
 | `kinds` | The command's [`kinds`](../../minion-build/#commands) leave out those its minion cannot keep a socket open over between messages: a `bind-call` page keeps nothing between calls, so its factory leaves `bind-call` out. |
@@ -583,15 +593,15 @@ terminal's, both ways, and its close hangs the process up.
 
 A `reverse_tunnel` task goes the other way, as `ssh -R` does: the minion
 listens on its host, and each connection that comes there is a stream the
-minion opens. What core does with it is the task's front, `forward`, its
-one: a reverse port forward connects it to `host:to` from core's own
-network. A reverse SOCKS front was dropped in wave 3.2 ([Design
-notes](#design-notes)).
+minion opens. Core connects each to `host:to` from its own network: a
+reverse port forward, its one front, which no param names. A reverse SOCKS
+front was dropped in wave 3.2, and the `front` param, left with one value,
+in 3.3 ([Design notes](#design-notes)).
 
 ### Reverse port forward
 
-A reverse tunnel whose front is `forward` connects each connection that
-comes to the minion's port to `host:to` from core's own network. What reaches `10.0.0.7:8080` from
+A reverse tunnel connects each connection that comes to the minion's port
+to `host:to` from core's own network. What reaches `10.0.0.7:8080` from
 a host behind the minion reaches the operator's `10.8.0.2:4444` (a
 handler, a web server serving a payload).
 
@@ -858,7 +868,9 @@ gap. Wave 1 is released (protocol v0.38.0, BOB v0.28.0): changes 1, 2, 3
 and 8, and core's halves of 7 and 9. Wave 2 is released (protocol v0.39.0,
 BOB v0.29.0): change 4's unix sockets and named pipes, and the options of a
 stream. Wave 3.2 is released (protocol v0.42.0, BOB v0.30.2): reverse
-SOCKS was dropped. Wave 3 is released (protocol v0.40.0, BOB v0.30.0): change 4's
+SOCKS was dropped. Wave 3.3 is released (protocol v0.43.0, BOB v0.30.3): a
+tunnel's params apply by its front (`when`), those seldom changed are under
+More options (`advanced`), and a reverse tunnel names no front. Wave 3 is released (protocol v0.40.0, BOB v0.30.0): change 4's
 process and accept, and change 5 (the
 [terminal](#terminal) front, SOCKS5 [`BIND`](#socks)). Wave 3.1 is released
 (protocol v0.41.0, BOB v0.30.1): `stop_idle` became one of core's params,
@@ -1113,7 +1125,7 @@ to each side: no item changes.
 **In order**, the waves: 1 released (the fronts and the rules, the HTTP
 proxy and reverse SOCKS (since dropped), core's halves of [7](#7-bytes-with-the-open) and [9](#9-timing-that-follows-the-link), [8](#8-stream-numbers-without-a-write-each), the cap); 2 released
 (unix sockets, named pipes and stream options, [4](#4-opens-of-more-kinds) in part); 3 released
-(shells and SOCKS5 `BIND`, [4](#4-opens-of-more-kinds), [5](#5-controls-and-an-end-for-shells)); 3.1 released (`stop_idle` core's); 3.2 released (reverse SOCKS dropped); 4, a VPN front with ICMP ([6](#6-icmp)), and
+(shells and SOCKS5 `BIND`, [4](#4-opens-of-more-kinds), [5](#5-controls-and-an-end-for-shells)); 3.1 released (`stop_idle` core's); 3.2 released (reverse SOCKS dropped); 3.3 released (each param by the front, More options, the reverse tunnel's `front` gone, the console in the form's order); 4, a VPN front with ICMP ([6](#6-icmp)), and
 BOB's half of [9](#9-timing-that-follows-the-link); 5, pivots (the TCP channel through a SOCKS port, BOB
 listening on a pipe), the SSH channel's tunnels, one front over several
 minions; 6, the host's HTTP stack and a factory of JSP or ASPX pages, each

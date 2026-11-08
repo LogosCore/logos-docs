@@ -90,7 +90,7 @@ A command names them in the [build schema](../minion-build/#commands):
 | [`list_volumes`](#list_volumes) | nothing | `volumes` | the file browser's roots: Refresh, and once by itself |
 | [`switch_connection`](#switch_connection) | `conn` (int) | none | a session's connection: Switch to |
 | [`tunnel`](#tunnel) | nothing of the command's; core adds `front`, `port`, `host`, `to`, `stop_idle`, `cap`, and where the command opens them `path`, `source`, `tls`, `program`, `args`, `rows`, `cols` | none | the session's commands: core opens an operational port, a SOCKS proxy, an HTTP proxy, a forward to `host:to` or a terminal in front |
-| [`reverse_tunnel`](#reverse_tunnel) | `bind` (string), `listen` (int), `udp` (bool); core adds `front`, `host`, `to`, `stop_idle`, `cap` | none | the session's commands: the minion listens at `bind:listen`, core connects each connection there to `host:to` (with `udp`, sends each source's datagrams on) |
+| [`reverse_tunnel`](#reverse_tunnel) | `bind` (string), `listen` (int), `udp` (bool); core adds `host`, `to`, `stop_idle`, `cap` | none | the session's commands: the minion listens at `bind:listen`, core connects each connection there to `host:to` (with `udp`, sends each source's datagrams on) |
 
 More come as commands need them (a process list, a screenshot); each gets
 a section here first, and a release of the protocol and core. Planned:
@@ -787,8 +787,16 @@ tunnel items. No result: the task's view is core's.
   ([Terminal](../minion-messages/tunnels/#terminal)). They carry no `num`, so the minion never sees them, and
   a build schema that declares one is refused. Each stream's tunnel item
   names where it goes.
+- **Each applies by the front** (its [`when`](../module-management/#fields)):
+  `host`, `to`, `path` and `tls` with `forward` alone, `source` with any
+  but `terminal`, `program`, `args`, `rows` and `cols` with `terminal`
+  alone. The form shows only those of the front picked; one given with
+  another front is refused (`host: only when front is forward`), and takes
+  no default. `source`, `rows`, `cols`, `stop_idle` and `cap` are
+  `advanced`: under the form's More options.
 - Its command's own params, each with a default, are the minion's
-  (`timeout`, `max_streams`), and it says what its minion opens (`opens`:
+  (`timeout`, `max_streams`; a param may apply by core's `front` too:
+  BOB's `timeout` is a connection's, none a terminal's), and it says what its minion opens (`opens`:
   `tcp`, `udp`, `unix`, `pipe`, `source`, `tls`, `process`, `accept`; none
   said, `tcp` alone; a target narrows it): core opens nothing else through it.
 - Its task holds no place in the minion's max tasks. Core adds `stop_idle`
@@ -804,13 +812,13 @@ address of its host, `0.0.0.0` for all of them, or a name it resolves) and
 `listen` (an `int`: a port, 0 for any free one), and opens each connection
 that comes there as a stream. With `udp` (a `bool`), it listens for
 datagrams instead: a stream for each address they come from (through a
-command that opens `udp`). What core does with each stream is the task's
-front, `forward`, its one: core connects it to `host` and `to` from its
-own network, sending a UDP one's datagrams on (reverse SOCKS was dropped in
-wave 3.2). No operational port, no result.
+command that opens `udp`). Core connects each stream to `host` and `to`
+from its own network, sending a UDP one's datagrams on: a reverse port
+forward, its one front, which no param names (reverse SOCKS was dropped in
+wave 3.2, the `front` param in 3.3). No operational port, no result.
 
-- **The front, `host`, `to`, `stop_idle` (never by default) and `cap` are
-  core's alone**, added to every command of the action. They carry no `num`, so a task never takes them to
+- **`host` and `to` (both required), `stop_idle` (never by default) and
+  `cap` are core's alone**, added to every command of the action. They carry no `num`, so a task never takes them to
   the minion: it never learns where core sends its connections. Core checks
   them as a destination, and `bind` and `listen` as an address to listen
   at, when it queues the task.

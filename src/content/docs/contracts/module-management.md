@@ -108,6 +108,8 @@ Properties and action parameters share one field description:
 | `key_pattern` | For `string_map`: what every key must match. |
 | `max_items` | For `string_list`, `string_map`, `enum_list` and `credential_list`: most items or entries. |
 | `options` | For `enum` and `enum_list`: 1 to 64, each a `value`, optional `label` and `description` (shown under the label in the option list). |
+| `when` | An action's or a command's param only: it applies while another param of the same form, an `enum` with no `when` of its own, holds one of `values`: `{"key": "front", "values": ["forward"]}`, a tunnel's destination a forward's alone. The UI shows it only then, and leaves it out of what it sends; one given otherwise is refused (`host: only when front is forward`), it takes no default, and a `required` one is required only while it applies. A command's may name a param core adds to its [action](../task-results-and-actions/) (a tunnel's `front`). Refused anywhere else. |
+| `advanced` | An action's or a command's param only: one seldom changed (a connect timeout). The UI shows it under More options, folded until opened or until it has a problem to show. Refused anywhere else. |
 
 A **property** adds `apply`:
 
