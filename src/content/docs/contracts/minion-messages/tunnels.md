@@ -922,8 +922,6 @@ how it ended. **Front**: what core puts in front. **Needs**: the
 | Bulk copies over a fast pivot | ✓ | ✓ both sides' windows grow | – | – | ✓ | none: [9](#9-timing-that-follows-the-link) built |
 | Slow links | ✓ | ✓ both sides' resends follow the link | ✓ | – | ✓ | none: [9](#9-timing-that-follows-the-link) and the [cap](#bandwidth-cap) built |
 | The SSH channel's tunnels | ✓ TCP, unix, process, accept | ✓ | ✗ SSH has no UDP | ✓ | ✓ | none: built, `logos-ssh` v0.6.0 ([Agentless Channels](../../agentless-channels/#tunnels)) |
-| Pages that keep sockets | ✓ | ✓ | ✓ | – | ✓ | none |
-| The host's HTTP stack | ✗ | – | – | – | – | a mechanic of its own |
 
 ### Each case
 
@@ -1011,15 +1009,6 @@ how it ended. **Front**: what core puts in front. **Needs**: the
   pty the terminal. SSH carries no UDP: its commands do not open it ([2](#2-what-a-command-opens)),
   so the VPN front through them is TCP alone. Over `bind-persistent` only,
   as the login, ending with the connection ([Agentless Channels](../../agentless-channels/#tunnels)).
-- **Pages that keep sockets between calls** (JSP, ASPX, a Node server, as
-  reGeorg's do): `bind-call` carries a tunnel already, core calling again at
-  once while a stream has bytes. A PHP page keeps nothing between calls,
-  and its factory leaves the kind out, as now.
-- **The host's own HTTP stack** (WinINet or WinHTTP with the user's logon:
-  Kerberos or NTLM to internal sites, the user's cookies): not a stream. The
-  minion would speak HTTP itself, which this design keeps out of every
-  minion, and core would have to decrypt the operator's own HTTPS to hand
-  it a request: a mechanic of its own, if ever.
 
 ### The changes
 
@@ -1129,9 +1118,8 @@ to each side: no item changes.
 proxy and reverse SOCKS (since dropped), core's halves of [7](#7-bytes-with-the-open) and [9](#9-timing-that-follows-the-link), [8](#8-stream-numbers-without-a-write-each), the cap); 2 released
 (unix sockets, named pipes and stream options, [4](#4-opens-of-more-kinds) in part); 3 released
 (shells and SOCKS5 `BIND`, [4](#4-opens-of-more-kinds), [5](#5-controls-and-an-end-for-shells)); 3.1 released (`stop_idle` core's); 3.2 released (reverse SOCKS dropped); 3.3 released (each param by the front, More options, the reverse tunnel's `front` gone, the console in the form's order); 4 released (a VPN front with ICMP, [6](#6-icmp), [VPN Front](../../vpn-front/), and
-BOB's half of [9](#9-timing-that-follows-the-link)); 5 released (the SSH channel's tunnels, `logos-ssh` v0.6.0: [Agentless Channels](../../agentless-channels/#tunnels));
-6, the host's HTTP stack and a factory of JSP or ASPX pages, each to be
-decided. Left out (2026-11-08): a TCP channel through a SOCKS port (it
+BOB's half of [9](#9-timing-that-follows-the-link)); 5 released (the SSH channel's tunnels, `logos-ssh` v0.6.0: [Agentless Channels](../../agentless-channels/#tunnels)).
+Left out (2026-11-08): a TCP channel through a SOCKS port (it
 works today, by its target's `proxy`), a minion listening on a named pipe
 (minions relaying for each other: out of scope for now), and one front
 over several minions.
