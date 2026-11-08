@@ -888,11 +888,11 @@ as it carries TCP (waves 2 and 3). And core speaks the front while the minion on
 opens and relays, so a new front is core's work alone, now that the front
 is core's to pick ([The tunnel commands](#the-tunnel-commands)).
 
-**What is narrow.** ICMP, the one kind of open still to come, and a front
-over several tasks. Fronts bound to build commands, an older minion
-misreading an open it did not fully understand, an open to a TCP host and
-port alone, and a stream that said nothing past its bytes were narrow too:
-waves 1 to 3 changed them.
+**What is narrow.** Nothing the cases below take, but the SSH channel's
+tunnels. Fronts bound to build commands, an older minion misreading an
+open it did not fully understand, an open to a TCP host and port alone, a
+stream that said nothing past its bytes, and ICMP were narrow too: waves 1
+to 4 changed them.
 
 ### The cases
 
@@ -915,11 +915,10 @@ how it ended. **Front**: what core puts in front. **Needs**: the
 | ICMP | ✓ an icmp stream | – | ✓ echo messages, port 0 | – | ✓ the VPN front | none: built ([6](#6-icmp)) |
 | Options of a stream | ✓ source, TLS | ✓ | – | – | ✓ | none: built; a socket's options, keys to come |
 | Reverse minions behind a minion | ✓ | ✓ | – | – | ✓ | none |
-| Bind minions behind a minion | ✓ | ✓ | – | – | ✓ | the channel's own: a proxy setting |
-| One front over several minions | ✓ | ✓ | – | – | ~ fronts are core's | a front over several tasks, core's alone |
+| Bind minions behind a minion | ✓ | ✓ | – | – | ✓ | none: the TCP channel's target `proxy` |
 | SOCKS5 `BIND` | ✓ an accept | ✓ | – | ✓ who came | ✓ | none: built ([SOCKS](#socks)) |
-| Bulk copies over a fast pivot | ✓ | ~ core's window grows, BOB's not | – | – | ✓ | [9](#9-timing-that-follows-the-link): BOB's half |
-| Slow links | ✓ | ~ core's resend follows the link, BOB's not | ✓ | – | ✓ | [9](#9-timing-that-follows-the-link): BOB's half; the [cap](#bandwidth-cap) built |
+| Bulk copies over a fast pivot | ✓ | ✓ both sides' windows grow | – | – | ✓ | none: [9](#9-timing-that-follows-the-link) built |
+| Slow links | ✓ | ✓ both sides' resends follow the link | ✓ | – | ✓ | none: [9](#9-timing-that-follows-the-link) and the [cap](#bandwidth-cap) built |
 | The SSH channel's tunnels | ✓ | ✓ | ✗ SSH has no UDP | – | ✓ | none: its commands open `tcp` alone |
 | Pages that keep sockets | ✓ | ✓ | ✓ | – | ✓ | none |
 | The host's HTTP stack | ✗ | – | – | – | – | a mechanic of its own |
@@ -958,8 +957,7 @@ how it ended. **Front**: what core puts in front. **Needs**: the
   `\\host\pipe\name`): as a unix socket, a pipe kind of open. A byte-mode
   pipe is a stream as it is; a message-mode one would need each message's
   end said (a key of `tunnel_data`, which an older minion now refuses
-  rather than misreads, [3](#3-an-open-refused-not-misread)). A pipe stream is also what a pivot over SMB
-  would ride: a channel whose connection is a stream, a design of its own.
+  rather than misreads, [3](#3-an-open-refused-not-misread)).
 - **An interactive shell** (a PTY): built (wave 3,
   [Terminal](#terminal)): a process kind of open (the program, its args,
   the terminal's size), and what it says besides bytes ([Controls](#controls):
@@ -972,7 +970,7 @@ how it ended. **Front**: what core puts in front. **Needs**: the
   too): `tunnel_datagram` names a port, which ICMP has none of. An ICMP
   kind of stream (change [6](#6-icmp)), its datagrams echo messages with no port,
   sent from an unprivileged ICMP socket of the minion's. SOCKS carries no
-  ICMP: the VPN front is what would use it (a draft: [VPN
+  ICMP: the VPN front uses it (built, wave 4: [VPN
   Front](../../vpn-front/#icmp)).
 - **Options of a stream**: built (wave 2): a source address on a host with
   two networks (`source`, every front's) and TLS to a forward's destination
@@ -983,29 +981,25 @@ how it ended. **Front**: what core puts in front. **Needs**: the
   minion A whose destination is core's HTTP channel, and minion B, built
   with A's address and the forward's port as its connection, checks in
   through A.
-- **Bind minions behind a minion**: the TCP channel dials a
-  `bind-persistent` minion; one behind minion A it would dial through A's
-  SOCKS proxy. A proxy setting on the channel's target, the channel's work
-  alone; the items are a SOCKS proxy's.
-- **One front over several minions** (two minions in one network behind
-  one port: each stream through either, new ones through the other when one
-  goes): a front no single task has, core's alone now that fronts are
-  core's ([1](#1-the-front-a-core-param) built): a port core gives the tasks of several sessions,
-  each stream opened in one of them; a stream stays one task's.
+- **Bind minions behind a minion**: today. The TCP channel dials a
+  `bind-persistent` minion; one behind minion A it dials through A's SOCKS
+  tunnel, its target's `proxy` (`socks5://core:41001`, core's address as
+  the channel reaches it: `logos-core-dev` in the dev stack). A's tunnel on
+  a port of its own (`tunnel 41001`) and kept open (`stop_idle` 0s, or B's
+  target always connected), so the address holds.
 - **SOCKS5 `BIND`** (a tool asks the proxy to take one connection back, as
   active FTP does): built (wave 3, [SOCKS](#socks)): the minion
   listens within a stream core opened, which has two replies (where it
   listens, then who came): an `accept` kind of open, its second word a
   `tunnel_ctl`.
 - **Bulk copies over a fast pivot**: a stream goes at most a window each
-  round trip. Core's window grows now, to 4 MiB, while the minion fills it
-  and the client keeps up ([9](#9-timing-that-follows-the-link), core's half built); BOB gives core 256 KiB
-  and holds 1 MiB at most ahead of its ack: its half of [9](#9-timing-that-follows-the-link).
+  round trip. Both sides' windows grow now, to 4 MiB, while the other
+  fills them and the reader keeps up ([9](#9-timing-that-follows-the-link), built: core's in wave 1, BOB's in
+  wave 4).
 - **Slow links** (a DNS channel, a dead drop, two pivots deep): every item
   can go twice and the offsets keep order, so slowness loses nothing.
-  Core's wait for an ack follows its session's round trip now, and it wakes
-  the session itself (built); BOB's is 5 s still, so a round trip past it
-  sends its unacked bytes twice: its half of [9](#9-timing-that-follows-the-link). How much of a scarce link
+  Both sides' waits for an ack follow the session's round trip now, and
+  core wakes the session itself ([9](#9-timing-that-follows-the-link), built). How much of a scarce link
   a tunnel takes is the [bandwidth cap](#bandwidth-cap), built.
 - **The SSH channel's tunnels**: SSH has the same shape. `direct-tcpip` is
   core's open (a host, a port), `forwarded-tcpip` (after a `tcpip-forward`)
@@ -1132,10 +1126,12 @@ to each side: no item changes.
 proxy and reverse SOCKS (since dropped), core's halves of [7](#7-bytes-with-the-open) and [9](#9-timing-that-follows-the-link), [8](#8-stream-numbers-without-a-write-each), the cap); 2 released
 (unix sockets, named pipes and stream options, [4](#4-opens-of-more-kinds) in part); 3 released
 (shells and SOCKS5 `BIND`, [4](#4-opens-of-more-kinds), [5](#5-controls-and-an-end-for-shells)); 3.1 released (`stop_idle` core's); 3.2 released (reverse SOCKS dropped); 3.3 released (each param by the front, More options, the reverse tunnel's `front` gone, the console in the form's order); 4 released (a VPN front with ICMP, [6](#6-icmp), [VPN Front](../../vpn-front/), and
-BOB's half of [9](#9-timing-that-follows-the-link)); 5, pivots (the TCP channel through a SOCKS port, BOB
-listening on a pipe), the SSH channel's tunnels, one front over several
-minions; 6, the host's HTTP stack and a factory of JSP or ASPX pages, each
-to be decided.
+BOB's half of [9](#9-timing-that-follows-the-link)); 5, the SSH channel's tunnels (under discussion);
+6, the host's HTTP stack and a factory of JSP or ASPX pages, each to be
+decided. Left out (2026-11-08): a TCP channel through a SOCKS port (it
+works today, by its target's `proxy`), a minion listening on a named pipe
+(minions relaying for each other: out of scope for now), and one front
+over several minions.
 
 ## Open questions
 
