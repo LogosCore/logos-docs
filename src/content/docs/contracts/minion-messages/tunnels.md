@@ -21,20 +21,26 @@ connection that comes there to a destination on its side, or speaks
 ```mermaid
 sequenceDiagram
   participant T as Operator's tool
-  participant C as Core (SOCKS on :41000)
+  participant F as Front (SOCKS on :41000)
+  participant C as Core
   participant M as Minion
   participant H as 10.0.0.5:445
-  T->>C: SOCKS5 CONNECT 10.0.0.5:445
+  Note over F: the task's front, in core
+  T->>F: SOCKS5 CONNECT 10.0.0.5:445
+  F->>C: a stream to 10.0.0.5:445
   C->>M: tunnel {task, stream 1, host, port}
   M->>H: TCP connect
   M->>C: tunnel_reply {stream 1, open}
-  C->>T: SOCKS5 reply: succeeded
-  T->>C: bytes
+  C->>F: stream 1 open
+  F->>T: SOCKS5 reply: succeeded
+  T->>F: bytes
+  F->>C: bytes
   C->>M: tunnel_data {stream 1, off 0, data}
   M->>H: bytes
   H->>M: bytes
   M->>C: tunnel_data {stream 1, off 0, data}, tunnel_ack {next}
-  C->>T: bytes
+  C->>F: bytes
+  F->>T: bytes
 ```
 
 ## Operational ports
@@ -110,13 +116,13 @@ The form and the console's command line take them as any param.
 | `tls` | a `tunnel`'s forward to a host and a port: the minion speaks TLS to the destination, the tools plain: offered where the command opens `tls` |
 | `program`, `args` | a [terminal](#terminal)'s: the program each connection runs on the minion's host (empty: its shell), and its args as one command line, split as a shell splits words (quotes and backslashes; nothing expanded: `protocol.TunnelArgs`): offered where the command opens `process` |
 | `rows`, `cols` | a terminal's size on its raw port, 24×80 by default, 1 to 1000 each (a web terminal says its own): offered where the command opens `process` |
+| `stop_idle` | a duration after which, with no stream open, core [stops the task](#the-tunnel-commands) (Stop when idle, below): `1h` by default for a `tunnel`, never (`0s`) for a `reverse_tunnel`; 0 never |
 | `cap` | the [bandwidth cap](#bandwidth-cap): bytes a second each way, 0 (the default) for none |
 
 | The command's | |
 |---|---|
 | `bind`, `listen`, `udp` | a `reverse_tunnel`'s, numbered: where the minion listens, and whether for UDP datagrams, which it reads from its task |
 | `timeout`, `max_streams` | each with a default: how long a connect may take, how many streams at once (below) |
-| `stop_idle` | optional, core's alone (no `num`): a duration after which, with no stream open, core [stops the task](#the-tunnel-commands) (Stop when idle, below); absent or 0, never |
 | `opens` | what its minion opens, and how: `tcp`, and `udp` (a `tunnel`'s UDP associations, a `reverse_tunnel`'s UDP listener); a `tunnel`'s `unix` and `pipe` (a forward to a path), `source` and `tls`, `process` (the [terminal](#terminal) front) and `accept` (SOCKS5 [`BIND`](#socks)); a command that says none, `tcp` alone. A build's target narrows it (its own `opens`: a Linux build has no pipes). Core opens nothing else through it, and offers only the params it opens: a SOCKS `UDP ASSOCIATE` through one that opens no `udp` is refused (command not supported), and a reverse tunnel's `udp` as the task is queued. |
 | Needs result | none: the task's view is core's (the port's address and its streams) |
 | `kinds` | The command's [`kinds`](../../minion-build/#commands) leave out those its minion cannot keep a socket open over between messages: a `bind-call` page keeps nothing between calls, so its factory leaves `bind-call` out. |
@@ -146,21 +152,20 @@ until core cancels it. **Stop** cancels the task: core closes the port and
 its streams, and the minion closes its sockets and ends the task ok. A task
 that ends on the minion's side (it exited, it lost the task) closes the port.
 
-**Stop when idle.** A command may take `stop_idle`, a duration, as an
-optional param of every tunnel action, which core alone reads. Core stops
-the task, as Stop does, once no stream has been open that long:
+**Stop when idle.** Core adds `stop_idle`, a duration, to every tunnel
+command, and alone reads it. Core stops the task, as Stop does, once no
+stream has been open that long:
 
 - **Idle means no stream open**, not no bytes: an open stream holds the
   clock however quiet it is (an SSH session left at its prompt). The clock
   runs from when core sees the minion has the task (its ack), and starts
   again each time the last open stream ends. A core restart starts it
   again.
-- **Per task, with the command's default**: BOB's `tunnel` stops after
-  `1h`, its `reverse_tunnel` never (`0s`: one often waits hours for a
-  callback). The operator changes it when
-  starting the tunnel; a command line that leaves it out gets the default,
-  which core then writes into the task's args, as the form's are; a
-  command without it never stops on its own, as before.
+- **Per task, with core's default for the action**: a `tunnel` stops after
+  `1h`, a `reverse_tunnel` never (`0s`: one often waits hours for a
+  callback). The operator changes it when starting the tunnel; a command
+  line that leaves it out gets the default, which core then writes into
+  the task's args, as the form's are.
 - **Said where it shows**: the task's Proxy, Forward or Terminal tab says when it
   stops unless a stream opens (`stopsAt`), as the Ports page does. A task
   core stopped keeps why (`cancelReason`: "stopped by core: no stream open
@@ -867,7 +872,7 @@ restart goes on with it. Core enforces it alone, the minion unchanged:
 | A UDP reverse forward's stream with no datagram either way | 2 minutes, then the minion closes it (core: 3 minutes) |
 | A UDP reverse forward's datagrams held for core's reply, per source | 256 KiB |
 | Ended streams a running tunnel lists | the latest 1000 (every open one too); none once its task ended |
-| A tunnel with no stream open, before core stops it | the command's `stop_idle` (BOB: `1h` for a `tunnel`, never for a `reverse_tunnel`); checked every 15 s |
+| A tunnel with no stream open, before core stops it | the task's `stop_idle` (by default `1h` for a `tunnel`, never for a `reverse_tunnel`); checked every 15 s |
 
 ## Future cases
 
@@ -879,7 +884,9 @@ and 8, and core's halves of 7 and 9. Wave 2 is released (protocol v0.39.0,
 BOB v0.29.0): change 4's unix sockets and named pipes, and the options of a
 stream. Wave 3 is released (protocol v0.40.0, BOB v0.30.0): change 4's
 process and accept, and change 5 (the
-[terminal](#terminal) front, SOCKS5 [`BIND`](#socks)). The rest of
+[terminal](#terminal) front, SOCKS5 [`BIND`](#socks)). Wave 3.1 is released
+(protocol v0.41.0, BOB v0.30.1): `stop_idle` became one of core's params,
+as change 1 made the front. The rest of
 this page says them; the others are not built.
 :::
 
@@ -1034,7 +1041,9 @@ front is core's work alone: no factory release, no minion built again. A
 build no longer limits the kind of port its minion serves; it never limited
 where the minion connects (only core holds a forward to its destination).
 `socks_proxy`, `port_forward` and `reverse_port_forward` went: a build made
-before has no tunnel command, and is built again for one.
+before has no tunnel command, and is built again for one. `stop_idle`
+joined core's params in wave 3.1: a factory declared it before, with its
+own default.
 
 #### 2. What a command opens
 
@@ -1126,7 +1135,7 @@ to each side: no item changes.
 **In order**, the waves: 1 released (the fronts and the rules, the HTTP
 proxy and reverse SOCKS, core's halves of [7](#7-bytes-with-the-open) and [9](#9-timing-that-follows-the-link), [8](#8-stream-numbers-without-a-write-each), the cap); 2 released
 (unix sockets, named pipes and stream options, [4](#4-opens-of-more-kinds) in part); 3 released
-(shells and SOCKS5 `BIND`, [4](#4-opens-of-more-kinds), [5](#5-controls-and-an-end-for-shells)); 4, a VPN front with ICMP ([6](#6-icmp)), and
+(shells and SOCKS5 `BIND`, [4](#4-opens-of-more-kinds), [5](#5-controls-and-an-end-for-shells)); 3.1 released (`stop_idle` core's); 4, a VPN front with ICMP ([6](#6-icmp)), and
 BOB's half of [9](#9-timing-that-follows-the-link); 5, pivots (the TCP channel through a SOCKS port, BOB
 listening on a pipe), the SSH channel's tunnels, one front over several
 minions; 6, the host's HTTP stack and a factory of JSP or ASPX pages, each

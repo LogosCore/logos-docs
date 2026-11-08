@@ -89,8 +89,8 @@ A command names them in the [build schema](../minion-build/#commands):
 | [`walk_dir`](#walk_dir) | `path` (string) | `dir_walk` | a listing's or the file browser's folder: Walk from here |
 | [`list_volumes`](#list_volumes) | nothing | `volumes` | the file browser's roots: Refresh, and once by itself |
 | [`switch_connection`](#switch_connection) | `conn` (int) | none | a session's connection: Switch to |
-| [`tunnel`](#tunnel) | nothing of the command's; core adds `front`, `port`, `host`, `to`, `cap`, and where the command opens them `path`, `source`, `tls`, `program`, `args`, `rows`, `cols`; optional `stop_idle` (duration) | none | the session's commands: core opens an operational port, a SOCKS proxy, an HTTP proxy, a forward to `host:to` or a terminal in front |
-| [`reverse_tunnel`](#reverse_tunnel) | `bind` (string), `listen` (int), `udp` (bool); core adds `front`, `host`, `to`, `cap`; optional `stop_idle` (duration) | none | the session's commands: the minion listens at `bind:listen`, core connects each connection there to `host:to` (with `udp`, sends each source's datagrams on), or serves SOCKS5 on it |
+| [`tunnel`](#tunnel) | nothing of the command's; core adds `front`, `port`, `host`, `to`, `stop_idle`, `cap`, and where the command opens them `path`, `source`, `tls`, `program`, `args`, `rows`, `cols` | none | the session's commands: core opens an operational port, a SOCKS proxy, an HTTP proxy, a forward to `host:to` or a terminal in front |
+| [`reverse_tunnel`](#reverse_tunnel) | `bind` (string), `listen` (int), `udp` (bool); core adds `front`, `host`, `to`, `stop_idle`, `cap` | none | the session's commands: the minion listens at `bind:listen`, core connects each connection there to `host:to` (with `udp`, sends each source's datagrams on), or serves SOCKS5 on it |
 
 More come as commands need them (a process list, a screenshot); each gets
 a section here first, and a release of the protocol and core. Planned:
@@ -791,9 +791,9 @@ tunnel items. No result: the task's view is core's.
   (`timeout`, `max_streams`), and it says what its minion opens (`opens`:
   `tcp`, `udp`, `unix`, `pipe`, `source`, `tls`, `process`, `accept`; none
   said, `tcp` alone; a target narrows it): core opens nothing else through it.
-- Its task holds no place in the minion's max tasks. A command may take
-  `stop_idle` (a duration, no `num`: core's alone), as every tunnel action's
-  optional param: core stops the task once no stream has been open that long
+- Its task holds no place in the minion's max tasks. Core adds `stop_idle`
+  too (a duration, `1h` by default): core stops the task once no stream has
+  been open that long
   ([Stop when idle](../minion-messages/tunnels/#the-tunnel-commands)).
 
 ## reverse_tunnel
@@ -810,8 +810,8 @@ own network, sending a UDP one's datagrams on; `socks` speaks SOCKS5 on it,
 behind a password core makes for the task, and connects where its client
 asks (TCP alone). No operational port, no result.
 
-- **The front, `host`, `to` and `cap` are core's alone**, added to every
-  command of the action. They carry no `num`, so a task never takes them to
+- **The front, `host`, `to`, `stop_idle` (never by default) and `cap` are
+  core's alone**, added to every command of the action. They carry no `num`, so a task never takes them to
   the minion: it never learns where core sends its connections. Core checks
   them as a destination, and `bind` and `listen` as an address to listen
   at, when it queues the task.
@@ -824,9 +824,9 @@ asks (TCP alone). No operational port, no result.
 A result only grows: a later version may add optional keys to its `data` or
 its entries, never remove one, change its meaning, or make it required. Core
 ignores keys it does not know, so a minion newer than core still fits. An
-action may only gain optional params (the protocol's
-`CommandAction.Optional`: a command takes one or leaves it out, and core
-does without when it is out), so factories built before stay valid. A change that cannot be made that way
+action may only gain params core adds itself (the protocol's
+`CommandAction.Adds`: core puts them beside every command's own, and a
+factory declares none of them), so factories built before stay valid. A change that cannot be made that way
 is a new name (`dir_listing_v2`), and the old one stays for the minions
 already built.
 
