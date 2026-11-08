@@ -130,7 +130,7 @@ apply, and an optional one takes a word only when it is one of its values:
 
 | The command's | |
 |---|---|
-| `bind`, `listen`, `udp` | a `reverse_tunnel`'s, numbered: where the minion listens, and whether for UDP datagrams, which it reads from its task |
+| `bind`, `listen`, `udp` | a `reverse_tunnel`'s, numbered: where the minion listens, and whether for UDP datagrams, which it reads from its task; `udp` in a command that opens `udp` alone (required there, refused elsewhere) |
 | `timeout`, `max_streams` | each with a default: how long a connect may take, how many streams at once (below). BOB's are under More options (`advanced`), and its `tunnel`'s `timeout` applies with `socks`, `http` and `forward` alone: a terminal connects to nothing. |
 | `opens` | what its minion opens, and how: `tcp`, and `udp` (a `tunnel`'s UDP associations, a `reverse_tunnel`'s UDP listener); a `tunnel`'s `unix` and `pipe` (a forward to a path), `source` and `tls`, `process` (the [terminal](#terminal) front) and `accept` (SOCKS5 [`BIND`](#socks)); a command that says none, `tcp` alone. A build's target narrows it (its own `opens`: a Linux build has no pipes). Core opens nothing else through it, and offers only the params it opens: a SOCKS `UDP ASSOCIATE` through one that opens no `udp` is refused (command not supported), and a reverse tunnel's `udp` as the task is queued. |
 | Needs result | none: the task's view is core's (the port's address and its streams) |
@@ -1135,12 +1135,6 @@ decided. Left out (2026-11-08): a TCP channel through a SOCKS port (it
 works today, by its target's `proxy`), a minion listening on a named pipe
 (minions relaying for each other: out of scope for now), and one front
 over several minions.
-
-## Open questions
-
-- **The SSH channel's tunnels**: whether the action should need
-  `udp` of a reverse tunnel command that does not open UDP (the SSH
-  factory declares it, always off).
 
 ## Design notes
 

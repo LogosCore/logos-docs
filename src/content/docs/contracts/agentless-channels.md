@@ -416,9 +416,9 @@ shell exits with (on pipes the code comes through). A port that refuses the
 connection opens after about 2 s and ends at once (Windows retries the
 connect), and a unix socket's forward fails.
 
-The `reverse_tunnel` command has a `udp` param, as the action needs every
-command to have; over SSH it stays off (core refuses `udp` on a command
-that does not open UDP).
+Its `reverse_tunnel` opens TCP alone, so it has no `udp` param (since
+`logos-ssh` v0.6.1: protocol v0.45.0 asks `udp` only of a command that opens
+`udp`).
 
 ### Windows servers
 
