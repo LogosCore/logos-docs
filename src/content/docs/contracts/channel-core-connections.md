@@ -611,6 +611,20 @@ newest connection when another comes in (the older is likely stale). It
 listens from the start when its listening connection comes first in its
 build, and otherwise once a switch moves it there (above).
 
+It carries the reverse kinds too, minions that dial it, with the same
+frames, each kind on a port of its own (`REVERSE_PERSISTENT_LISTEN`,
+`REVERSE_CALL_LISTEN`; none by default, `:4790` and `:4791` in its dev
+stack):
+
+| Kind | Built into the minion (`fields`) | The exchange |
+|---|---|---|
+| `reverse-persistent` | `host` and `port` (required: the channel as the minion reaches it), `connect_timeout` (10s), `keepalive` (30s), `reconnect_backoff` (60s), `checkin_interval` (60s) and `checkin_jitter` (20) | the minion's first frame opens the connection's socket (its address the peer); frames go both ways until either side closes; the minion dials again when it closes, backing off |
+| `reverse-call` | `host`, `port`, `connect_timeout` (10s), `request_timeout` (40s), `checkin_interval` (60s), `checkin_jitter` (20) | a connection for each exchange: the minion's frame through the sync call, core's reply back under the same id (the id alone when core has nothing: the 204), then the channel closes; no reply at all when core refused it (as the HTTP channel's 404) |
+
+A minion that dials and sends nothing within 30 seconds is closed; a
+reverse call waits for core within `CORE_SYNC_TIMEOUT` (30s). BOB's minion
+speaks all three kinds.
+
 ## `get_tasks` on a persistent connection
 
 Through a call, a minion keeps its load in hand by when it asks: a
@@ -643,20 +657,20 @@ sends tasks as they are queued, so the minion says once how many it takes:
 
 A session can have more than one connection open: a minion reconnects while
 core's end of its old socket has not timed out yet, polls beside a
-WebSocket, or listens and calls back. And one connection can serve several
-sessions: a minion that relays others' messages (a pivot) carries them over
-its own, each sent under its own id.
+WebSocket, or listens and calls back. A connection carries one minion's
+messages: a minion that relays others' is a
+[delegate](../minion-messages/delegation/), which carries them in its own.
 
 - **Core keeps, for each session, the open connections that carried its
-  messages**; a connection serves every session it carried a message of.
-- **A connection is its first speaker's own**: the minion whose connection
-  it is speaks first. That session is `connected` while the connection is
-  open, and checked in by it. The sessions it relays (a pivot's) are
-  reached over it, but are not connected: each message of theirs checks
-  them in, and they go late and lost by their own schedule, as if they
-  checked in through calls. When the session whose own it is closes, or
-  another process takes it (`session_closed` or `session_replaced` over the
-  connection), the next session to speak over it is its own.
+  messages.**
+- **A connection is its first speaker's**: the minion whose connection it
+  is speaks first. That session is `connected` while the connection is
+  open, and checked in by it. A message under another session's id over it
+  is not taken (as a frame that does not open); its own minion staging
+  again (a `hello` under its build's ids) moves it to the session that
+  opens. When its session closes, or another process takes it
+  (`session_closed` or `session_replaced` over the connection), the next
+  session to speak over it is its own.
 - **A push goes on the one that carried the session's latest message**; if
   that send fails (its socket is gone), on the one before; if none is left,
   what was to go waits for the next exchange: a check-in's reply, or a call.
@@ -665,8 +679,7 @@ its own, each sent under its own id.
   acknowledged goes again on whichever connection comes next.
 - **Core does not close a session's older connections**: a dead one goes when
   its pings stop, a live one may be a second path. A session keeps 8 at
-  most: a ninth no longer reaches it over the oldest, which closes when no
-  other session uses it (a pivot's own connection stays).
+  most: a ninth no longer reaches it over the oldest, which closes.
 - **An answer to core's push** (`re`) is taken over any connection of the
   session, once, within 10 minutes: a minion that connected again still
   answers. An answer gets no reply, so what must arrive goes in a message

@@ -2,11 +2,20 @@
 title: "Delegation"
 ---
 
-:::caution[Draft]
-A design agreed 2026-11-08: nothing is built. The protocol only: what a
-delegate is, who declares what, the `delegate` item, the delegate's two
-actions, and what core does with what they carry. Core's records and the
-web app come with the build.
+:::note[Status]
+Built in the protocol (`logos-golang-protocol`: the item and its pieces,
+the two actions, `serves`, `delegated_only`), core (delegates' tasks,
+targets that name a delegate, each session's path; the web app's delegate
+picker, task view and a session's path) and BOB: its `delegate` command
+(op 18) serves the TCP channel's `bind-persistent` kind (it dials a BOB
+listening for the TCP channel), and its `reverse_delegate` (op 19) the
+channel's `reverse-persistent` and `reverse-call` (it listens, as the
+channel does, for BOBs built with its address). Released on 2026-11-09:
+protocol v0.46.0, BOB v0.32.0, the TCP channel v0.2.0 (its reverse kinds).
+Run end to end that day, each kind through a delegate: a shell's output and
+a 3 MB download, Disconnect and Connect again (bind), the delegate's task
+stopped and started again (reverse), a session behind 3 delegates. No
+`delegated_only` kind yet.
 :::
 
 Core reaches a minion's connection through an **instance** of the
@@ -76,8 +85,9 @@ minions serve, each `{module_name, versions, kinds}` as a build schema's
 reads), at most 16. `delegate` names bind kinds, `reverse_delegate`
 reverse ones. **Agentless kinds are not delegated**: an
 [agentless](../../agentless-channels/) kind's channel is the minion, and
-keys never go to a minion, so `serves` never names one. A target
-narrows it, as it narrows `channels`.
+keys never go to a minion, so `serves` never names one. A factory that
+serves other kinds on another target declares another command
+(`targets`).
 
 ## The delegate's tasks
 
@@ -100,8 +110,10 @@ starts them and numbers them, in a `reverse_delegate` task B does.
   to the minion): core stops the task once nothing went through it that
   long, `1h` by default for `delegate`, never for `reverse_delegate`.
 - **No result, no place in B's max tasks**: the task's view is core's
-  (what it carried, each session through it). Their `kinds` leave out
-  `bind-call`: a page runs no task between calls.
+  (what it carried, each session through it). Such a command names its
+  `kinds`, never `bind-call`: a page runs no task between calls.
+- **Core's own task** (one core queued for a target) is issued by no user,
+  its params their defaults: every param of a `delegate` command has one.
 - **The task ends, and with it everything it carries**: B closes its
   connections, gives up its exchanges, and stops listening. Its session
   closing or replaced (`session_replaced`) ends it in core.
@@ -140,7 +152,7 @@ delegate = {
   ? 6: uint,            ; status: answer: the transport's (an HTTP
                         ;   status); reply: the sync call's (200 with a
                         ;   frame, 204 nothing for the minion, else a
-                        ;   refusal: 409, 413, 422)
+                        ;   refusal: 409, 422, 500)
   ? 7: { 1: uint, 2: tstr },  ; failure: answer: unreachable 1, timeout 2,
                         ;   TLS 3, other 4, and why
   ? 8: bstr,            ; head: answer: the first 512 bytes of what
@@ -177,8 +189,8 @@ agentless kind's alone: never in this item.
 | 3 | the task ended, or the delegate runs no such task |
 
 - **Steps can go twice.** Core sends a `call`, an `open` and a `close`
-  with every message to B until its answer comes (an `answer`, a `close`
-  back), or the deadline passes; B takes each once by its `n`, and sends the
+  again, in B's next message once 5 seconds passed, until its answer comes
+  (an `answer`, a `close` back), or the deadline passes; B takes each once by its `n`, and sends the
   answer it gave again. A `sync`, a `reply` and a `frame` are not resent by
   core or B: a lost one is a lost transport message, which A's messages
   survive by their own rules ([Freshness and
@@ -289,6 +301,13 @@ says, whatever B's room).
   module, while B can be reached (connected, or on time); when B goes lost,
   its connections count as closed. The `peer` is A's external address, as a
   channel's peer address is.
+- **A's path is its session's**: each message of A's records on its session
+  the delegates it came through, nearest first (each one's session and the
+  task that carried it), and since when it comes that way. A message
+  straight from a channel module clears it; a check-in that carries no
+  message (a connection's keepalive) leaves it. The web app shows it on
+  the session: the Sessions table's Last seen, its Connections, its
+  console's tab.
 - **Delegates of delegates**: B may be delegated itself, its own messages
   carried by another delegate: core opens each frame in turn, at most 4
   delegates between a minion and a channel module. A frame of a session
@@ -332,28 +351,11 @@ delegate's pace. B's, by B's own kind:
 | | |
 |---|---|
 | A frame joined from pieces | 1 MiB |
+| Frames being joined, a delegate task's | 8 MiB; past it a new frame's pieces are dropped |
+| Pieces that never complete | dropped after 2 minutes |
+| What waits for a delegate task | 16 MiB; past it a frame is dropped (its minion sends again) |
 | `serves` of a command | 16 |
 | Delegates between a minion and a channel module | 4 |
-
-## When built: the other pages
-
-- [Wire format](../wire-format/#registry): item 29 `delegate`, the value
-  sets "Delegate steps" (sync 1 … close 7) and "Delegate close reasons"
-  (closed 1, no such connection 2, task ended 3).
-- [Minion Messages](../#items): the item's row, and the row above.
-- [Task Results and Actions](../../task-results-and-actions/): `delegate`
-  and `reverse_delegate`.
-- [Minion Build](../../minion-build/#commands): a command's `serves`, and a
-  target narrowing it.
-- [Minion Connection Schema](../../minion-connection/): a kind's
-  `delegated_only`.
-- [Channel ↔ Core: Connections](../../channel-core-connections/): an
-  instance is a module's or a delegate's; a target's delegate; and "one
-  connection serves several sessions", with core's rules for a pivot's
-  sockets, goes ([Design notes](#design-notes)).
-- [Tunnels](../tunnels/#each-case): "Reverse minions behind a minion" and
-  "Bind minions behind a minion" point here, and the left-out "minions
-  relaying for each other" is this.
 
 ## Design notes
 
@@ -375,10 +377,10 @@ delegate's pace. B's, by B's own kind:
   a port can go.
 - **Why not frames on B's own connection.** Core's rule that one
   connection serves several sessions (a pivot's frames over its socket
-  under their own ids) works over persistent kinds only, the sync call
-  carrying one id, shows the channel every delegated session's id, and has
-  core guess whose connection a socket is. No minion relays so; delegation
-  replaces it, and the rule goes with its owner bookkeeping.
+  under their own ids) worked over persistent kinds only, the sync call
+  carrying one id, showed the channel every delegated session's id, and had
+  core guess whose connection a socket is. No minion relayed so; it went
+  with delegation: a connection carries one minion's messages.
 - **Why a task is the instance.** A module is an instance while it is
   registered; a delegate, while its task runs. Operators see what it
   carries and stop it; what it carries ends with it, so a process that

@@ -311,7 +311,7 @@ depends on the minion's connection:
 | Connection | A check-in | Late and lost |
 |---|---|---|
 | `reverse-call` | each message the minion sends | by its schedule |
-| `reverse-persistent` | each message, and its own open connection (one it spoke over first); a session another minion's connection relays, its messages only | while connected, never; after, from when it closed, by its schedule: how soon it will be back |
+| `reverse-persistent` | each message, and its open connection | while connected, never; after, from when it closed, by its schedule: how soon it will be back |
 | `bind-call` | each call that reaches the page | by its schedule, when the page says one (core then calls on it); never without one |
 | `bind-persistent` | each message, and the open connection itself | never: the connection says whether the minion is there (connected, not connected on purpose, unreachable since) |
 

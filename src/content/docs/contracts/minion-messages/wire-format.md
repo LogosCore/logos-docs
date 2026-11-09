@@ -262,6 +262,7 @@ given in its CDDL on the page that defines it.
 | | | 26 | [`tunnel_datagram`](../tunnels/#udp) |
 | | | 27 | [`tunnel_listen`](../tunnels/#reverse-port-forward) |
 | | | 28 | [`tunnel_ctl`](../tunnels/#controls) |
+| | | 29 | [`delegate`](../delegation/#the-item) |
 
 **The message**: `v` 0, `id` 1, `re` 2, `items` 3, and core's `at` 4, as [above](#message).
 
@@ -287,6 +288,8 @@ keys](../sessions/#stage), and the data of each of core's
 | Tunnel close reasons | done 1, reset 2, no such stream 3, task ended 4 | [Tunnels](../tunnels/#streams) |
 | Tunnel open kinds | unix socket 1, named pipe 2, process 3, accept 4 | [Tunnels](../tunnels/#streams) |
 | Tunnel signals | interrupt 1, terminate 2, kill 3 | [Tunnels](../tunnels/#controls) |
+| Delegate steps | sync 1, reply 2, call 3, open 4, answer 5, frame 6, close 7 | [Delegation](../delegation/#the-item) |
+| Delegate close reasons | closed 1, no such connection 2, task ended 3 | [Delegation](../delegation/#the-item) |
 
 A value a receiver does not know is taken and shown by its number (core
 reads an entry type it does not know as `other`).

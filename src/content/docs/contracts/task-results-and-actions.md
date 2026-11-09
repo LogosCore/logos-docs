@@ -828,6 +828,32 @@ wave 3.2, the `front` param in 3.3). No operational port, no result.
   need defaults (`timeout`, `max_streams`). Its task holds no place in the
   minion's max tasks.
 
+## delegate
+
+The minion serves the bind kinds its command's `serves` names for other
+minions while its task runs ([Delegation](../minion-messages/delegation/)):
+core sends it the calls and opens of the targets that name its session as
+their delegate, and it calls or dials each target as the channel would. No
+result: the task's view is core's (what it serves, what it carried, the
+connections through it).
+
+- **Core starts one itself** when a target that names the session needs it
+  and none runs: the first command serving the target's kind, its params
+  their defaults (so every param of the command has one), issued by no
+  user. An operator may start one too.
+- **Core adds `stop_idle`** (a duration, `1h` by default, never sent to the
+  minion): core stops the task once nothing has gone through it that long.
+- Its task holds no place in the minion's max tasks.
+
+## reverse_delegate
+
+The minion serves the reverse kinds its command's `serves` names while its
+task runs: it listens as the command's own params say (a transport's
+server side is its channel's business, never in a connection schema), and
+carries the requests and connections minions bring. An operator starts it,
+so its params need no defaults. Core adds `stop_idle` (never by default). No
+result; no place in the minion's max tasks.
+
 ## Changing the vocabulary
 
 A result only grows: a later version may add optional keys to its `data` or

@@ -41,6 +41,7 @@ answer back), or a connection socket (one message per frame, both ways).
 | [Identity](identity/) | Who a minion's work runs as when not its process's own: the `identity` item, its order with the acks, and what core keeps and shows. |
 | [Tasks and results](tasks-and-results/) | How an exchange goes, asking for tasks, a task and its arguments, cancelling, results, and listings of the host's file system. |
 | [File transfers](file-transfers/) | Files both ways, kept in core or streamed through it: chunks, acks, resuming, and what core keeps. |
+| [Delegation](delegation/) | A minion that serves a channel kind's transport on its host for other minions, carrying what the channel would say to core in its own messages: any channel kind, any connection kind, the minions it serves unchanged. |
 | [Tunnels](tunnels/) | TCP streams and UDP associations the minion opens from its host (unix sockets, named pipes, processes, a listener for one connection too), carried in messages; core's SOCKS or HTTP proxy, a port forward, or a terminal, on an operational port in front; or a reverse tunnel, the minion listening and core forwarding each of its streams to one destination. |
 
 ## A minion's life at a glance
@@ -129,6 +130,7 @@ everything as it comes, so operators never see the numbers.
 | 18 | `feedback` | minion | a warning or an error for its operators | [Sessions](sessions/#feedback) |
 | 19 | `reack` | core | which of the tasks core thinks the minion runs it still has | [Tasks and results](tasks-and-results/#tasks-the-minion-lost) |
 | 20 | `identity` | minion | who its tasks, or a task, run as when not its process's own | [Identity](identity/) |
+| 29 | `delegate` | both | one step of what a delegate carries for the minions it serves: a sync and its reply, a call or an open and its answer, a connection's frame or close | [Delegation](delegation/#the-item) |
 
 ## Mechanics by connection kind
 
@@ -162,7 +164,7 @@ them, first.
 |---|---|---|---|---|
 | [Staging](sessions/#staging) | the minion stages | the minion stages | skipped: the session keeps the build's keys | the minion stages, once dialed |
 | [`hello`](sessions/#hello) | the minion's | the minion's | the page's, answering core's `rehello` | the minion's |
-| [Presence](sessions/#late-and-lost-sessions) | late and lost by its schedule | connected while a connection of its own is open; between connections, or relayed over another minion's, by its schedule | from the last call that worked, by its schedule if it says one | the connection: connected once the minion spoke, not connected (on purpose), unreachable since |
+| [Presence](sessions/#late-and-lost-sessions) | late and lost by its schedule | connected while a connection of its own is open; between connections, by its schedule | from the last call that worked, by its schedule if it says one | the connection: connected once the minion spoke, not connected (on purpose), unreachable since |
 | [`get_tasks`](tasks-and-results/#asking-for-tasks) `max` | per reply | a standing allowance | per next call | a standing allowance |
 | [`cancel`](tasks-and-results/#cancelling-a-task) | at the next check-in | pushed | in the next call (a task inside a running call ends first) | pushed |
 | [Lost tasks](tasks-and-results/#tasks-the-minion-lost) (`reack`) | after a claim, at the next check-in | after a claim, pushed | none: a call's tasks end within it, long ones go on through `resume` | after a claim, and on each new connection in the reply to the minion's first message under its session |
@@ -173,6 +175,7 @@ them, first.
 | [Files](file-transfers/) either way | the minion checks in at once while one moves | as it goes | a chunk a call, core calling again at once | as it goes |
 | [Streams](file-transfers/#streaming-a-file) that hold | core's `poll`: back within a second | pushed when they may go on | called when they may go on | pushed when they may go on |
 | [Tunnels](tunnels/) | core's `poll`: at once while items go, 250 ms with a stream idle, 1 s with none; the minion checks in at once with items of its own | pushed both ways as they come | only a minion that keeps its sockets between calls: called again while items go | pushed both ways as they come |
+| [Serving as a delegate](delegation/) | the delegate checks in at once with items for core; core's in its replies, `poll` (a second) while a step, pieces or a frame wait | pushed both ways as they come | none: a page runs no task between calls | pushed both ways while connected |
 | [Switching](sessions/#connections) | the minion moves | the minion moves | a page has one connection | core dials, the minion moves through the dial |
 | [Failover](../channel-core-connections/#failover) | the minion's | the minion's | none | none: core has to dial it |
 | [Replays](wire-format/#freshness-and-replay) of core's messages | none: replies match `re` | the minion may remember ids | the page refuses an `at` out of its window | the minion may remember ids |

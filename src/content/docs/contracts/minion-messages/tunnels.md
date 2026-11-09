@@ -980,13 +980,15 @@ how it ended. **Front**: what core puts in front. **Needs**: the
 - **Reverse minions behind a minion**: today. A reverse port forward on
   minion A whose destination is core's HTTP channel, and minion B, built
   with A's address and the forward's port as its connection, checks in
-  through A.
+  through A. [Delegation](../delegation/) does it without a tunnel: A
+  serves the channel's transport itself.
 - **Bind minions behind a minion**: today. The TCP channel dials a
   `bind-persistent` minion; one behind minion A it dials through A's SOCKS
   tunnel, its target's `proxy` (`socks5://core:41001`, core's address as
   the channel reaches it: `logos-core-dev` in the dev stack). A's tunnel on
   a port of its own (`tunnel 41001`) and kept open (`stop_idle` 0s, or B's
-  target always connected), so the address holds.
+  target always connected), so the address holds. A target that names A as
+  its [delegate](../delegation/) has A dial B itself.
 - **SOCKS5 `BIND`** (a tool asks the proxy to take one connection back, as
   active FTP does): built (wave 3, [SOCKS](#socks)): the minion
   listens within a stream core opened, which has two replies (where it
@@ -1120,9 +1122,8 @@ proxy and reverse SOCKS (since dropped), core's halves of [7](#7-bytes-with-the-
 (shells and SOCKS5 `BIND`, [4](#4-opens-of-more-kinds), [5](#5-controls-and-an-end-for-shells)); 3.1 released (`stop_idle` core's); 3.2 released (reverse SOCKS dropped); 3.3 released (each param by the front, More options, the reverse tunnel's `front` gone, the console in the form's order); 4 released (a VPN front with ICMP, [6](#6-icmp), [VPN Front](../../vpn-front/), and
 BOB's half of [9](#9-timing-that-follows-the-link)); 5 released (the SSH channel's tunnels, `logos-ssh` v0.6.0: [Agentless Channels](../../agentless-channels/#tunnels)).
 Left out (2026-11-08): a TCP channel through a SOCKS port (it
-works today, by its target's `proxy`), a minion listening on a named pipe
-(minions relaying for each other: out of scope for now), and one front
-over several minions.
+works today, by its target's `proxy`), and one front over several minions.
+Minions relaying for each other are [Delegation](../delegation/).
 
 ## Design notes
 
