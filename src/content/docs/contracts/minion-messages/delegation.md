@@ -3,19 +3,18 @@ title: "Delegation"
 ---
 
 :::note[Status]
-Built in the protocol (`logos-golang-protocol`: the item and its pieces,
-the two actions, `serves`, `delegated_only`), core (delegates' tasks,
-targets that name a delegate, each session's path; the web app's delegate
-picker, task view and a session's path) and BOB: its `delegate` command
-(op 18) serves the TCP channel's `bind-persistent` kind (it dials a BOB
-listening for the TCP channel), and its `reverse_delegate` (op 19) the
-channel's `reverse-persistent` and `reverse-call` (it listens, as the
-channel does, for BOBs built with its address). Released on 2026-11-09:
-protocol v0.46.0, BOB v0.32.0, the TCP channel v0.2.0 (its reverse kinds).
-Run end to end that day, each kind through a delegate: a shell's output and
-a 3 MB download, Disconnect and Connect again (bind), the delegate's task
-stopped and started again (reverse), a session behind 3 delegates. No
-`delegated_only` kind yet.
+Implemented and released on 2026-11-09: the protocol v0.46.0 (the item
+and its pieces, the two actions, `serves`, `delegated_only`), core (all
+four kinds through a delegate, delegates of delegates, targets that name a
+delegate, each session's path; the web app's delegate picker, a delegate
+task's view and a session's path), BOB v0.32.0 (`delegate`, op 18, serves
+the TCP channel's `bind-persistent`; `reverse_delegate`, op 19, its
+`reverse-persistent` and `reverse-call`) and the TCP channel v0.2.0 (its
+reverse kinds). Run end to end that day through BOB: `bind-persistent`,
+`reverse-persistent` and `reverse-call` (a shell's output and a 3 MB
+download, Disconnect and Connect again, the delegate's task stopped and
+started again, a session behind 3 delegates). What no module uses yet:
+[Not used yet](#not-used-yet).
 :::
 
 Core reaches a minion's connection through an **instance** of the
@@ -393,3 +392,17 @@ delegate's pace. B's, by B's own kind:
 - **Why pieces.** A is unchanged: it cannot learn B's room, and fills its
   messages to its own connection's size, which a delegate's message,
   carrying it in an item, can never hold whole when both are the largest.
+
+## Not used yet
+
+What the protocol and core carry, but no module exercises yet:
+
+- **`bind-call` through a delegate.** Core sends the `call` and takes the
+  `answer` (tested in core), but no factory serves a `bind-call` kind, so
+  it has not run end to end. A `delegate` command that serves Dumbo's
+  `bind-call` (B making the HTTP request to a page) would.
+- **A `delegated_only` kind.** Core refuses a bind target of one that names
+  no delegate, and the target dialog asks for a delegate, but no channel
+  declares such a kind.
+- **The endpoint form** does not say yet that a `delegated_only` reverse
+  kind's address is a delegate's ([Who declares what](#who-declares-what)).
