@@ -123,13 +123,72 @@ MongoDB resolves the database engine decision listed as pending in the
   names and PUT for its artifact, valid until the build's deadline. Core then
   reads the artifact back to check its size and SHA-256.
 
-## nginx — Entry Point
+## nginx — Core's front
 
-- **Role**: the operators' entrypoint. In development it serves TLS on 8443
-  and plain HTTP on 8080, and routes:
-  - `/api/` (the APIs, and the channels' sync endpoint) → core;
-  - `/api/v1/ws/wiki/` → hocuspocus;
+- **Role**: the entrypoint for operators and modules: TLS (and HTTP/2) on
+  443, plain HTTP on 80, and routes:
+  - `/api/` (the APIs, and the channels' sync call) → core;
+  - the WebSockets, each with its upgrade and a day's timeouts: the wiki
+    (`/api/v1/ws/wiki/` → hocuspocus), GraphQL subscriptions, the VPN
+    link, a task's terminal, and the modules' own: a channel's control
+    link (`/api/channel/link`) and connection sockets
+    (`/api/channel/connection`), a factory's factory link
+    (`/api/factory/link`);
+  - task files and minion streams, unbuffered and without nginx's body
+    limit;
   - `/` → the web app.
+- **The image**: `ghcr.io/logoscore/logos-nginx`, built from
+  `logos-core/deploy/nginx` and published with every change there (tags
+  `latest`, `main`, `sha-<commit>`). The routes live with core's code
+  (`deploy/nginx/locations.conf`), so a new route reaches every deployment
+  with the image; the dev stack runs the same image. Set by environment:
+
+  | Variable | Default | |
+  |---|---|---|
+  | `LOGOS_BACKEND` | `core:8002` | core, `host:port` |
+  | `LOGOS_FRONTEND` | `frontend:80` | the web app |
+  | `LOGOS_HOCUSPOCUS` | `hocuspocus:1234` | the wiki's collaboration server |
+  | `LOGOS_SERVER_NAME` | `_` (any) | the names the servers answer to, and a generated certificate is for |
+  | `LOGOS_HTTP` | `serve` | plain HTTP serves the app (`serve`), or redirects to HTTPS (`redirect`); `/healthz` answers either way |
+  | `LOGOS_TLS_CERT`, `LOGOS_TLS_KEY` | `/etc/nginx/certs/tls.crt`, `tls.key` | the certificate to serve |
+
+- **Certificates**: the one mounted at `LOGOS_TLS_CERT` and `LOGOS_TLS_KEY`.
+  Without one, the image makes a self-signed certificate for
+  `LOGOS_SERVER_NAME` and localhost, valid ten years, in
+  `/etc/nginx/logos-certs`: mount a volume there to keep it across
+  containers. Either way it logs the certificate's SHA-256 fingerprint at
+  start, ready for modules' `LOGOS_CORE_CERT_SHA256` ([How modules reach
+  core](#how-modules-reach-core)).
+- **More**: `*.conf` files mounted in `/etc/nginx/logos-extra` are included
+  in both servers (locations of a deployment's own); `/etc/nginx/conf.d`
+  takes whole servers.
+- **Kubernetes**: the Helm chart's Ingress instead (ingress-nginx), whose
+  WebSocket upgrades need no configuration.
+
+## How modules reach core
+
+A module reaches core two ways: over AMQP, through RabbitMQ (registration,
+management, builds), and over HTTP(S), at core's base URL (its environment's
+`LOGOS_CORE_BASE_URL`; the HTTP channel's `LOGOS_SYNC_BASE_URL`): the
+channels' sync call, control link and connection sockets, a factory's
+factory link. That URL is core itself (`http://core:8002` on its network),
+or its front over HTTPS.
+
+A front whose certificate no system trusts (a self-signed one) takes one of
+three settings, the same in every module (module-core's `coretls`, used by
+channel-core and factory-core for every request to core):
+
+| Setting | The module trusts |
+|---|---|
+| `LOGOS_CORE_CA_FILE` | the certificates in this PEM file, beside the system's: core's own self-signed certificate, or the authority that issued it. Still verified, the host name included: the certificate must name the host in the URL. |
+| `LOGOS_CORE_CERT_SHA256` | exactly the certificate with this SHA-256 fingerprint (hex, colons allowed, as openssl and the front's log print it), whatever signed it and whatever name it carries. Nothing to copy to each module. |
+| `LOGOS_CORE_TLS_INSECURE=true` | any certificate: none is verified, and anyone between the module and core can read and change what passes. Logged as a warning at start. |
+
+One at a time: the first set of insecure, the fingerprint, the CA file
+decides. A setting that does not read stops the module at start (the HTTP
+channel), or fails every request to core saying which (the others).
+Released in module-core v0.3.0, channel-core v3.9.0, factory-core v0.3.1,
+and every module built on them.
 
 ## hocuspocus — Wiki Collaboration
 
@@ -176,7 +235,8 @@ traces in SeaweedFS, Grafana) and is planned. None of it runs.
 | Core Server | RabbitMQ | AMQP | Lifecycle, management, log tail, builds, lifecycle events |
 | Channel Modules | RabbitMQ | AMQP | Lifecycle RPC, serving management and the log tail, log batches |
 | Factory Modules | RabbitMQ | AMQP | The same, and builds |
-| Channel Modules | Core Server | HTTP | Minion sync (`POST /api/channel/sync`) |
+| Channel Modules | Core Server (or its front) | HTTP(S) | Minion sync (`POST /api/channel/sync`); WebSockets: the control link, connection sockets |
+| Factory Modules | Core Server (or its front) | HTTP(S) | WebSocket: the factory link, for a factory that translates its minions' codec |
 | Core Server | MongoDB | MongoDB wire protocol | Persistence |
 | hocuspocus | MongoDB | MongoDB wire protocol | Wiki documents |
 | Core Server | Redis | RESP | Sessions, caches, sync de-duplication |
