@@ -39,7 +39,7 @@ JSON envelope, and a factory translating either layer itself).
 
 | Page | What it covers |
 |---|---|
-| [Wire format](wire-format/) | The sealed frame, the message envelope, CBOR rules, replay, errors and limits: what every message is. |
+| [Wire format](wire-format/) | The sealed frame, the message envelope, CBOR rules, compression (packed items, DEFLATE), replay, errors and limits: what every message is. |
 | [Codecs](codecs/) | A draft: a build's envelope and suite, core's (CBOR, JSON; `aes-256-cbc-hmac-sha256`) or its factory's own, translated over a factory link, one call per message each way. |
 | [Sessions](sessions/) | How a minion process gets keys and a session (staging, `hello`), what identifies its machine, how long a session lives, persisted and late sessions, and what a minion does when an exchange fails. |
 | [Identity](identity/) | Who a minion's work runs as when not its process's own: the `identity` item, its order with the acks, and what core keeps and shows. |

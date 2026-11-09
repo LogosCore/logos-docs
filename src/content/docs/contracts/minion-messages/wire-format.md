@@ -127,6 +127,82 @@ array or map, and no string longer than the bytes left. Ids are raw bytes
 (16, not a 36-character UUID), durations are milliseconds and times are unix
 seconds, so a minion parses integers only.
 
+## Compression
+
+:::note[Status]
+Released on 2026-11-09: the protocol v0.47.0 (`Pack`, `Unpack`,
+`UnpackItems`, the build schema's and the build request's `compression`),
+core (it packs and takes packed items; the build form's Compress messages)
+and BOB v0.33.0, whose factory declares `deflate` and whose minion inflates
+and packs. Dumbo's pages and the SSH channel declare none yet. Run end to
+end that day: a task's 400-character command went packed to the
+minion, and 200 000 bytes of output came back packed, in messages of 26 KB.
+:::
+
+A sender may send any item **packed**: deflated, inside a `packed` item,
+which the receiver inflates and takes as the item it holds, in its place in
+the message.
+
+```cddl
+packed = {
+  0: 30,                ; t: packed
+  1: uint,              ; alg: 1 deflate
+  2: bstr,              ; the item, as the message's envelope writes it,
+                        ;   deflated
+}
+```
+
+- **One item each.** A packed item holds exactly one item of its own
+  direction, never another packed one, in a compression context of its
+  own: what one item says never changes the size of another.
+- **In its place.** The receiver takes the item where the packed one
+  stands: acks keep their order, and an `err` about it names the packed
+  item's index (`item`) and echoes the `ctx` the item inside said.
+- **DEFLATE**, raw ([RFC 1951](https://www.rfc-editor.org/rfc/rfc1951)),
+  `alg` 1: in the standard library of every language a minion is written
+  in (Go's `compress/flate`, .NET's `DeflateStream`, PHP's `gzinflate`,
+  Python's `zlib`, JavaScript's `DecompressionStream("deflate-raw")`). No
+  other algorithm has a number yet.
+- **The envelope inside** is the message's: CBOR, or the JSON text under
+  core's [JSON envelope](../codecs/#the-json-envelope) (a draft). A factory
+  that translates its envelope translates packed items too, or does not
+  declare compression.
+
+**Who packs.**
+
+- **The factory says what its minions inflate**: the build schema's
+  `compression`, `["deflate"]`. Core packs nothing for a minion of a
+  factory that declares none.
+- **On by default.** A build of a factory that declares it has compression
+  on, unless the operator turns it off; the build request says it
+  (`compression`: `"deflate"`, or absent for off), and the factory builds
+  it into the minion. A minion packs only when its build has it on; core
+  reads packed items from any minion.
+- **The sender chooses each item.** Core packs an item of 256 bytes or
+  more whose deflated form saves an eighth or more of it: as the outbox
+  adds it to a message, and the rest (answers, chunks) as the message is
+  sealed. It never packs a task whose args hold a credential, nor a
+  delegate's item (a call or an open names a target's values and
+  credentials; a frame is sealed, and does not shrink). A minion may
+  follow the same rule. What does not shrink, a compressed file or TLS in
+  a tunnel, goes as it is.
+
+**Sizes.** The message's 768 KiB counts its items inflated; a connection's
+`max_message` counts them as sent, so core, which deflates an item as it
+adds it to a message, fits more into a connection that carries little. A
+receiver inflates a packed item only into the room the message has left
+(768 KiB less the items before it): one past it gets `too_large`, and one
+that does not inflate, or holds no single item (or another packed one),
+gets `bad_message`. An item of the other direction inside is answered as
+it would be unpacked. A tunnel's offsets and windows count the stream's own
+bytes: packing changes how its item travels, never its offsets.
+
+**What sizes still say.** A packed item's size says how well its content
+compresses, to anyone who sees the traffic. One context per item keeps a
+secret in one item from being probed through data an outsider shapes in
+another (a file on the host, a service's answer in a tunnel); an operator
+who would rather show no such signal turns compression off for the build.
+
 ## Freshness and replay
 
 A minion's messages carry no time: core stamps each with its own receive time. Core's messages that start an exchange say its clock (`at`), for a minion that cannot remember ids (below).
@@ -265,6 +341,7 @@ given in its CDDL on the page that defines it.
 | | | 27 | [`tunnel_listen`](../tunnels/#reverse-port-forward) |
 | | | 28 | [`tunnel_ctl`](../tunnels/#controls) |
 | | | 29 | [`delegate`](../delegation/#the-item) |
+| | | 30 | [`packed`](#compression) |
 
 **The message**: `v` 0, `id` 1, `re` 2, `items` 3, and core's `at` 4, as [above](#message).
 
@@ -292,6 +369,7 @@ keys](../sessions/#stage), and the data of each of core's
 | Tunnel signals | interrupt 1, terminate 2, kill 3 | [Tunnels](../tunnels/#controls) |
 | Delegate steps | sync 1, reply 2, call 3, open 4, answer 5, frame 6, close 7 | [Delegation](../delegation/#the-item) |
 | Delegate close reasons | closed 1, no such connection 2, task ended 3 | [Delegation](../delegation/#the-item) |
+| Compression algorithms (`alg`) | deflate 1 | [Compression](#compression) |
 
 A value a receiver does not know is taken and shown by its number (core
 reads an entry type it does not know as `other`).
@@ -312,9 +390,6 @@ the host shows it) and data are named as they come.
 - **Keys per direction.** One key pair serves both directions, and the
   direction byte stops reflection. Separate pairs would limit what one leaked
   direction exposes, at the cost of four keys per build.
-- **Compression.** Compressing before encrypting saves bytes on text output,
-  but leaks through sizes when attacker-chosen data shares a message with
-  secrets. Left out unless a command asks for it.
 
 ## Design notes
 
@@ -334,6 +409,18 @@ the host shows it) and data are named as they come.
   none outside it either, since the sync call carries the ciphertext raw. The
   subset above converts to JSON and back (a numbered key named from the
   registry), so a message can always be shown as JSON.
+- **Why compression per item.** Text output and listings deflate to a
+  fifth or an eighth of their size, a binary to about half; a compressed
+  file or TLS not at all, and a small item grows. One context for a whole
+  message would mix items: data an outsider shapes beside a secret in one
+  context is how compression leaks through sizes (CRIME, BREACH). A context
+  per item keeps one item's content from shaping another's size, lets the
+  sender skip what does not shrink, and is the unit core already plans
+  messages by. Several small items in one context would gain a little and
+  bring the mixing back: one item each keeps one rule.
+- **Why DEFLATE.** Every language a minion is written in inflates it with
+  its standard library. zstd compresses better and faster, but needs a
+  library in most; a number for it comes when a minion needs one.
 - **Why encrypt-then-MAC with the full tag.** The tag is checked before
   anything is decrypted, so a forged or altered frame never reaches the CBC
   padding check, the classic way CBC leaks. A 32-byte tag costs 16 bytes more

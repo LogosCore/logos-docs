@@ -270,8 +270,10 @@ core starts waits, and what the minion sends is refused.
 - **A codec per connection.** A build's codec is the same on all its
   connections; a transport that carries little might want a denser one
   than the build's others. Left out until a channel needs it.
-- **Compression** ([Wire Format](../wire-format/#open-questions)) can
-  already be a factory's envelope; core's stay uncompressed.
+- **Compression** is the item model's, not a codec's: a
+  [packed](../wire-format/#compression) item travels in every
+  envelope, and a factory that translates its envelope translates packed
+  items too.
 
 ## Design notes
 
