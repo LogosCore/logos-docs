@@ -141,13 +141,19 @@ Planned:
 - Dumbo (`logos-dumbo`, the factory and its channel in one repo and image):
   PHP pages, `bind-call` minions core reaches through the Dumbo channel; a
   proof of concept with eight commands (hello, files, listings, walks).
+- Raven (`logos-raven`): PowerShell scripts that check in through the HTTP
+  channel (`reverse-call`) and do hello and echo; a test of
+  [codecs](../contracts/minion-messages/codecs/#raven-the-test-factory): its
+  minions speak PowerShell's CLIXML, which Raven translates for core, and its
+  suite seals nothing.
 - Go, .NET or Python factories: possible, none built yet.
 
 ### Codecs
 
 :::note[Draft]
-[Codecs](../contracts/minion-messages/codecs/), agreed 2026-11-09, not
-built. It replaces the translator hooks once sketched here.
+[Codecs](../contracts/minion-messages/codecs/), agreed 2026-11-09, built in
+the protocol (v0.48.1), core and factory-core (v0.3.0); Raven, a test
+factory, runs them. It replaces the translator hooks once sketched here.
 :::
 
 A factory whose minions cannot speak core's codec, the CBOR envelope or the

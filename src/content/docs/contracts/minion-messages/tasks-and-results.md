@@ -24,15 +24,15 @@ connection kind](../#mechanics-by-connection-kind)):
   its next message.
 - **A `bind-call` page answers calls**: core starts every exchange, and the
   page's answer carries `re`.
-- **Core answers every message that carries items** with a sealed reply whose
-  `re` is the request's `id`, even when it has nothing of its own. Through
-  the sync call an empty check-in, when core has nothing either, gets
-  **204**; over a socket every request gets a reply, empty or not, so the
-  minion knows it arrived.
-- **Items count as delivered only on a sealed reply with the matching `re`.**
-  On a 404, a timeout, or a 204 to a message with items, the minion sends
-  them again in a later message, under a new `id`. Core does the same with
-  what it sends: what the minion did not acknowledge goes again.
+- **Core answers every message it takes.** When it has something to say,
+  with a sealed reply whose `re` is the request's `id`. When it has
+  nothing, through the sync call, with **204** (an HTTP channel's empty
+  reply), after it took the message's items; over a socket every request
+  gets a sealed reply, empty or not, so the minion knows it arrived.
+- **Items count as delivered on a sealed reply with the matching `re`, or a
+  204.** On a 404, a timeout, or no answer, the minion sends them again in
+  a later message, under a new `id`. Core does the same with what it sends:
+  what the minion did not acknowledge goes again.
 - **Every item can be sent again safely.** Results are taken once by
   `(task, seq)`, chunks by `(xfer, off)`; acks and hellos are the same each
   time. So nothing needs exactly-once delivery: both sides resend until the
