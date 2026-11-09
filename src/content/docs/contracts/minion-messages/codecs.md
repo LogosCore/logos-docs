@@ -357,7 +357,7 @@ for 32-bit platforms):
 
 ## Raven: the test factory
 
-`logos-raven` (v0.1.0) runs the mechanics end to end with a minion that cannot speak
+`logos-raven` (v0.1.1) runs the mechanics end to end with a minion that cannot speak
 core's codec: PowerShell scripts (Windows PowerShell 5.1, PowerShell 7)
 that check in through the HTTP channel (`reverse-call`) and do two things,
 `hello` and `echo`. Both layers are Raven's:
