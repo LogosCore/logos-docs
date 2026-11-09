@@ -8,8 +8,10 @@ schema's and the targets' `crypto`, `envelope` and `codec`, the build
 request's `envelope`, the JSON envelope, packing in either envelope and the
 factory link's frames: [In the protocol package](#in-the-protocol-package))
 and core ([In core](#in-core): core's JSON envelope, the factory link and
-every message through it). factory-core does not have it yet, nor does any
-factory: no module speaks a codec but core's CBOR and suite.
+every message through it). factory-core has the link client too,
+unreleased (`pkg/codeclink`: a factory gives `factory.Config` a `Codec` and
+`CoreURL`). No factory uses it yet: no module speaks a codec but core's CBOR
+and suite.
 :::
 
 A minion message becomes bytes in two layers. Its **envelope** writes the
@@ -214,8 +216,13 @@ silent for 90 dropped), and the factory opens it again, backing off.
   translates every codec the module declares.
 - **Request ids** are core's, unique among its calls waiting on that link;
   answers come in any order.
-- **factory-core keeps the link**: a factory gives it three functions,
-  inbound, outbound and keys, and the SDK does the rest.
+- **factory-core keeps the link** (`pkg/codeclink`): a factory gives
+  `factory.Config` a `Codec`, three methods (`Inbound`, `Outbound`, `Keys`),
+  and core's base URL (`CoreURL`), and Run keeps the link open, answering
+  each call within its deadline. `NotOpened`, `NotMessage` and `Refused` are
+  the failures core tells apart; any other error goes as other.
+  `codeclink.Answer` runs one call in process, and `factorytest.NewCore` is
+  core's end of a real link, for a factory's tests.
 
 ```mermaid
 sequenceDiagram
