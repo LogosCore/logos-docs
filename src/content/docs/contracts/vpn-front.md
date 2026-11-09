@@ -6,8 +6,12 @@ title: "VPN Front"
 Wave 4 of the tunnels' [Future cases](../minion-messages/tunnels/#future-cases),
 released 2026-11-08: protocol v0.44.0, BOB v0.31.0 (ICMP, and its half of
 the timing, [change 9](../minion-messages/tunnels/#9-timing-that-follows-the-link)),
-core, and `logos-vpn` v0.1.1 (v0.1.0's tag released no binaries). Not yet run on a real network: the user
-tests it once a machine with networks of its own is at hand.
+core, and `logos-vpn` v0.1.1 (v0.1.0's tag released no binaries). The
+one-line install ([Installing](#installing)) and a self-signed core's pins
+released 2026-11-09: `logos-vpn` v0.2.1 (v0.2.0's `install.ps1` used
+`Get-FileHash`, which Windows PowerShell 5.1 started from PowerShell 7
+lacks), core, logos-nginx. Not yet run on a real network: the user tests
+it once a machine with networks of its own is at hand.
 :::
 
 A `tunnel` whose front is **`vpn`** routes an operator's machine into the
@@ -51,10 +55,44 @@ key made for the operator who asked.
 sudo logos-vpn https://logos.example.com lgv_…
 ```
 
-On Windows the same runs in an elevated PowerShell (`logos-vpn.exe …`). The
+On Windows the same runs in an elevated PowerShell (`logos-vpn …`). The
 address is the web app's, as the operator opened it: `https://`, or `http://`
-to a loopback address alone (a dev stack, an SSH forward). Beside it, the tab
-gives the client for each system, from core ([The client](#the-client)).
+to a loopback address alone (a dev stack, an SSH forward). Above it, the
+dialog gives the line that installs the client first
+([Installing](#installing)); below, the client to download by hand, from
+core ([The client](#the-client)).
+
+### Installing
+
+A machine without logos-vpn takes one line, for its system, which installs
+this core's client and connects with the key:
+
+```sh
+curl -fsSL https://logos.example.com/api/v1/vpn/install.sh | sudo sh -s -- https://logos.example.com lgv_…
+```
+
+```powershell
+[Net.ServicePointManager]::SecurityProtocol=[Net.ServicePointManager]::SecurityProtocol -bor 3072;& ([scriptblock]::Create((New-Object Net.WebClient).DownloadString('https://logos.example.com/api/v1/vpn/install.ps1'))) 'https://logos.example.com' 'lgv_…'
+```
+
+The installer, core's (`GET /api/v1/vpn/install.sh` for Linux and macOS,
+`install.ps1` for Windows PowerShell 5.1 and PowerShell 7; for anyone: it
+holds nothing secret), fetches the machine's build and the release's
+`SHA256SUMS` with the key, checks the one against the other, puts it on
+the PATH (`/usr/local/bin`; `%ProgramFiles%\Logos`, added to the
+machine's PATH) and connects. Run again, it replaces the one there: core's
+release, whatever it is. The key fetches the client as it connects: one
+not lapsed, or a client's, of an operator still one; fetching does not
+take it.
+
+**A self-signed core.** When core's front serves a certificate no system
+trusts, it says so ([Core's front](../../core-infrastructure/#nginx--cores-front):
+`X-Logos-Cert-SHA256`, `X-Logos-Cert-Pin`, which core's `/status` gives as
+`front_cert`), and both lines pin it: curl's `-k --pinnedpubkey sha256//…`
+and the installer's `--pin` for its fetches, `--cert-sha256` for
+logos-vpn; on Windows a compiled validation callback checking the
+certificate's SHA-256, and `-CertSha256`. The installed command does too
+(`sudo logos-vpn -cert-sha256 AB:CD:… https://… lgv_…`).
 
 **What it does.** The client connects with the key, gets the tunnel's
 routes, adds an interface (`logos0` on Linux, a `utun` on macOS, a Wintun
@@ -322,9 +360,14 @@ tunnel_datagram = {     ; of an icmp stream
   gVisor's TCP/IP stack, and the protocol module (`logos-golang-protocol`)
   for the tunnel items and their CBOR, as minions take them. It shares the
   protocol, as minions do, and nothing else of core's.
-- **Its command**: `logos-vpn [-interface name] [-mtu n] <core address>
-  <key>`, the key from `LOGOS_VPN_KEY` when the line leaves it out (so it
-  stays out of the machine's process list). The interface (`logos0` on
+- **Its command**: `logos-vpn [-interface name] [-mtu n] [-cert-sha256 fp
+  | -ca-file pem | -insecure] <core address> <key>`, the key from
+  `LOGOS_VPN_KEY` when the line leaves it out (so it stays out of the
+  machine's process list). Core's certificate is trusted as a module trusts
+  it ([How modules reach
+  core](../../core-infrastructure/#how-modules-reach-core)), each flag
+  falling back to the module's variable (`LOGOS_CORE_CERT_SHA256`,
+  `LOGOS_CORE_CA_FILE`, `LOGOS_CORE_TLS_INSECURE`). The interface (`logos0` on
   Linux, a free `utun` on macOS, `logos-vpn` on Windows) gets addresses of
   its own, `198.18.255.1` and `fdc0:6c6f:676f:7300::1` (a benchmarking
   range and a unique local prefix, which no target network uses as its
@@ -339,13 +382,17 @@ tunnel_datagram = {     ; of an icmp stream
 - **Served by core**: the clients (Linux, macOS and Windows; amd64 and
   arm64), from a `logos-vpn` release, at `GET
   /api/v1/vpn/client/{os}-{arch}` (from `VPN_CLIENT_DIR`, `/app/vpn-clients`
-  by default: `logos-vpn-{os}-{arch}`, `.exe` on Windows), for anyone signed
-  in, which the VPN tab links. A hello of another link version is refused
-  (4001), saying where core's is. Core's image carries the release
-  `core/vpn-client.version` names (`scripts/fetch-vpn-clients.sh` at the
-  image's build: every binary checked against the release's `SHA256SUMS`,
-  all six required, or the build fails); the dev image fetches the same
-  into `/opt/vpn-clients`. A new `logos-vpn` release is that one line. In
+  by default: `logos-vpn-{os}-{arch}`, `.exe` on Windows) and the release's
+  hashes at `GET /api/v1/vpn/client/SHA256SUMS`, for anyone signed in,
+  which the VPN tab links, or a VPN key's holder (the installer's
+  `Authorization: Bearer lgv_…`); the installers at `GET
+  /api/v1/vpn/install.sh` and `install.ps1`, for anyone. A hello of another
+  link version is refused (4001), saying where core's is. Core's image
+  carries the release `core/vpn-client.version` names
+  (`scripts/fetch-vpn-clients.sh` at the image's build: every binary
+  checked against the release's `SHA256SUMS`, kept beside them, all six
+  and both installers required, or the build fails); the dev image fetches
+  the same into `/opt/vpn-clients`. A new `logos-vpn` release is that one line. In
   the release chain it goes after the protocol, before core.
 
 ## Limits

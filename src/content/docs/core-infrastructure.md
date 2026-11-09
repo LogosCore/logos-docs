@@ -151,6 +151,7 @@ MongoDB resolves the database engine decision listed as pending in the
   | `LOGOS_SERVER_NAME` | `_` (any) | the names the servers answer to, and a generated certificate is for |
   | `LOGOS_HTTP` | `serve` | plain HTTP serves the app (`serve`), or redirects to HTTPS (`redirect`); `/healthz` answers either way |
   | `LOGOS_TLS_CERT`, `LOGOS_TLS_KEY` | `/etc/nginx/certs/tls.crt`, `tls.key` | the certificate to serve |
+  | `LOGOS_TLS_PIN` | `auto` | whether clients pin the certificate: `auto` when no authority the image knows signs it (a self-signed one), `always`, `never` |
 
 - **Certificates**: the one mounted at `LOGOS_TLS_CERT` and `LOGOS_TLS_KEY`.
   Without one, the image makes a self-signed certificate for
@@ -159,6 +160,13 @@ MongoDB resolves the database engine decision listed as pending in the
   containers. Either way it logs the certificate's SHA-256 fingerprint at
   start, ready for modules' `LOGOS_CORE_CERT_SHA256` ([How modules reach
   core](#how-modules-reach-core)).
+- **Pins**: a certificate clients pin (`LOGOS_TLS_PIN`), the HTTPS server
+  tells core on every `/api/` request: `X-Logos-Cert-SHA256` (its
+  fingerprint) and `X-Logos-Cert-Pin` (its public key's, `sha256//…`, as
+  curl's `--pinnedpubkey` takes it), never a client's own. Core's
+  `/status` gives them back as `front_cert`, and the VPN's Connect a
+  machine lines pin them ([Installing](../contracts/vpn-front/#installing)).
+  Plain HTTP says none.
 - **More**: `*.conf` files mounted in `/etc/nginx/logos-extra` are included
   in both servers (locations of a deployment's own); `/etc/nginx/conf.d`
   takes whole servers.
