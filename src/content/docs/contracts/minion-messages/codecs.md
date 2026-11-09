@@ -36,14 +36,19 @@ What a codec never changes:
 - **Who holds the keys.** Core keeps every key and alone knows which id is
   whose; a factory gets the keys of a message it translates, with the
   message.
+- **Compression.** [Packed items](../wire-format/#compression) are the
+  item model's, not a layer of a codec: a build packs or not (its
+  `compression`), whatever its codec, and an envelope writes a packed item
+  as it writes any item.
 
 ```
-inbound   channel ─ id, payload ─▶ core: keys by id ─▶ suite: open ─▶ envelope: decode ─▶ the message
-outbound  the message ─▶ envelope: encode ─▶ suite: seal ─▶ core ─ id, payload ─▶ channel
+inbound   channel ─ id, payload ─▶ core: keys by id ─▶ suite: open ─▶ envelope: decode ─▶ packed items: unpack ─▶ the message
+outbound  the message ─▶ items: pack ─▶ envelope: encode ─▶ suite: seal ─▶ core ─ id, payload ─▶ channel
 ```
 
 Each step is core's, or the build's factory's when it translates that
-layer.
+layer; packing goes with the envelope (below: [the form core hands
+over](#the-factory-link)).
 
 ## A build's codec
 
@@ -127,6 +132,17 @@ size and keeps them within the connection. A minion keeps its own within it
 too: a 512 KiB chunk fits the protocol's 768 KiB as JSON; a connection that
 carries less needs smaller chunks, as it does in CBOR.
 
+**Packed under JSON.** A packed item's data is the item's JSON text,
+deflated, and as a byte string it travels as base64. Base64 inside the
+deflated text costs DEFLATE part of its gain, and base64 outside adds a
+third, so compression is worth less under JSON than under CBOR, though still
+much: a result with 200 000 bytes of `ls -laR` output, plaintext:
+
+| | CBOR | JSON |
+|---|---|---|
+| plain | 200 030 B | 266 738 B |
+| packed | 26 908 B | 59 001 B |
+
 ## Translating factories
 
 ### The factory link
@@ -156,6 +172,14 @@ silent for 90 dropped), and the factory opens it again, backing off.
   translates the suite alone. A factory reads and writes that form with
   the protocol package, or any CBOR library of its language; its minions
   never see it.
+- **Packing goes with the envelope.** When the factory translates the
+  envelope, items cross the link unpacked: core packs nothing for such a
+  build, and the factory packs and unpacks in its own format where the
+  build has compression on (its schema's `compression` says what its
+  minions inflate), handing core its minion's items unpacked (core takes
+  packed ones too, as from any minion). When it translates the suite alone,
+  packed items are inside the plaintext core's envelope wrote, which the
+  factory seals as it is: core packs and unpacks, as for any build.
 - **Any instance**: core sends a call to one of the module's instances
   with a link open, the one with the fewest calls waiting. Every instance
   translates every codec the module declares.
@@ -208,7 +232,9 @@ codec it writes itself it counts the bytes; for a factory's it plans by the
 declaration: a message of `n` bytes, in the form core hands over, comes back
 at most `n × growth / 100 + overhead`, kept within the connection's
 `max_message` (and the protocol's 768 KiB). An XML envelope with base64
-bytes might declare `growth` 250 and `overhead` 200.
+bytes might declare `growth` 250 and `overhead` 200. The form is unpacked
+when the factory translates the envelope, so `growth` bounds its bytes
+before any packing of its own: packing only takes them under the bound.
 
 - **An answer past its bound** is not sent: core sends the message again
   with half its items (the rest wait for the next), and notes on the
@@ -270,12 +296,18 @@ core starts waits, and what the minion sends is refused.
 - **A codec per connection.** A build's codec is the same on all its
   connections; a transport that carries little might want a denser one
   than the build's others. Left out until a channel needs it.
-- **Compression** is the item model's, not a codec's: a
-  [packed](../wire-format/#compression) item travels in every
-  envelope, and a factory that translates its envelope translates packed
-  items too.
 
 ## Design notes
+
+- **Why compression is not a third layer.** A factory never needs to take
+  it over for minions that cannot do core's: it is optional, so a factory
+  whose minions cannot inflate DEFLATE declares no `compression`, and its
+  builds pack nothing. A factory that translates its envelope already packs
+  in its own format, as part of writing its messages, with no call of its
+  own. And packing is per item, as core fills a message: a factory's
+  algorithm could not pack an item without a call per item. Another
+  algorithm, when minions want one, is a number in the protocol for every
+  factory and core alike, as DEFLATE is.
 
 - **Why two layers.** Formats and crypto change for different reasons. A
   minion with AES but no CBOR keeps core's suite and translates its
