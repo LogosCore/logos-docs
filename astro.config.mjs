@@ -101,6 +101,7 @@ export default defineConfig({
               items: [
                 { slug: "contracts/minion-messages" },
                 { slug: "contracts/minion-messages/wire-format" },
+                { slug: "contracts/minion-messages/codecs" },
                 { slug: "contracts/minion-messages/sessions" },
                 { slug: "contracts/minion-messages/identity" },
                 { slug: "contracts/minion-messages/tasks-and-results" },

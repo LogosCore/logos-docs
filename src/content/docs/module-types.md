@@ -128,10 +128,10 @@ Built:
   result.
 - Build in the commands the operator picked, and no others.
 
-Planned, with the factory command contract:
+Planned:
 
-- Preprocess operator/core commands into minion-specific wire format.
-- Postprocess raw minion responses into structured events/results.
+- Translate its minions' codec, their envelope or their suite, when they
+  cannot speak core's ([Codecs](#codecs), a draft).
 - Version the command contract per minion family.
 
 ### Examples
@@ -143,35 +143,21 @@ Planned, with the factory command contract:
   proof of concept with eight commands (hello, files, listings, walks).
 - Go, .NET or Python factories: possible, none built yet.
 
-### Optional Translator Hooks
+### Codecs
 
-:::note[Not built]
-A design for the factory command contract: no factory implements hooks yet,
-and core sends factories no minion traffic.
+:::note[Draft]
+[Codecs](../contracts/minion-messages/codecs/), agreed 2026-11-09, not
+built. It replaces the translator hooks once sketched here.
 :::
 
-By default, the preprocess/postprocess responsibilities above map directly
-between the normalized Logos model and the minion wire format. A factory that
-wants a **custom language for its minions** may optionally implement translator
-hooks to insert its own intermediate representation:
-
-- `translate_outbound` — convert a normalized Logos command intent into the
-  factory's custom minion language before it is serialized to wire format.
-- `translate_inbound` — convert a raw minion response in the factory's custom
-  language back into the normalized Logos result schema.
-
-Hooks are an implementation detail **owned entirely by the factory** — they are
-not a separate module or deployable. Factories that need no custom language
-simply omit them and rely on the default direct mapping.
-
-Guidance for factories that implement them:
-
-- Translator hooks run inside the factory, a core-side processing layer that
-  operates on already-decrypted plaintext. They never cross the channel trust
-  boundary and never touch payload crypto.
-- Keep hooks deterministic and test-heavy.
-- Make the mapping explicit; avoid hidden heuristic behavior in critical paths.
-- Version the custom language alongside the factory's command contracts.
+A factory whose minions cannot speak core's codec, the CBOR envelope or the
+`aes-256-cbc-hmac-sha256` suite, may translate either layer itself: its
+build schema names its own (`<module_name>.<name>`), and core hands that
+layer to the factory over a factory link, one call per message each way. A
+factory that translates its suite makes that suite's keys too. Core also
+offers a JSON envelope of its own, with no factory in the message's path.
+The item model stays the protocol's: a codec changes how a message is
+written, never what it says.
 
 ### Notes
 
@@ -195,7 +181,7 @@ All module types should:
 
 Crypto boundary rules:
 
-- Minion payload crypto (`encrypt/decrypt/verify/sign`) belongs to core Logos services.
+- Minion payload crypto (`encrypt/decrypt/verify/sign`) belongs to core Logos services, or to the build's own factory when it translates its suite ([Codecs](../contracts/minion-messages/codecs/), a draft).
 - Channel modules must be plaintext-blind and process only routing metadata + encrypted blobs.
 
 ## Contracts

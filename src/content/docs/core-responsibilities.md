@@ -75,10 +75,11 @@ See [Channel ↔ Core: HTTP Sync](../contracts/channel-core-sync/).
 - Encrypt/sign outbound payloads.
 - Keep channels plaintext-blind (channels never decrypt payloads).
 
-Core generates each minion's keys for its factory's suite and implements only
-`aes-256-cbc-hmac-sha256` for now: a factory declaring another suite cannot
-register. Encrypting and decrypting minion traffic waits for the payload crypto
-contract.
+Core generates each minion's keys for its factory's suite and implements
+`aes-256-cbc-hmac-sha256`: it seals and opens every frame, and a factory
+declaring another suite cannot register. One that translates its own suite
+will make its keys and seal and open its minions' frames
+([Codecs](../contracts/minion-messages/codecs/), a draft).
 
 ## 7) Task and Session Orchestration
 

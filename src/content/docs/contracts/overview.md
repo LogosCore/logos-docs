@@ -80,7 +80,8 @@ Every contract in this section, regardless of surface, follows the same baseline
   keyed by what it acts on (a build's `build_id`, an action's
   `invocation_id`, a configuration `revision`, a log `stream_id`), and the data
   plane drops a `message_id` it has seen.
-- **Crypto boundary** — minion payload crypto belongs to core Logos services only.
+- **Crypto boundary** — minion payload crypto belongs to core Logos services only
+  (a draft lets a build's own factory translate it: [Codecs](../minion-messages/codecs/)).
   Control-plane contracts never transport minion ciphertext, and channels stay
   plaintext-blind on the data plane. A build request carries a minion's key
   material to its factory (`crypto`), which writes it into the artifact.
@@ -104,7 +105,8 @@ Every contract in this section, regardless of surface, follows the same baseline
 | [Credentials](../credentials/) | Credential fields in connection and build schemas: what a module gets, and the logins a channel reports | Core → Channel, Factory, Minion | Implemented; the SSH channel's targets first |
 | [Minion Messages](../minion-messages/) | Data plane, inside the ciphertext | Minion ↔ Core | Implemented (`v` 3: numbered keys, values and commands, `rehello`); [tunnels](../minion-messages/tunnels/) (SOCKS with UDP, port forwards through a minion: protocol v0.36.0, BOB v0.26.0; reverse port forwards, the minion listening, over TCP and UDP, and stop when idle: protocol v0.37.0, BOB v0.27.0; the actions `tunnel` and `reverse_tunnel` with core's fronts (an HTTP proxy, reverse SOCKS), `opens`, `unsupported`, bytes with the open, stream numbers in blocks, timing that follows the link and the bandwidth cap: protocol v0.38.0, BOB v0.28.0; forwards to unix sockets and named pipes, a source address and TLS to the destination: protocol v0.39.0, BOB v0.29.0; a terminal front (processes in a PTY or a ConPTY, raw on the port or in the web app), SOCKS5 BIND and `tunnel_ctl`: protocol v0.40.0, BOB v0.30.0; `stop_idle` one of core's params: protocol v0.41.0, BOB v0.30.1; reverse SOCKS dropped: protocol v0.42.0, BOB v0.30.2) |
 | [VPN Front](../vpn-front/) | Data plane: an operator's machine routed into a minion's networks, by `logos-vpn`, a client of core's, over a WebSocket of tunnel items; ICMP through a minion | VPN client ↔ Core; Core ↔ Minion | Implemented: protocol v0.44.0, BOB v0.31.0 (ICMP), `logos-vpn` v0.1.1; not yet run on a real network |
-| [Delegation](../minion-messages/delegation/) | Data plane: a minion serving a channel kind's transport for another minion, the channel's steps carried in its own messages | Minion ↔ Core | Protocol, core and BOB's `delegate` and `reverse_delegate` (the TCP channel's three kinds) built, unreleased |
+| [Delegation](../minion-messages/delegation/) | Data plane: a minion serving a channel kind's transport for another minion, the channel's steps carried in its own messages | Minion ↔ Core | Implemented: protocol v0.46.0, core, BOB v0.32.0 (`delegate` and `reverse_delegate`: the TCP channel's three kinds), the TCP channel v0.2.0 |
+| [Codecs](../minion-messages/codecs/) | Data plane: how a message is written and sealed: core's envelopes (CBOR, JSON) and suite, or a factory's own, translated over a factory link | Core ↔ Factory | Draft (agreed 2026-11-09) |
 | [Task Results and Actions](../task-results-and-actions/) | Data plane: a task's `data`; what core runs a command for | Minion → Core, named in the build schema | Implemented: results `dir_listing`, `dir_walk`, `volumes`, `file_download`, `file_upload`, `file_stream`; actions `list_dir`, `walk_dir`, `list_volumes`, `download_file`, `upload_file`, `upload_stream`, `stream_file`, `delete_path` |
 | [File Browser](../file-browser/) | A machine's file system, as tasks saw it | Core, from tasks' results | Implemented |
 

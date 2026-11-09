@@ -91,9 +91,10 @@ sequenceDiagram
 - `minion ↔ core Server` is the logical protocol conversation.
 - Channel is a transport relay — it delivers the ciphertext as it is and remains plaintext-blind.
 - Factories are separate processes. Today they talk to core only about builds,
-  over AMQP, and to the object store through presigned URLs. In the target they
-  also translate between the minion's language and Logos events, on plaintext
-  core gives them.
+  over AMQP, and to the object store through presigned URLs. A factory that
+  translates its minions' codec ([Codecs](../contracts/minion-messages/codecs/),
+  a draft) will also get their messages over a factory link, one call per
+  message each way.
 - How a channel extracts the build id and the ciphertext from its transport,
   or embeds the response back, is the channel's implementation detail. Core
   only sees the sync call defined in [Channel ↔ Core: HTTP Sync](../contracts/channel-core-sync/).
