@@ -2,16 +2,20 @@
 title: "Codecs"
 ---
 
-:::caution[Draft: the protocol and core released]
-Agreed 2026-11-09, released the same day: the protocol v0.48.1 (the
+:::note[Status]
+Implemented and released on 2026-11-09: the protocol v0.48.1 (the
 schema's and the targets' `crypto`, `envelope` and `codec`, the build
 request's `envelope`, the JSON envelope, packing in either envelope and the
-factory link's frames: [In the protocol package](#in-the-protocol-package))
-and core ([In core](#in-core): core's JSON envelope, the factory link and
-every message through it). factory-core has the link client too,
-v0.3.0 (`pkg/codeclink`: a factory gives `factory.Config` a `Codec` and
-`CoreURL`). One factory uses it, [Raven](#raven-the-test-factory), a test
-of the mechanics: no factory in use speaks a codec but core's CBOR and suite.
+factory link's frames: [In the protocol package](#in-the-protocol-package)),
+core ([In core](#in-core): core's JSON envelope, the factory link and every
+message through it) and factory-core v0.3.0 (`pkg/codeclink`: a factory
+gives `factory.Config` a `Codec` and `CoreURL`, and Run keeps the link).
+Run end to end that day through [Raven](#raven-the-test-factory) v0.1.2, a
+test factory translating both layers: on the dev stack (its keys made at
+the offer, `hello` and `echo`, the factory stopped and back) and on
+Windows 11 under Windows PowerShell 5.1. What no module uses yet: core's
+JSON envelope (core's tests alone speak it), and a factory's codec outside
+a test: every other build speaks core's CBOR and suite.
 :::
 
 A minion message becomes bytes in two layers. Its **envelope** writes the

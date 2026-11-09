@@ -131,7 +131,7 @@ Built:
 Planned:
 
 - Translate its minions' codec, their envelope or their suite, when they
-  cannot speak core's ([Codecs](#codecs), a draft).
+  cannot speak core's ([Codecs](#codecs)).
 - Version the command contract per minion family.
 
 ### Examples
@@ -150,10 +150,10 @@ Planned:
 
 ### Codecs
 
-:::note[Draft]
-[Codecs](../contracts/minion-messages/codecs/), agreed 2026-11-09, built in
-the protocol (v0.48.1), core and factory-core (v0.3.0); Raven, a test
-factory, runs them. It replaces the translator hooks once sketched here.
+:::note[Status]
+[Codecs](../contracts/minion-messages/codecs/), released 2026-11-09 in the
+protocol (v0.48.1), core and factory-core (v0.3.0); Raven, a test factory,
+runs them. It replaces the translator hooks once sketched here.
 :::
 
 A factory whose minions cannot speak core's codec, the CBOR envelope or the
@@ -187,7 +187,7 @@ All module types should:
 
 Crypto boundary rules:
 
-- Minion payload crypto (`encrypt/decrypt/verify/sign`) belongs to core Logos services, or to the build's own factory when it translates its suite ([Codecs](../contracts/minion-messages/codecs/), a draft).
+- Minion payload crypto (`encrypt/decrypt/verify/sign`) belongs to core Logos services, or to the build's own factory when it translates its suite ([Codecs](../contracts/minion-messages/codecs/)).
 - Channel modules must be plaintext-blind and process only routing metadata + encrypted blobs.
 
 ## Contracts

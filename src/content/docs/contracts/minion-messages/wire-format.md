@@ -5,8 +5,8 @@ title: "Wire Format"
 What every minion message is, whatever it carries: a CBOR map, sealed in a
 frame with the minion's keys. The items inside are defined on the other
 [Minion Messages](../) pages. CBOR and this frame are core's codec, every
-build's today; [Codecs](../codecs/), a draft, adds a JSON envelope of
-core's and a factory's own envelope or suite.
+build's unless it names another; [Codecs](../codecs/) adds a JSON envelope
+of core's and a factory's own envelope or suite.
 
 ## Sealed frame
 
@@ -164,7 +164,7 @@ packed = {
   Python's `zlib`, JavaScript's `DecompressionStream("deflate-raw")`). No
   other algorithm has a number yet.
 - **The envelope inside** is the message's: CBOR, or the JSON text under
-  core's [JSON envelope](../codecs/#the-json-envelope) (a draft). A factory
+  core's [JSON envelope](../codecs/#the-json-envelope). A factory
   that translates its envelope translates packed items too, or does not
   declare compression.
 
