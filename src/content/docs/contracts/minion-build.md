@@ -137,7 +137,9 @@ Declared in `module.register` under `build`:
 | `version` | Version of the factory's parameter set, from 1. Raised when values saved against the previous set would build something else or fail: a field or target removed, renamed or given another meaning. Adding an optional field or a target does not need it. |
 | `channels[]` | At least one: the channel kinds the minions can speak: `module_name`, the connection schema `versions` they read (1 to 16), and `kinds`. |
 | `channels[].kinds[]` | At least one, in the factory's order of preference: the [connection kinds](../channel-core-connections/#kinds-in-the-build-schema-and-in-builds) the minions support through that channel, each `kind` with optional `fields`, the factory's own [connection parameters](#connection-parameters) for a connection of that kind, in full. |
-| `crypto` | Optional. The one payload crypto suite the minions implement; core generates each minion's keys for it. Core implements only `aes-256-cbc-hmac-sha256` (AES-256-CBC, then HMAC-SHA256 over the ciphertext) for now and refuses a registration with any other suite (`validation_failed`). A draft lets a factory name its own suite and envelope, and core offer a JSON envelope ([Codecs](../minion-messages/codecs/)). |
+| `crypto` | Optional. The payload crypto suite the minions implement. Core's, whose keys core generates for each minion: only `aes-256-cbc-hmac-sha256` (AES-256-CBC, then HMAC-SHA256 over the ciphertext) for now, and core refuses a registration with another suite without a dot (`validation_failed`). Or the factory's own, `<module_name>.<name>`, which the factory translates and makes the keys of ([Codecs](../minion-messages/codecs/)). |
+| `envelope` | Optional. How the minions write a message as plaintext: `cbor` (the default) or `json`, core's, or the factory's own, `<module_name>.<name>`, which it translates ([Codecs](../minion-messages/codecs/)). |
+| `codec` | Required when the schema or a target names a suite or an envelope of the factory's own, refused otherwise: `growth` (percent, 100 to 400), `overhead` (bytes, 0 to 4096) and `timeout` (a duration, 100 ms to 30 s; 5 s by default), what the factory's [translation](../minion-messages/codecs/#a-builds-codec) may take. |
 | `fields[]` | Build parameters shared by every target. Field specs as in a [management manifest](../module-management/#fields), plus the [types below](#field-types-for-builds). |
 | `targets[]` | What the factory can produce, at least one. |
 | `commands[]` | Optional. What the minions can do. Operators pick each build's [commands](#commands) from its target's. |
@@ -157,6 +159,7 @@ A target:
 | `fields[]` | Parameters of this target only, added to the shared ones. |
 | `channels[]` | Optional. Narrows the factory's `channels` for this target, to channel kinds, `versions` and connection `kinds` (names only) the factory lists. The connection parameters stay the factory's. |
 | `opens[]` | Optional. Narrows what this target's tunnel commands open (their `opens[]`), for a platform that has less: a Linux build has no named pipes. Empty: all of them. |
+| `crypto`, `envelope` | Optional. Replace the schema's for this target's builds ([Codecs](../minion-messages/codecs/)): one factory may build a minion in a compiled language and one in a script. A target whose codec is not core's CBOR with core's suite connects through no [agentless](../agentless-channels/) kind: core refuses such a build. |
 
 - Core validates the schema at registration (structure, limits, defaults
   against their own specs) and refuses a registration whose schema is invalid
@@ -169,7 +172,9 @@ A target:
   up to 31 characters, unique in their target.
 - Channel kinds are unique, each with its `versions` unique and from 1. A
   target's `channels` name only kinds and versions the factory lists.
-- The crypto suite is a slug (`^[a-z0-9][a-z0-9._-]{0,62}$`) that core implements.
+- Suites and envelopes are slugs (`^[a-z0-9][a-z0-9._-]{0,62}$`): one without a
+  dot core implements, one with a dot the factory's own, its `module_name`
+  first (another module's is refused).
 - A command's `targets` name only targets of the schema, once each.
 - Labels are up to 120 characters and descriptions up to 1,000, as in a
   management manifest.
@@ -538,7 +543,8 @@ Request `payload`:
 | `credentials` | The [credentials](../credentials/#what-a-module-gets) the values, the connections' `values` and their endpoints' `params` name, by id: each its `id`, `name`, `type` and the fields of its type that hold a value. Secret, as the values: for the build only. |
 | `connections` | The [connections](#connections), in the order the minion tries them: each one's settings as an endpoint [export](../minion-connection/#the-export) under `endpoint` (its `name`, channel kind, schema version, connection `kind`, and `params` with defaults filled in), its [connection parameter](#connection-parameters) `values`, defaults filled in, and its own `failover` settings when it has any. |
 | `failover` | The build's [failover policy](../channel-core-connections/#failover), defaults filled in: `enabled`, `fail_after`, `fail_for`, `wrap`, `cycle_pause`, `failback_after`. Sent whatever the factory declares; one that does not declare `failover` may ignore it. |
-| `crypto` | Present when the factory declares `crypto`: its `suite` and the minion's key `material`, fresh for every build. For `aes-256-cbc-hmac-sha256`: `enc_key`, the AES-256 key, and `mac_key`, the HMAC-SHA256 key, 32 random bytes each in base64. The factory puts them in the artifact and keeps them nowhere else. |
+| `crypto` | Present when the target's builds have a suite: its `suite` and the minion's key `material`, fresh for every build. For `aes-256-cbc-hmac-sha256`: `enc_key`, the AES-256 key, and `mac_key`, the HMAC-SHA256 key, 32 random bytes each in base64. For a suite of the factory's own: the material the factory made for the build over its [factory link](../minion-messages/codecs/#the-factory-link), base64 (the build waits in the queue until it has it). The factory puts them in the artifact and keeps them nowhere else. |
+| `envelope` | Present when the target's envelope is not `cbor`: `json`, or the factory's own. |
 | `max_tasks` | Present for a factory that declares `max_tasks`: how many tasks the minion runs at once as it starts, 0 (none until a session sets more) to 64; 5 unless the operator set another. The factory builds it in. |
 | `compression` | Present for a factory that declares `compression`, unless the operator turned it off: the algorithm the minion packs and inflates (`"deflate"`). The factory builds it in. Protocol v0.47.0. |
 | `session_id` | Present for a build with a persisted session (only to a factory that declares `persisted_sessions`): the session the minion claims in its `hello`, a lowercase UUID; an existing session, or one core reserved with the build. The factory builds it in. |

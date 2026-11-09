@@ -2,14 +2,14 @@
 title: "Codecs"
 ---
 
-:::caution[Draft: the protocol built]
+:::caution[Draft: the protocol and core built]
 Agreed 2026-11-09. The protocol package has it (unreleased): the schema's
 and the targets' `crypto`, `envelope` and `codec`, the build request's
 `envelope`, the JSON envelope, packing in either envelope and the factory
 link's frames ([In the protocol package](#in-the-protocol-package)). Core
-and factory-core do not yet: until they do, every build's codec is core's,
-the CBOR envelope and the `aes-256-cbc-hmac-sha256` suite ([Wire
-Format](../wire-format/)).
+has it too, unreleased ([In core](#in-core)): core's JSON envelope, the
+factory link and every message through it. factory-core does not yet,
+nor does any factory: no module speaks a codec but core's CBOR and suite.
 :::
 
 A minion message becomes bytes in two layers. Its **envelope** writes the
@@ -154,8 +154,10 @@ Sizes, plaintext (sealing adds the same 51 to 66 bytes to either):
 | a 64 KiB chunk | 65 592 B | 87 487 B (+33 %) |
 | a 512 KiB chunk | 524 344 B | 699 155 B (+33 %) |
 
-Core writes a JSON minion's messages itself, so it plans them by their JSON
-size and keeps them within the connection. A minion keeps its own within it
+Core writes a JSON minion's messages itself. It plans them in CBOR within
+three quarters of the connection (bytes are a third larger as base64), and
+checks the JSON as it writes it: a message past the connection goes with half
+its items, the rest waiting for the next. A minion keeps its own within it
 too: a 512 KiB chunk fits the protocol's 768 KiB as JSON; a connection that
 carries less needs smaller chunks, as it does in CBOR.
 
@@ -264,9 +266,9 @@ when the factory translates the envelope, so `growth` bounds its bytes
 before any packing of its own: packing only takes them under the bound.
 
 - **An answer past its bound** is not sent: core sends the message again
-  with half its items (the rest wait for the next), and notes on the
-  session that the codec outgrew its declaration. A message of one item
-  still past it ends that item's task failed, `too_large`.
+  with half its items (the rest wait for the next), and logs that the codec
+  outgrew its declaration. A message of one item still past it is not sent:
+  its exchange fails as when the factory does not answer.
 - **Inbound**, the message as the factory hands it to core is held to the
   protocol's limits; how large it was on the wire is the channel's.
 
@@ -279,11 +281,11 @@ call waiting:
 |---|---|
 | a minion's message (`inbound`) | treats it as a message it cannot open: the sync call answers **422**, and the channel answers its client as for any refusal; a socket's frame is dropped. The minion retries as after any failed exchange, and loses nothing: it keeps what was not acknowledged |
 | a reply, or a message core starts (`outbound`) | does not send it: the reply's exchange fails as above; pushes, calls and opens wait in the outbox for the link |
-| a build's or a stage's keys | the build waits for the link, and fails after the build's own timeout; the stage is not answered |
+| a build's or a stage's keys | the build waits in the queue, asked again each time its lease runs out (2 minutes), and fails at its queue deadline; the stage is not answered |
 | a reply already kept for a message seen again | sends it: it is sealed already |
 
-Core shows it on the session (its factory does not answer, since when) and
-on the factory's module; a target waits rather than being called.
+Core shows it on the session (its factory does not answer, since when),
+and clears it once the factory answers.
 
 ## Mechanics by connection kind
 
@@ -331,6 +333,19 @@ core starts waits, and what the minion sends is refused.
 | `JSONEnvelope`, `CBOREnvelope`, `CoreEnvelope(name)` | core's envelopes: a message or an item, CBOR to the envelope's form and back |
 | `PackIn`, `UnpackIn`, `UnpackRoomIn`, `UnpackItemsIn` | packing in either envelope; `Pack` and the rest are CBOR's |
 | `FactoryCall`, `FactoryAnswerFrame`, `EncodeFactoryCall`, `DecodeFactoryAnswer` (and back), `FactoryLinkPath`, `HeaderFactoryInstance` | the factory link's frames and their checks (`ValidateFor`: an answer against its call) |
+
+## In core
+
+`logos-core` (unreleased):
+
+| Where | What |
+|---|---|
+| `pkg/factorylink` | The hub: a link per factory instance, a call to the one with the fewest waiting, answers by request id checked against their call; no link, a dropped link or no answer in time is the factory not answering |
+| `GET /api/factory/link` (`controller/factory_link.go`) | The endpoint, behind the sync call's registration gate: 403 for an instance that is not a registered factory |
+| `pkg/minionsync/codecs.go` | `readMessage` and `writeMessage`, which every message goes through (a sync call, a socket, a push, a call to a bind minion): core's layers, one factory call each way for the factory's; candidate keys and replaced holders; a stage's keys; the session's `codecDownSince`; `planLimit` |
+| `pkg/builds` | A target's codec kept on the build (`envelope`, `codec`), a factory suite's keys asked at the offer, the request's `envelope`, a codec an agentless kind cannot speak refused |
+| Registration | A suite without a dot core does not implement, and a factory's name of another module, refused |
+| GraphQL and the web app | `Build.envelope`, `Build.codec`, `BuildTarget.crypto`/`envelope`, `MinionSession.codecDownSince`; the build overview's Codec row and the session's Codec notice |
 
 ## Open questions
 
