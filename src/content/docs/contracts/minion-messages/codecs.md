@@ -2,14 +2,14 @@
 title: "Codecs"
 ---
 
-:::caution[Draft: the protocol and core built]
-Agreed 2026-11-09. The protocol package has it (unreleased): the schema's
-and the targets' `crypto`, `envelope` and `codec`, the build request's
-`envelope`, the JSON envelope, packing in either envelope and the factory
-link's frames ([In the protocol package](#in-the-protocol-package)). Core
-has it too, unreleased ([In core](#in-core)): core's JSON envelope, the
-factory link and every message through it. factory-core does not yet,
-nor does any factory: no module speaks a codec but core's CBOR and suite.
+:::caution[Draft: the protocol and core released]
+Agreed 2026-11-09, released the same day: the protocol v0.48.1 (the
+schema's and the targets' `crypto`, `envelope` and `codec`, the build
+request's `envelope`, the JSON envelope, packing in either envelope and the
+factory link's frames: [In the protocol package](#in-the-protocol-package))
+and core ([In core](#in-core): core's JSON envelope, the factory link and
+every message through it). factory-core does not have it yet, nor does any
+factory: no module speaks a codec but core's CBOR and suite.
 :::
 
 A minion message becomes bytes in two layers. Its **envelope** writes the
@@ -323,7 +323,8 @@ core starts waits, and what the minion sends is refused.
 
 ## In the protocol package
 
-`logos-golang-protocol`'s `protocol` package (unreleased):
+`logos-golang-protocol`'s `protocol` package, v0.48.1 (v0.48.0 did not build
+for 32-bit platforms):
 
 | Go | What |
 |---|---|
@@ -336,7 +337,7 @@ core starts waits, and what the minion sends is refused.
 
 ## In core
 
-`logos-core` (unreleased):
+`logos-core`, released 2026-11-09 (9c68d41, a645db7):
 
 | Where | What |
 |---|---|
