@@ -9,7 +9,7 @@ request's `envelope`, the JSON envelope, packing in either envelope and the
 factory link's frames: [In the protocol package](#in-the-protocol-package))
 and core ([In core](#in-core): core's JSON envelope, the factory link and
 every message through it). factory-core has the link client too,
-unreleased (`pkg/codeclink`: a factory gives `factory.Config` a `Codec` and
+v0.3.0 (`pkg/codeclink`: a factory gives `factory.Config` a `Codec` and
 `CoreURL`). No factory uses it yet: no module speaks a codec but core's CBOR
 and suite.
 :::
