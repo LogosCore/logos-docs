@@ -234,7 +234,7 @@ not a request).
 | `proxy` | url | — | Outbound proxy for the minion. |
 | `tls_verify` | bool | `false` | Check the certificate against trusted roots. |
 | `tls_pin_sha256` | string | — | SHA-256 of the server certificate (64 hex); authenticates the server with verification off. |
-| `user_agent` | string (`format: user_agent`) | — | Empty: the minion's built-in one. The UI offers a generator for realistic browser User-Agents. At most 512 characters. |
+| `user_agent` | string (`format: user_agent`) | — | Empty: the minion's built-in one. The UI offers a generator for realistic browser User-Agents, and says under the field when a value is outdated or gives itself away ([`format`](../module-management/#fields)). At most 512 characters. |
 | `headers` | string_map | — | Extra headers on every request and WebSocket handshake, name → value (names are header tokens, values have no line breaks and at most 4096 characters; at most 32). |
 | `request_timeout` | duration | `40s` | 1s to 10m. How long to wait for a reply. Keep it above the channel's `CORE_SYNC_TIMEOUT` (30s by default): a minion giving up sooner than the channel waits for core drops replies still on their way. |
 | `checkin_interval` | duration | `60s` | 1s to 168h. `reverse-call`: how often to check in with nothing to send. `reverse-persistent`: how soon core expects the minion back after the WebSocket closed (late, then lost, run by it); while it is open no check-in is needed (core pushes tasks, and the channel closes the WebSocket when its link to core breaks, so the minion reconnects by `ws_reconnect_backoff`). |
