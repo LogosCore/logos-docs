@@ -2,10 +2,14 @@
 title: "Codecs"
 ---
 
-:::caution[Draft]
-Agreed 2026-11-09, not built: a design to build from. Until it is, every
-build's codec is core's: the CBOR envelope and the `aes-256-cbc-hmac-sha256`
-suite ([Wire Format](../wire-format/)).
+:::caution[Draft: the protocol built]
+Agreed 2026-11-09. The protocol package has it (unreleased): the schema's
+and the targets' `crypto`, `envelope` and `codec`, the build request's
+`envelope`, the JSON envelope, packing in either envelope and the factory
+link's frames ([In the protocol package](#in-the-protocol-package)). Core
+and factory-core do not yet: until they do, every build's codec is core's,
+the CBOR envelope and the `aes-256-cbc-hmac-sha256` suite ([Wire
+Format](../wire-format/)).
 :::
 
 A minion message becomes bytes in two layers. Its **envelope** writes the
@@ -57,10 +61,11 @@ over](#the-factory-link)).
 | Suite | `crypto` (as today) | `aes-256-cbc-hmac-sha256` | `<module_name>.<name>`, e.g. `acme.xchacha` |
 | Envelope | `envelope` | `cbor` (the default), `json` | `<module_name>.<name>`, e.g. `acme.xml` |
 
-- **Names.** Core's names have no dot. A factory's own carry its
-  `module_name` and a dot: core refuses a registration naming another
-  module's, or a name of its own in a module's form. Both follow the suite
-  pattern (`^[a-z0-9][a-z0-9._-]{0,62}$`).
+- **Names.** Core's names have no dot: a name without one that core does
+  not have is refused. A factory's own carry its `module_name` and a dot:
+  core refuses a registration naming another module's. Both follow the
+  suite pattern (`^[a-z0-9][a-z0-9._-]{0,62}$`), so a factory whose
+  `module_name` does not fit it names none of its own.
 - **Per target.** A target may name its own `crypto` and `envelope`, which
   replace the schema's for its builds: one factory may build a minion in a
   compiled language and one in a script.
@@ -69,17 +74,30 @@ over](#the-factory-link)).
 
   | Key | Says |
   |---|---|
-  | `growth` | percent, 100 to 400: how much larger than the form core hands it (below) the factory's bytes come back, at most |
+  | `growth` | Required. Percent, 100 to 400: how much larger than the form core hands it (below) the factory's bytes come back, at most |
   | `overhead` | bytes, 0 to 4096, on top of `growth`, per message |
-  | `timeout` | how long a call may take: 5 seconds when none is declared, 30 at most |
+  | `timeout` | how long a call may take, a duration (`"2s"`), 100 ms to 30 s: 5 seconds when none is declared |
+
+  ```json
+  {
+    "crypto": "acme.xchacha",
+    "codec": { "growth": 250, "overhead": 200, "timeout": "2s" },
+    "targets": [
+      { "id": "windows-exe", "format": "exe", "platforms": ["windows/amd64"] },
+      { "id": "ps1", "format": "script", "platforms": ["windows/any"], "envelope": "acme.xml" }
+    ]
+  }
+  ```
 
 - **Agentless kinds take core's codec.** An [agentless](../../agentless-channels/)
   kind's channel acts as the minion with core's keys and speaks the
-  protocol itself: a schema that names a factory's suite or envelope, or
-  `json`, lists no agentless kind.
+  protocol itself: a target whose codec is not core's CBOR envelope with
+  core's suite (a factory's suite or envelope, or `json`) connects through
+  no agentless kind.
 - **The build keeps it.** Core records a build's suite and envelope with
   its keys and sends them in the build request (`crypto`, as today, and
-  `envelope`). A session keeps its build's codec for its life.
+  `envelope`, left out for `cbor`). A session keeps its build's codec for
+  its life.
 - **A name is kept while builds use it.** A factory translates every codec
   its builds were made with for as long as their minions live: a changed
   format is a new name.
@@ -94,15 +112,24 @@ over](#the-factory-link)).
 |---|---|
 | a map with numbered keys (the message, its items, every structure the [registry](../wire-format/#registry) numbers) | an object whose names are the keys' numbers in decimal: `"0"`, `"3"` |
 | a map with text keys (an `x`, a command's own data) | an object with the same names |
-| a byte string where a CDDL says `bstr` (ids, output, a chunk's data, a frame) | a string, its base64 ([RFC 4648 §4](https://www.rfc-editor.org/rfc/rfc4648#section-4), padded) |
-| a byte string in a map a factory shapes itself, where no CDDL says | `{"$b": "<base64>"}`: a name `$b` alone is reserved there |
+| a byte string where the protocol's types say bytes (ids, output, a chunk's data, a frame) | a string, its base64 ([RFC 4648 §4](https://www.rfc-editor.org/rfc/rfc4648#section-4), padded) |
+| a byte string where the protocol's types leave the value open: an `x`, a result's `data`, a task's `args` | `{"$b": "<base64>"}`: a name `$b` alone is reserved there |
 | text | a string |
 | an integer | a number without fraction or exponent, within ±(2⁵³ − 1) |
-| a float | a finite number |
+| a float | a finite number with a fraction or an exponent (`2.0`, not `2`) |
 | `true`, `false`, `null`, an array | the same |
 
-- **Read by the protocol's types**, as CBOR is: whether a field is bytes,
-  text or a number is its CDDL's. An object name appears once.
+- **Read by the protocol's types**, as CBOR is: an item by its type's
+  structure, whether a field is bytes, text or a number by its CDDL. An
+  object name appears once. An item of a type the reader does not know is
+  read as open.
+- **Open places** are those whose shape is not the protocol's but a
+  command's or a factory's: an `x`, a result's `data` (core's own results'
+  too: a `file_download`'s `xfer` is `{"$b": …}` there), a task's `args`
+  (a file offer, a credential). There an object whose names are all
+  numbers in decimal is a map with numbered keys, and any other a map with
+  text keys: a factory's own maps use names that are not all numbers. A
+  reader takes `{"$b": …}` wherever bytes go, open or not.
 - **Written compact**: UTF-8, no byte order mark, no whitespace; a reader
   accepts whitespace.
 - **The same limits**: 256 items, 65 536 elements, 16 levels, and the
@@ -158,10 +185,10 @@ silent for 90 dropped), and the factory opens it again, backing off.
 
 | Frame | Direction | Keys |
 |---|---|---|
-| `inbound` (1) | core → factory | 1 request id; 2 the build id; 3 the id the message came under; 4 the bytes: the payload as the channel gave it (the factory's suite), or the plaintext core opened (its envelope alone); 5 deadline in milliseconds; 6 keys, to a factory's suite only: the candidate key materials, in order; 7 layers: `[1]` the suite, `[2]` the envelope, `[1, 2]` both |
+| `inbound` (1) | core → factory | 1 request id; 2 the build id (16 bytes); 3 the id the message came under (16 bytes); 4 the bytes: the payload as the channel gave it (the factory's suite), or the plaintext core opened (its envelope alone); 5 deadline in milliseconds; 6 keys, to a factory's suite only: the candidate key materials, in order, 1 to 5; 7 layers: `[1]` the suite, `[2]` the envelope, `[1, 2]` both |
 | `outbound` (2) | core → factory | 1, 2, 3; 4 the bytes: the message in CBOR (the factory's envelope), or the plaintext core's envelope wrote (its suite alone); 5; 6 keys: the one material of the id; 7 layers |
 | `keys` (4) | core → factory | 1, 2; 5; 8 for: a build 1, a stage 2; 9 the `stage` item's `key`, for a stage |
-| `answer` (3) | factory → core | 1 request id; then one of: 2 the bytes (`inbound`: the message in CBOR, or the plaintext for core's envelope; `outbound`: the payload, or the plaintext its envelope wrote, which core seals); 3 which of key 6's materials opened it (`inbound`, a factory's suite); 10 the material and 11 the wrapped material (`keys`); or 4 a failure, `{1: kind, 2: message}`: not opened 1 (no key fits, or a check failed), not a message 2 (it opened, and does not decode), refused 3 (a stage key it does not take), other 4 |
+| `answer` (3) | factory → core | 1 request id; then one of: 2 the bytes (`inbound`: the message in CBOR, or the plaintext for core's envelope; `outbound`: the payload, or the plaintext its envelope wrote, which core seals); 3 which of key 6's materials opened it, its index from 0 (`inbound`, a factory's suite); 10 the material, and 11 the wrapped material for a stage (`keys`); or 4 a failure, `{1: kind, 2: message}`: not opened 1 (no key fits, or a check failed), not a message 2 (it opened, and does not decode), refused 3 (a stage key it does not take), other 4 |
 
 - **One call per message each way**, whatever the factory translates: it
   runs its layers in order and hands back what core's next step takes, so
@@ -286,10 +313,24 @@ core starts waits, and what the minion sends is refused.
 | A codec name | the suite pattern, at most 63 characters; a factory's `<module_name>.<name>` |
 | `growth` | 100 to 400 percent |
 | `overhead` | 0 to 4096 bytes |
-| `timeout` | 5 seconds by default, 30 at most |
-| Key material, wrapped material | 4 KiB each |
-| A factory link frame | the message limit grown by the codec, plus 64 KiB |
+| `timeout` | 100 ms to 30 s, 5 seconds by default |
+| Key material, wrapped material, a stage's key | 4 KiB each |
+| Candidate keys in an `inbound` call | 5: the id's own and a persisted session's last 4 replaced |
+| A factory link frame | the message limit grown by the most a codec may declare, plus 64 KiB: 3 215 360 B |
 | A JSON integer | ±(2⁵³ − 1) |
+
+## In the protocol package
+
+`logos-golang-protocol`'s `protocol` package (unreleased):
+
+| Go | What |
+|---|---|
+| `BuildSchema.Envelope`, `.Codec` (`BuildCodec`); `BuildTarget.Crypto`, `.Envelope`; `BuildRequest.Envelope` | the declarations; `ValidateBuildSchema` checks names and `codec` |
+| `BuildSchema.TargetCodec`, `Codec.Layers`, `.Agentless`; `BuildCodec.Bound`, `.CallTimeout` | a target's codec, what its factory translates, the size bound, the call's timeout |
+| `ValidateCodecOwner(schema, module)`, `ValidateAgentlessCodecs(schema, isAgentless)` | the checks that need the module or the channels' schemas: core's at registration |
+| `JSONEnvelope`, `CBOREnvelope`, `CoreEnvelope(name)` | core's envelopes: a message or an item, CBOR to the envelope's form and back |
+| `PackIn`, `UnpackIn`, `UnpackRoomIn`, `UnpackItemsIn` | packing in either envelope; `Pack` and the rest are CBOR's |
+| `FactoryCall`, `FactoryAnswerFrame`, `EncodeFactoryCall`, `DecodeFactoryAnswer` (and back), `FactoryLinkPath`, `HeaderFactoryInstance` | the factory link's frames and their checks (`ValidateFor`: an answer against its call) |
 
 ## Open questions
 
