@@ -22,9 +22,11 @@ sequenceDiagram
     CS->>CS: validate against the factory's build schema, new build id → QUEUED
     CS->>IP: factory.build (AMQP, the instance's rpc_queue)
     IP-->>CS: accepted, with the build's plan → BUILDING
-    IP->>S3: download build files (presigned URLs)
+    IP->>CS: download build files (the build's links)
+    CS->>S3: stream them from the store
     IP->>CS: factory.build.progress (logos.core.rpc)
-    IP->>S3: upload the artifact (presigned URL)
+    IP->>CS: upload the artifact (the build's link)
+    CS->>S3: stream it into the store
     IP->>CS: factory.build.result
     CS->>S3: check the artifact's size and SHA-256
     CS->>CS: SUCCEEDED: the minion is recorded
@@ -90,8 +92,9 @@ sequenceDiagram
 
 - `minion ↔ core Server` is the logical protocol conversation.
 - Channel is a transport relay — it delivers the ciphertext as it is and remains plaintext-blind.
-- Factories are separate processes. Today they talk to core only about builds,
-  over AMQP, and to the object store through presigned URLs. A factory that
+- Factories are separate processes. Today they talk to core only about builds:
+  over AMQP, and over HTTP for a build's files and artifact, which core
+  streams from and into the object store (no factory reaches it). A factory that
   translates its minions' codec ([Codecs](../contracts/minion-messages/codecs/),
   a draft) will also get their messages over a factory link, one call per
   message each way.

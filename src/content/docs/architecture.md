@@ -62,7 +62,8 @@ and separates what is built from what is still a plan.
   operations are idempotent by their own keys: a build id, an action's
   invocation id, a configuration revision.
 - Files take neither route: factories download build files from, and upload
-  artifacts to, presigned object store URLs.
+  artifacts to, core over HTTP, through the links each build carries; core
+  streams them from and into the object store.
 
 ## Built and Planned
 
@@ -141,8 +142,9 @@ guards on the background jobs that lack them.
 - **Operator → core**: through nginx. JWT sessions (local login, or single
   sign-on through OIDC), CSRF protection on every change, and roles.
 - **Core and modules → RabbitMQ**: one broker account, shared today.
-- **Core → MongoDB, Redis, SeaweedFS**: core only. A factory reaches SeaweedFS
-  through presigned URLs, for one build's objects.
+- **Core → MongoDB, Redis, SeaweedFS**: core only. A factory gets one build's
+  files and gives its artifact through core, by links signed for that build
+  until a minute past its deadline.
 
 ## Baseline Security Controls
 

@@ -356,15 +356,19 @@ needs to fetch it:
 {
   "id": "0f9a2c1e-6f1b-4a43-9d4e-2b9b3c1d7e55", "name": "app.ico", "size": 4286,
   "sha256": "9f2c…", "media_type": "image/x-icon",
-  "url": "http://logos-seaweedfs-s3:8333/…?X-Amz-Signature=…"
+  "url": "/api/factory/builds/5b0c4f6e-…/files/0f9a2c1e-…?expires=1793025060&sig=…"
 }
 ```
 
-`url` is a presigned download URL (an HTTP GET), valid until a minute past the
-build's deadline. The factory checks the size and SHA-256 after downloading.
-Core signs URLs for the storage address factories reach, a core setting
-(`BUILD_STORAGE_ENDPOINT`) that defaults to the one core uses. The app uploads
-build files with `POST /api/v1/build-files`.
+`url` is a **link**: a path on core's address, which the factory `GET`s
+from wherever it reaches core (its `LOGOS_CORE_BASE_URL`, core itself or its
+front, with the same [TLS settings](../../core-infrastructure/#how-modules-reach-core)
+as its other calls). Core signs it for the build and the file until a minute
+past the build's deadline, and streams the file from its storage, which a
+factory never reaches. The factory checks the size and SHA-256 after
+downloading. A link that is not core's, another build's or expired is
+refused (403), and so is any once the build has ended (409). The app
+uploads build files with `POST /api/v1/build-files`.
 
 ## Connections
 
@@ -407,13 +411,15 @@ sequenceDiagram
     participant S3 as SeaweedFS
     OP->>CORE: build (description, factory kind, target, platform, commands, values, connections)
     CORE->>CORE: validate, fill in defaults, new build id → QUEUED
-    CORE->>F: factory.build (presigned URLs, deadline)
+    CORE->>F: factory.build (links, deadline)
     F-->>CORE: accepted, with its plan (steps) → BUILDING
-    F->>S3: download files
+    F->>CORE: download files (the links)
+    CORE->>S3: stream them from the store
     loop each step
         F->>CORE: factory.build.progress (the step it is on)
     end
-    F->>S3: upload artifact
+    F->>CORE: upload artifact (its link)
+    CORE->>S3: stream it into the store
     F->>CORE: factory.build.result
     CORE->>S3: check size and SHA-256
     CORE->>CORE: SUCCEEDED: minion and build record stored
@@ -523,11 +529,11 @@ Request `payload`:
       "id": "0f9a2c1e-6f1b-4a43-9d4e-2b9b3c1d7e55", "name": "app.ico", "size": 4286,
       "sha256": "9f2c41d0e5a8b7c6d5e4f3a2b1c0d9e8f7a6b5c4d3e2f1a0b9c8d7e6f5a4b3c2",
       "media_type": "image/x-icon",
-      "url": "http://logos-seaweedfs-s3:8333/…?X-Amz-Signature=…"
+      "url": "/api/factory/builds/5b0c4f6e-…/files/0f9a2c1e-…?expires=1793025060&sig=…"
     }
   },
   "crypto": { "suite": "aes-256-cbc-hmac-sha256", "material": { "enc_key": "<base64, 32 bytes>", "mac_key": "<base64, 32 bytes>" } },
-  "artifact": { "upload_url": "http://logos-seaweedfs-s3:8333/…?X-Amz-Signature=…", "max_size": 268435456 },
+  "artifact": { "upload_url": "/api/factory/builds/5b0c4f6e-…/artifact?expires=1793025060&sig=…", "max_size": 268435456 },
   "deadline": "2026-10-26T14:30:00Z",
   "actor": { "type": "user", "id": "f140266c-…", "name": "admin" }
 }
@@ -548,7 +554,7 @@ Request `payload`:
 | `max_tasks` | Present for a factory that declares `max_tasks`: how many tasks the minion runs at once as it starts, 0 (none until a session sets more) to 64; 5 unless the operator set another. The factory builds it in. |
 | `compression` | Present for a factory that declares `compression`, unless the operator turned it off: the algorithm the minion packs and inflates (`"deflate"`). The factory builds it in. Protocol v0.47.0. |
 | `session_id` | Present for a build with a persisted session (only to a factory that declares `persisted_sessions`): the session the minion claims in its `hello`, a lowercase UUID; an existing session, or one core reserved with the build. The factory builds it in. |
-| `artifact` | Where to upload the artifact: `upload_url`, a presigned URL to `PUT` it to, valid until a minute past the deadline, and `max_size`, the largest artifact the factory may upload (a core setting, default 256 MiB). factory-core refuses to upload a larger one (`artifact_too_large`). A presigned upload cannot be capped, so core holds the factory to it by its result: see [`factory.build.result`](#factorybuildresult). |
+| `artifact` | Where to upload the artifact: `upload_url`, a link (as a file's [`url`](#build-files)) to `PUT` it to, with its length (`Content-Length`; none: 411), valid until a minute past the deadline, and `max_size`, the largest artifact the factory may upload (a core setting, default 256 MiB). factory-core refuses to upload a larger one (`artifact_too_large`); core refuses one over the build's limit before reading a byte (413), and holds the factory to it by its result too: see [`factory.build.result`](#factorybuildresult). A second upload replaces the first. |
 | `deadline` | When core stops waiting: the build timeout after the offer. |
 | `actor` | Who started the build, for the factory's own logs. |
 
@@ -831,7 +837,6 @@ Core's settings for builds:
 | `BUILD_FILE_MAX_SIZE` | 64 MiB | The largest [build file](#build-files) upload, at most 1 GiB. |
 | `BUILD_ARTIFACT_MAX_SIZE` | 256 MiB | The artifact's `max_size` in a build request, at most 1 GiB. A build keeps the one it was offered with. |
 | `BUILD_BUCKET` | `logos-builds` | The SeaweedFS bucket for build files and artifacts. |
-| `BUILD_STORAGE_ENDPOINT` | core's own S3 endpoint | The storage address presigned URLs are signed for: the one factories reach. |
 
 ## In the app and the API
 
@@ -885,12 +890,17 @@ downloads an artifact.
 - **Core owns identity and keys.** Core generates the build id, and will
   generate its keys with payload crypto. The keys will only pass through the
   factory into the artifact: never in a form or a build record.
-- **Presigned URLs for files and artifacts.** Factories need no storage
-  credentials and reach only the objects of the build at hand, and file bytes
-  travel through neither core nor the broker. SHA-256 checks on both sides catch
-  a damaged transfer. A presigned upload cannot be capped, so core holds a
-  factory to `max_size` by the size its result reports, and never reads more
-  of an artifact than that.
+- **Files and artifacts through core.** A build's links are core's own, paths
+  on the address the factory already reaches core at, signed for that build:
+  a factory needs no storage credentials and reaches only the objects of the
+  build at hand, and works wherever it reaches core. Until 2026-11-10 they
+  were presigned URLs of the store itself, which a factory on another host
+  could not resolve (`seaweedfs-s3` is a name on core's network) and which
+  would have sent a minion, its keys inside, to the store unencrypted; core
+  now streams the bytes and caps an upload by its length. SHA-256 checks on
+  both sides catch a damaged transfer, and core still holds a factory to
+  `max_size` by the size its result reports, never reading more of an
+  artifact than that.
 - **Asynchronous, with progress and results as calls to core.** A build takes
   minutes, while management actions are synchronous and capped at 60 s. A result
   must be acknowledged, and a factory must learn when core gave up on a build,

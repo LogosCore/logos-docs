@@ -235,6 +235,7 @@ err := factory.Run(ctx, factory.Config{
     Build:               &schema,
     Builder:             b,
     MaxConcurrentBuilds: 4,
+    CoreURL:             os.Getenv("LOGOS_CORE_BASE_URL"), // core, or its front
 })
 if err != nil {
     log.Fatal(err) // an invalid config or build schema
@@ -244,9 +245,13 @@ if err != nil {
 `factory.Run` sets module_type `factory`, refuses an invalid schema, and runs
 until `ctx` ends. Then it cancels the running builds, waits up to
 `ShutdownGrace` (10 s) for their results to reach core, and deregisters, so a
-factory hands it its signal context directly. Its `Config` also takes
-`HTTPClient` for downloads and uploads (no timeout needed: each transfer ends
-with its build's deadline). `MaxConcurrentBuilds` defaults to 1 and is where the
+factory hands it its signal context directly. `CoreURL` is required: a
+build's files and its artifact go through core (the links a `factory.build`
+carries are paths on it), so a factory reaches core over HTTP(S) as a
+channel does, with the same [TLS settings](../core-infrastructure/#how-modules-reach-core).
+Its `Config` also takes `HTTPClient` for those downloads and uploads (no
+timeout needed: each transfer ends with its build's deadline; module-core's
+`coretls.Client()` by default). `MaxConcurrentBuilds` defaults to 1 and is where the
 live `max_concurrent_builds` property starts. `Handlers` may not take the build
 operations.
 

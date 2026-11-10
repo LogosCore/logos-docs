@@ -28,8 +28,8 @@ exactly one of them.
   [routing conventions](../amqp-conventions/).
 
 Files take neither surface: a factory downloads a build's files from, and
-uploads its artifact to, presigned object store URLs that core hands it with
-the build ([Minion Build](../minion-build/#build-files)).
+uploads its artifact to, core over HTTP, through the links core hands it
+with the build ([Minion Build](../minion-build/#build-files)).
 
 ### The control plane is bidirectional
 

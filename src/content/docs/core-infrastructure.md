@@ -44,7 +44,7 @@ graph TD
     HP -- "wiki documents" --> DB
     CS -- "sessions, cache, dedup" --> RDS
     CS -- "objects (S3 API)" --> SFS
-    IP -- "presigned URLs: build files, artifacts" --> SFS
+    IP -- "build files, artifacts (HTTP)" --> CS
 ```
 
 ## RabbitMQ — Message Bus
@@ -118,10 +118,11 @@ MongoDB resolves the database engine decision listed as pending in the
   - `skills`: AI agent skill bundles operators publish;
   - `logos-builds`: files uploaded for builds, and build artifacts.
 - **Why SeaweedFS**: lightweight, self-hosted, S3-compatible API. Avoids external cloud dependencies and keeps binary blobs out of the document database.
-- **Connections**: Core Server reads and writes. A factory holds no
-  credentials: each build hands it presigned URLs, GET for the files the build
-  names and PUT for its artifact, valid until the build's deadline. Core then
-  reads the artifact back to check its size and SHA-256.
+- **Connections**: Core Server alone reads and writes. A factory never
+  reaches it: a build's files and its artifact go through core, which
+  streams them from and into `logos-builds` (the links each `factory.build`
+  carries: [Minion Build](../contracts/minion-build/#build-files)). Core
+  then reads the artifact back to check its size and SHA-256.
 
 ## nginx — Core's front
 
@@ -178,9 +179,12 @@ MongoDB resolves the database engine decision listed as pending in the
 A module reaches core two ways: over AMQP, through RabbitMQ (registration,
 management, builds), and over HTTP(S), at core's base URL (its environment's
 `LOGOS_CORE_BASE_URL`; the HTTP channel's `LOGOS_SYNC_BASE_URL`): the
-channels' sync call, control link and connection sockets, a factory's
-factory link. That URL is core itself (`http://core:8002` on its network),
-or its front over HTTPS.
+channels' sync call, control link and connection sockets; a factory's
+build files and artifacts (every factory's: the links a build carries are
+paths on that URL) and its factory link. That URL is core itself
+(`http://core:8002` on its network), or its front over HTTPS. Nothing else
+of core's stack is reached: a module on another host needs core's URL and
+its RabbitMQ, no store.
 
 A front whose certificate no system trusts (a self-signed one) takes one of
 three settings, the same in every module (module-core's `coretls`, used by
@@ -249,4 +253,4 @@ traces in SeaweedFS, Grafana) and is planned. None of it runs.
 | hocuspocus | MongoDB | MongoDB wire protocol | Wiki documents |
 | Core Server | Redis | RESP | Sessions, caches, sync de-duplication |
 | Core Server | SeaweedFS | HTTP (S3-compatible) | Object storage |
-| Factory Modules | SeaweedFS | HTTP (presigned URLs) | Build files in, artifacts out |
+| Factory Modules | Core Server (or its front) | HTTP(S) | Build files in, artifacts out (`/api/factory/builds/`) |
