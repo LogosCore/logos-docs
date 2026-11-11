@@ -864,24 +864,11 @@ restart goes on with it. Core enforces it alone, the minion unchanged:
 
 ## Future cases
 
-:::note[Partly built]
-A review of the tunnel items against the cases past SOCKS, port forwards and
-reverse port forwards (2026-11-07): what each takes, and a change for each
-gap. Wave 1 is released (protocol v0.38.0, BOB v0.28.0): changes 1, 2, 3
-and 8, and core's halves of 7 and 9. Wave 2 is released (protocol v0.39.0,
-BOB v0.29.0): change 4's unix sockets and named pipes, and the options of a
-stream. Wave 3.2 is released (protocol v0.42.0, BOB v0.30.2): reverse
-SOCKS was dropped. Wave 3.3 is released (protocol v0.43.0, BOB v0.30.3): a
-tunnel's params apply by its front (`when`), those seldom changed are under
-More options (`advanced`), and a reverse tunnel names no front. Wave 3 is released (protocol v0.40.0, BOB v0.30.0): change 4's
-process and accept, and change 5 (the
-[terminal](#terminal) front, SOCKS5 [`BIND`](#socks)). Wave 3.1 is released
-(protocol v0.41.0, BOB v0.30.1): `stop_idle` became one of core's params,
-as change 1 made the front. The rest of
-this page says them; the others are not built. Wave 4 is released
-(protocol v0.44.0, BOB v0.31.0): the [VPN Front](../../vpn-front/) (a
-client of core's on the operator's machine, `logos-vpn`), ICMP
-([6](#6-icmp)) and BOB's half of [9](#9-timing-that-follows-the-link).
+:::note[Status]
+A review (2026-11-07) of the tunnel items against the cases past SOCKS, port
+forwards and reverse port forwards, with a change for each gap. Each change
+below says what of it is built: they went out in waves 1 to 5 (protocol
+v0.38.0 to v0.44.0, BOB v0.28.0 to v0.31.0, `logos-ssh` v0.6.0).
 :::
 
 **What holds.** A stream is general already: bytes in order each way,
@@ -921,7 +908,7 @@ how it ended. **Front**: what core puts in front. **Needs**: the
 | SOCKS5 `BIND` | ✓ an accept | ✓ | – | ✓ who came | ✓ | none: built ([SOCKS](#socks)) |
 | Bulk copies over a fast pivot | ✓ | ✓ both sides' windows grow | – | – | ✓ | none: [9](#9-timing-that-follows-the-link) built |
 | Slow links | ✓ | ✓ both sides' resends follow the link | ✓ | – | ✓ | none: [9](#9-timing-that-follows-the-link) and the [cap](#bandwidth-cap) built |
-| The SSH channel's tunnels | ✓ TCP, unix, process, accept | ✓ | ✗ SSH has no UDP | ✓ | ✓ | none: built, `logos-ssh` v0.6.0 ([Agentless Channels](../../agentless-channels/#tunnels)) |
+| The SSH channel's tunnels | ✓ TCP, unix, process, accept | ✓ | ✗ SSH has no UDP | ✓ | ✓ | none: built, `logos-ssh` v0.6.0 ([The SSH Module](../../../modules/ssh/#tunnels)) |
 
 ### Each case
 
@@ -942,7 +929,7 @@ how it ended. **Front**: what core puts in front. **Needs**: the
   timed out: nothing). Each UDP flow is an association. ICMP takes change
   [6](#6-icmp). The front is core's alone now ([1](#1-the-front-a-core-param) built). Its TUN is a client of
   core's on the operator's machine, `logos-vpn`, decided 2026-11-08 over a
-  WireGuard peer in core and Headscale: a draft ([VPN
+  WireGuard peer in core and Headscale: built ([VPN
   Front](../../vpn-front/)).
 - **Scans through SOCKS** (`nmap -sT`, netexec, proxychains sweeps): work,
   each probe a stream, its reply the port's state (refused: closed; timed
@@ -1010,7 +997,7 @@ how it ended. **Front**: what core puts in front. **Needs**: the
   `direct-streamlocal@openssh.com` carries the unix kind, a session with a
   pty the terminal. SSH carries no UDP: its commands do not open it ([2](#2-what-a-command-opens)),
   so the VPN front through them is TCP alone. Over `bind-persistent` only,
-  as the login, ending with the connection ([Agentless Channels](../../agentless-channels/#tunnels)).
+  as the login, ending with the connection ([The SSH Module](../../../modules/ssh/#tunnels)).
 
 ### The changes
 
@@ -1120,7 +1107,7 @@ to each side: no item changes.
 proxy and reverse SOCKS (since dropped), core's halves of [7](#7-bytes-with-the-open) and [9](#9-timing-that-follows-the-link), [8](#8-stream-numbers-without-a-write-each), the cap); 2 released
 (unix sockets, named pipes and stream options, [4](#4-opens-of-more-kinds) in part); 3 released
 (shells and SOCKS5 `BIND`, [4](#4-opens-of-more-kinds), [5](#5-controls-and-an-end-for-shells)); 3.1 released (`stop_idle` core's); 3.2 released (reverse SOCKS dropped); 3.3 released (each param by the front, More options, the reverse tunnel's `front` gone, the console in the form's order); 4 released (a VPN front with ICMP, [6](#6-icmp), [VPN Front](../../vpn-front/), and
-BOB's half of [9](#9-timing-that-follows-the-link)); 5 released (the SSH channel's tunnels, `logos-ssh` v0.6.0: [Agentless Channels](../../agentless-channels/#tunnels)).
+BOB's half of [9](#9-timing-that-follows-the-link)); 5 released (the SSH channel's tunnels, `logos-ssh` v0.6.0: [The SSH Module](../../../modules/ssh/#tunnels)).
 Left out (2026-11-08): a TCP channel through a SOCKS port (it
 works today, by its target's `proxy`), and one front over several minions.
 Minions relaying for each other are [Delegation](../delegation/).

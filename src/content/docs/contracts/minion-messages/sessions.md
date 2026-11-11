@@ -33,8 +33,9 @@ id. The session then keeps the build's own keys:
   and the channel passes it to core in `Logos-Build-Id`. Channels never know
   staging exists. Core finds the keys by the id: a session's, a temporary
   id's or a build's.
-- **Under a build id** core takes only `stage` or `hello`; **under a
-  temporary id** only `hello`. Anything else there gets `bad_message`. The
+- **Under a build id** core takes one item, alone: a `stage` or a `hello`;
+  **under a temporary id**, a `hello` alone. A message with anything else,
+  or with more, gets `bad_message`, and nothing in it is taken. The
   exception is a `bind-call` minion's answer to core's `rehello` under the
   build id: its `hello` opens the session, and the rest of the answer is
   taken under that session, as any later answer is.
@@ -84,12 +85,13 @@ stage-keys = {          ; aes-256-cbc-hmac-sha256's key material, as keys
 ```cddl
 hello = {
   0: 3,                 ; t: hello
-  1: uint,              ; pid
   2: tstr,              ; os: GOOS-style, "windows", "linux", "darwin"
   3: tstr,              ; arch: GOARCH-style, "amd64", "arm64", "386"
-  11: uint,             ; machine_id's source: where its value came
-                        ;   from, see Machine identity
-  15: tstr,             ; machine_id's value
+  ? 1: uint,            ; pid: the minion's process; 0 or absent: none of
+                        ;   its own (a channel acting as the minion)
+  ? 11: uint,           ; machine_id's source, with 15: where its value
+                        ;   came from, see Machine identity
+  ? 15: tstr,           ; machine_id's value, with 11
   ? 4: tstr,            ; host: the host name
   ? 5: tstr,            ; user: as the OS reports it, e.g. "CORP\\svc_backup"
   ? 6: tstr,            ; domain: the host's Windows domain or workgroup
@@ -124,8 +126,10 @@ hello_response = {
 ```
 
 1. The minion sends its `hello` under the temporary id, sealed with the new
-   keys (or, skipping staging, under the build id with the build's own keys).
-   It may ask for tasks in the same request ([`get_tasks`](../tasks-and-results/#asking-for-tasks)).
+   keys (or, skipping staging, under the build id with the build's own keys),
+   **alone**: core takes nothing else there. It asks for tasks
+   ([`get_tasks`](../tasks-and-results/#asking-for-tasks)) in its first
+   message under the session id.
 2. Core creates a **session**, gives it those keys, and records the host and
    process. A temporary id serves one `hello`. A `hello` again under it
    within 10 minutes (its reply lost on the way) gets the same
@@ -137,12 +141,16 @@ hello_response = {
    that is sent under the session id and sealed with the session's keys, for
    as long as the process runs.
 
-**The fields.** `pid`, `os`, `arch` and `machine_id` are required: a minion
-always knows them (`machine_id` falls back as far as a random id); core takes
-a `hello` without a machine id all the same. The rest are optional: a minion
-cannot always learn its host or user (in a sandbox, say). Core keeps and
-shows the numbered values by name: the integrity level, the machine id as
-`"<source>:<value>"`, the addresses as text.
+**The fields.** `os` and `arch` are required: core answers a `hello`
+without them with `bad_message` (`HelloItem.Validate`). A minion says its
+machine id too, a source and a value together: it always knows one (it
+falls back as far as a random id), though core takes a `hello` without it.
+`pid` is the minion's process, 0 or left out for a minion with none of its
+own (a channel acting as the minion, [agentless](../../agentless-channels/)).
+The rest are optional: a minion cannot always learn its host or user (in a
+sandbox, say). Core keeps and shows the numbered values by name: the
+integrity level, the machine id as `"<source>:<value>"`, the addresses as
+text.
 
 - `os` and `arch` use the vocabulary of build platforms, so core shows them
   beside the build's platform and flags a mismatch (a 32-bit build on a
@@ -159,8 +167,9 @@ shows the numbered values by name: the integrity level, the machine id as
   core knows each one's name, kind and channel from the build. When it
   moves to another, it says so with a [`conn_update`](#connections).
 - A factory's own fields go under `x`, so a key core adds later never
-  collides with one of them; its build schema may declare them, so the web
-  app can label them.
+  collides with one of them. Nothing declares them: core keeps them with
+  the session as they came, and the session's details list them by their
+  own keys.
 
 **A `hello` under the session id** (a *rehello*) replaces what core recorded
 of the host and process, and gets `hello_response` with the same session id.
@@ -173,10 +182,12 @@ rehello = { 0: 6 }      ; t: rehello (core → minion)
 The **`rehello` item** asks a minion for a `hello`. Core sends it as a
 `bind-call` minion's first call, under the build id, and the page's
 `hello`, sealed with the build's keys, opens its session ([bind-call
-targets](../../channel-core-connections/#bind-call-minions-targets-and-sessions)).
-Under a session it asks for the host and process again: a minion that
-starts its exchanges says its `hello` in its next message (BOB's does,
-through the connection in use).
+targets](../../channel-core-connections/#bind-call-minions-targets-and-sessions));
+that answer is the one message under a build id that may carry more than
+its `hello`. Under a session the item asks for the host and process again:
+a minion that starts its exchanges says its `hello` in its next message
+(BOB's does, through the connection in use). Core sends `rehello` today only
+as a `bind-call` minion's first call.
 
 ## Machine identity
 
@@ -229,6 +240,10 @@ A minion takes the **first** of these it can read, skipping placeholders:
   computer account SID (`domain-sid`, number 7): reading it means asking LSA
   or a domain controller, and on Windows `win-machine-guid` always comes
   first. Their numbers stay in the registry.
+- **A server an agentless channel reaches** over SSH, when the server's
+  own machine id cannot be read: `ssh-host-key` (number 11), the SHA-256 of
+  its host key in hex. It names the server before any login, and reading it
+  runs nothing ([The SSH Module](../../../modules/ssh/#the-channel)).
 - **Not identities**, whatever they look like: `/proc/sys/kernel/random/boot_id`
   (new each boot), a network card's MAC address (randomized, or changed with
   the card), a volume's serial (copied with the disk image).
@@ -502,6 +517,6 @@ minion connects again (`reverse-persistent`) or waits for core's next dial
   transport and in `Logos-Build-Id`, so channels and channel-core carry it
   without knowing staging exists.
 - **Why a machine id, not the host.** Sessions come and go (restarts,
-  persisted sessions replaced, a second implant on the same host); the
+  persisted sessions replaced, a second minion on the same host); the
   machine stays. The file browser keeps one snapshot per machine because of
   it.

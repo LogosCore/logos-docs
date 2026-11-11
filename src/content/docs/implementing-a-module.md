@@ -3,13 +3,17 @@ title: "Implementing a Module"
 ---
 
 This page is the practical companion to the [contracts](../contracts/overview/):
-what a module has to do to live on the control plane, and how the Go SDKs do
-it: [`logos-golang-module-core`](https://github.com/logoscore/logos-golang-module-core)
-for every module type, and
+what every module has to do to live on the control plane, and how the Go SDKs
+do it: [`logos-golang-module-core`](https://github.com/logoscore/logos-golang-module-core)
+for every module type, with
 [`logos-golang-channel-core`](https://github.com/logoscore/logos-golang-channel-core)
-on top of it for channels, and `logos-golang-factory-core` for factories. The
-[HTTP channel](https://github.com/logoscore/logos-http-channel) is the worked
-example throughout.
+on top of it for channels and
+[`logos-golang-factory-core`](https://github.com/logoscore/logos-golang-factory-core)
+for factories. The [HTTP channel](https://github.com/logoscore/logos-http-channel)
+is the worked example. What each type does beyond that has a guide of its own:
+[Writing a Channel](../guides/writing-a-channel/), and
+[Writing a Factory](../guides/writing-a-factory/) with
+[Writing a Minion](../guides/writing-a-minion/).
 
 ## What every module does
 
@@ -71,10 +75,11 @@ instance that is not registered with `403`. A module that deregisters before
 its in-flight requests finish fails them. It matters for builds too: core fails
 a build still running on an instance that is no longer registered.
 
-Then each type does its own job: a channel relays minion traffic to core's
-[sync endpoint](../contracts/channel-core-sync/), and a factory serves
+Then each type does its own job: a channel relays minion traffic to core over
+the sync call, the control link and connection sockets
+([Writing a Channel](../guides/writing-a-channel/)), and a factory serves
 `factory.build` and `factory.build.cancel` on its inbox and reports progress
-and results to core ([Minion Build](../contracts/minion-build/)).
+and results to core ([Writing a Factory](../guides/writing-a-factory/)).
 
 ## With the Go SDKs
 
@@ -84,8 +89,8 @@ it. They are layered by module type:
 | SDK | For | Holds |
 |---|---|---|
 | `logos-golang-module-core` | every module type | The control plane: session, lifecycle, management, log tail, logging. |
-| `logos-golang-channel-core` (v3) | channels | `channel.Run` (the session as a channel, with the [connection schema](../contracts/minion-connection/)) and the channel data-plane helpers (profiles, transforms, sync client). |
-| `logos-golang-factory-core` | factories | `factory.Run` (the session as a factory, declaring the [build schema](../contracts/minion-build/) and serving its builds), the `Builder` and `Job` a factory builds with, and `factorytest` to run a builder in its tests. It adds a [builds section](../contracts/minion-build/#managing-a-factory) to the factory's management. See [Writing a factory](#writing-a-factory). |
+| `logos-golang-channel-core` (v3) | channels | `channel.Run` (the session as a channel, with the [connection schema](../contracts/minion-connection/)) and the data-plane clients: `syncclient` (the sync call), `connclient` (connection sockets) and `linkclient` (the control link, which the module starts itself). See [Writing a Channel](../guides/writing-a-channel/). |
+| `logos-golang-factory-core` | factories | `factory.Run` (the session as a factory, declaring the [build schema](../contracts/minion-build/) and serving its builds), the `Builder` and `Job` a factory builds with, and `factorytest` to run a builder in its tests. It adds a [builds section](../contracts/minion-build/#managing-a-factory) to the factory's management. See [Writing a Factory](../guides/writing-a-factory/). |
 
 The module-core packages:
 
@@ -202,163 +207,29 @@ depends on what a module *is* belongs in the module:
 
 Minions speak to it in a packed binary format, described in its README's
 [Wire format](https://github.com/LogosCore/logos-http-channel#wire-format)
-section. Besides plain requests it accepts **WebSockets** on any path: each binary
-frame is one message in the same packed format, relayed to core as a sync
-like a request (core does not tell the two apart), with a few messages in flight
-per connection and the same minion UUID answered in order. Its manifest adds
-connection limits, ping and idle settings, connection counters and a
-`close_connections` action; drain also closes open connections.
+section. Besides plain requests (`reverse-call`, each one a sync call to
+core), it accepts **WebSockets** on any path (`reverse-persistent`): each
+binary frame is one message in the same packed format, and each WebSocket is
+relayed over a connection socket of its own to core, which pushes the
+minion's tasks over it. Its manifest adds connection limits, ping and idle
+settings, connection counters and a `close_connections` action; drain also
+closes open connections.
 
 Its environment holds what core must not change: how to reach core
-(`LOGOS_SYNC_BASE_URL`, `CORE_SYNC_TIMEOUT`), the broker credentials, the log
-format, and which proxies to trust for client addresses. Each request is
+(`LOGOS_SYNC_BASE_URL`, its own name for what other modules call
+`LOGOS_CORE_BASE_URL`, and `CORE_SYNC_TIMEOUT`), the broker credentials, the
+log format, and which proxies to trust for client addresses. Each request is
 logged once, as one structured line.
 
-## Writing a factory
+## Next
 
-A factory is a `Builder` handed to `factory.Run`. Condensed from BOB's
-`main.go` (BOB, `logos-bob-factory`, is the reference factory: it builds
-dummy minions, JSON files that describe what they were built with):
-
-```go
-ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
-defer stop()
-
-schema := buildSchema // a protocol.BuildSchema: channels, fields, targets, commands
-err := factory.Run(ctx, factory.Config{
-    Config: module.Config{
-        AMQPURL:    amqpURL,
-        Identity:   lifecycle.Identity{ModuleName: "bob", Instance: instance, Version: version},
-        Management: mgmtSrv, // the factory's own; factory-core adds the builds section
-        Logs:       logs,
-    },
-    Build:               &schema,
-    Builder:             b,
-    MaxConcurrentBuilds: 4,
-    CoreURL:             os.Getenv("LOGOS_CORE_BASE_URL"), // core, or its front
-})
-if err != nil {
-    log.Fatal(err) // an invalid config or build schema
-}
-```
-
-`factory.Run` sets module_type `factory`, refuses an invalid schema, and runs
-until `ctx` ends. Then it cancels the running builds, waits up to
-`ShutdownGrace` (10 s) for their results to reach core, and deregisters, so a
-factory hands it its signal context directly. `CoreURL` is required: a
-build's files and its artifact go through core (the links a `factory.build`
-carries are paths on it), so a factory reaches core over HTTP(S) as a
-channel does, with the same [TLS settings](../core-infrastructure/#how-modules-reach-core).
-Its `Config` also takes `HTTPClient` for those downloads and uploads (no
-timeout needed: each transfer ends with its build's deadline; module-core's
-`coretls.Client()` by default). `MaxConcurrentBuilds` defaults to 1 and is where the
-live `max_concurrent_builds` property starts. `Handlers` may not take the build
-operations.
-
-### The builder
-
-```go
-// Steps is the plan for one build, before it starts: core shows it as the
-// build's pipeline. Optional (Planner); without it a build has one step, "Build".
-func (b *bob) Steps(req protocol.BuildRequest) []protocol.BuildStep {
-    var steps []protocol.BuildStep
-    if id, _ := req.Values["badge"].(string); id != "" {
-        steps = append(steps, stepBadge) // a step that will not run is left out
-    }
-    return append(steps, stepRender, stepUpload)
-}
-
-func (b *bob) Build(ctx context.Context, job *factory.Job) (factory.Result, error) {
-    if f, ok := job.File("badge"); ok {
-        job.Step(stepBadge.ID, "checking the badge")
-        if _, err := job.ReadFile(ctx, f); err != nil { // size and SHA-256 checked
-            return factory.Result{}, factory.Fail("badge_unreadable", err.Error())
-        }
-    }
-    job.Step(stepRender.ID, "")
-    body, name := render(job.Request) // what the minion is
-    job.Step(stepUpload.ID, "")
-    if err := job.UploadArtifact(ctx, name, "application/json", bytes.NewReader(body)); err != nil {
-        return factory.Result{}, err
-    }
-    return factory.Result{Warnings: []string{"a dummy minion: it describes a minion and runs nothing"}}, nil
-}
-```
-
-The `Job` is one build:
-
-| | |
-|---|---|
-| `Request`, `Target` | The `factory.build` request, already checked against the schema, and the target being built. `Values` holds every field with a value or a default. |
-| `HasCommand(id)` | Whether the minion is built with a command: the operator picked it, or the target requires it. Build in exactly the request's `commands`, or fail the build. |
-| `Step(id, message)` | Report the step of the plan the build is on. It never blocks: a newer report replaces one not sent yet, and a step outside the plan is dropped (and logged once). |
-| `Log()`, `Logf` | The build log, sent with the result; core keeps its last 64 KiB. |
-| `File(key)`, `ReadFile`, `Download` | The file a `file` field names, read into memory (small files) or saved to disk, its size and SHA-256 checked. |
-| `UploadArtifact` | Spools the artifact to a temporary file, refuses one over `max_size`, and uploads it with its length; its size and SHA-256 go into the result. |
-
-`Build` must return when `ctx` ends: the build was cancelled, ran out of time,
-or the factory is stopping. Key material, secret values and files never go to
-logs, progress or the build log.
-
-### Results and failures
-
-A build that returns without an error and with its artifact uploaded
-succeeded. An error fails it: `factory.Fail(code, message)` with a code of the
-factory's own (`^[a-z0-9][a-z0-9_.-]{0,62}$`), and any other error as
-`build_failed`. factory-core reports these codes itself:
-
-| Code | When |
-|---|---|
-| `build_failed` | The builder returned an error without a code. |
-| `no_artifact` | It returned without uploading an artifact. |
-| `artifact_too_large` | The artifact is over the request's `max_size`. |
-| `invalid_result` | The result broke the contract's limits; the message says how. |
-| `timeout` | The deadline passed during the build. |
-| `shutdown` | The factory stopped during the build. |
-| `panic` | The builder panicked. |
-
-The SDK takes care of the rest of the contract: it validates each request
-(`validation_failed`, `unsupported_version`), refuses builds over the limit or
-while draining (`busy`), accepts a repeated request with the same plan without
-building again (remembering a build for an hour past its deadline), stops a
-build when core cancels it or answers its progress with `not_found`, and
-sends the result until core replies or the deadline passes (each attempt
-10 s, retries from 1 s doubling to 30 s). It adds the
-[builds section](../contracts/minion-build/#managing-a-factory) to the
-factory's management; the factory's own manifest cannot use its keys.
-
-### Testing a builder
-
-`factorytest` runs a builder in process, without core or a broker, through the
-same checks, plan, `Job` and result as `factory.Run`:
-
-```go
-store := factorytest.NewStore(t) // serves files and takes artifacts over HTTP
-badge := store.File(protocol.NewID(), "badge.png", "image/png", png)
-out := factorytest.Run(t, buildSchema, &bob{}, store, protocol.BuildRequest{
-    Target: "dummy", Platform: "any/any", SchemaVersion: 1,
-    Values: map[string]any{"badge": badge.ID},
-    Files:  map[string]protocol.BuildFile{badge.ID: badge},
-    // …commands and connections, as core sends them
-})
-// out.Steps, out.Progress, out.Result: what core would have received.
-// out.Artifact: the bytes uploaded.
-```
-
-It fills in what core adds when the request leaves it out (a build id, the
-upload URL and `max_size`, a deadline a minute away), and fails the test when
-the request does not fit the schema. `factorytest.Build` returns only the
-result and the artifact.
-
-### BOB
-
-| Kind | Declared |
-|---|---|
-| Build schema | Targets `dummy` and `dummy-lite` (`json`, `any/any`); fields `greeting`, `kill_date` (`datetime`), `punches` (`enum_list`) and `badge` (`file`, images up to 256 KiB); HTTP connection parameters `method` and `path_prefix` (`format: "path"`); commands `sleep` and `exit` (required), `hello` and `ls` (default), `download`, and `shell` (`dummy` only) |
-| Properties | `build_delay` and `fail_builds` (to try slow and failing builds), `log_level` |
-| Actions | `say_hello` |
-| Builds section | added by factory-core, `max_concurrent_builds` starting at 4 |
-| Capabilities | `logs` |
+- **A channel**: [Writing a Channel](../guides/writing-a-channel/): choosing
+  connection kinds, the program, the connection schema in Go, each kind's
+  path to core, testing it, and running it against a dev core.
+- **A factory**: [Writing a Factory](../guides/writing-a-factory/): the
+  builder, what core sends with a build, the artifact, testing a builder, and
+  BOB as the worked example. [Writing a Minion](../guides/writing-a-minion/)
+  says what its minions implement.
 
 ## Design notes
 

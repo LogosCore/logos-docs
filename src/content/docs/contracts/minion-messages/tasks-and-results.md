@@ -30,9 +30,11 @@ connection kind](../#mechanics-by-connection-kind)):
   reply), after it took the message's items; over a socket every request
   gets a sealed reply, empty or not, so the minion knows it arrived.
 - **Items count as delivered on a sealed reply with the matching `re`, or a
-  204.** On a 404, a timeout, or no answer, the minion sends them again in
-  a later message, under a new `id`. Core does the same with what it sends:
-  what the minion did not acknowledge goes again.
+  204.** On a 404, a timeout, or no answer, the minion sends them again: in
+  a later message under a new `id`, or as the same message, which gets the
+  reply core kept for it ([Freshness and
+  replay](../wire-format/#freshness-and-replay)). Core does the same with
+  what it sends: what the minion did not acknowledge goes again.
 - **Every item can be sent again safely.** Results are taken once by
   `(task, seq)`, chunks by `(xfer, off)`; acks and hellos are the same each
   time. So nothing needs exactly-once delivery: both sides resend until the
@@ -75,11 +77,17 @@ get_tasks = {
   never more than `max`. A minion that is busy leaves it out and gets no new
   task, whatever else its request carries.
 - **`get_tasks` can share a request** with results, acks, chunks or a
-  `hello`: a minion that finishes a task sends its result and takes the next
-  task in one round trip.
-- **`max` absent** means no limit of the minion's: core sends what it has
-  within one message's [limits](../wire-format/#limits), and the rest in
-  later replies. A minion that wants nothing leaves `get_tasks` out.
+  rehello (a `hello` under the session id): a minion that finishes a task
+  sends its result and takes the next task in one round trip. A first
+  `hello`, under a temporary id or the build id, goes alone
+  ([Sessions](../sessions/#hello)): the minion asks for tasks in its first
+  message under the session id. The exception is a `bind-call` page's
+  answer to `rehello`, whose `get_tasks` core takes under the session the
+  `hello` opened.
+- **`max` absent** means no limit of the minion's: core sends what it has,
+  32 tasks a message at most, within one message's
+  [limits](../wire-format/#limits), and the rest in later replies. A minion
+  that wants nothing leaves `get_tasks` out.
 - **Tasks sent before and not acked come first**, and count toward `max`: a
   minion whose reply with tasks was lost gets them again on its next
   `get_tasks`.

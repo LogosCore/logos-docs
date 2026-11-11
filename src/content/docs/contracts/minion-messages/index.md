@@ -9,13 +9,12 @@ are the factory's (a build schema declares them: [Minion
 Build](../minion-build/#commands)); everything here is core's, the same for
 every factory.
 
-:::note[Status]
-Built, in the protocol package (`logos-golang-protocol`), core, BOB's minion
-and the Dumbo factory's PHP page, through all four [connection
-kinds](../../module-types/#connection-kinds): `reverse-call`,
-`reverse-persistent`, `bind-call` and `bind-persistent`. How each mechanic
-goes on each kind is [below](#mechanics-by-connection-kind).
-:::
+The protocol package (`logos-golang-protocol`) and core implement all of it,
+through all four [connection kinds](../../module-types/#connection-kinds):
+`reverse-call`, `reverse-persistent`, `bind-call` and `bind-persistent`. How
+each mechanic goes on each kind is [below](#mechanics-by-connection-kind).
+What a minion has to implement, and what it may leave out, is [Writing a
+Minion](../../guides/writing-a-minion/#what-a-minion-implements).
 
 ## The layers
 
@@ -66,18 +65,22 @@ sequenceDiagram
     C-->>CH: 200 sealed {re, items: [stage_response: tid, keys encrypted, corr]}
     CH-->>M: reply
     M->>M: check corr, decrypt the new keys
-    M->>CH: temporary id + sealed with the new keys {items: [hello, get_tasks max 2]}
+    M->>CH: temporary id + sealed with the new keys {items: [hello]}
     CH->>C: sync
     C->>C: create a session, record the host
-    C-->>CH: 200 sealed {re, items: [hello_response: sid, task shell, task sleep]}
+    C-->>CH: 200 sealed {re, items: [hello_response: sid]}
+    CH-->>M: reply
+    M->>CH: session id + sealed {items: [get_tasks max 2]}
+    CH->>C: sync
+    C-->>CH: 200 sealed {re, items: [task shell, task ls]}
     CH-->>M: reply
     M->>M: run the tasks
-    M->>CH: session id + sealed {items: [ack tasks, result shell, get_tasks max 1]}
+    M->>CH: session id + sealed {items: [ack tasks, result ls, get_tasks max 1]} (shell still runs)
     CH->>C: sync
     C->>C: store the result, stop resending both tasks
-    C-->>CH: 200 sealed {re} (no task waiting)
-    CH-->>M: reply
-    M->>CH: session id + sealed {} (check-in, busy: no get_tasks)
+    C-->>CH: 204 (no task waiting)
+    CH-->>M: reply, empty
+    M->>CH: session id + sealed {items: [result shell, get_tasks max 2]}
     CH->>C: sync
     C-->>CH: 204 (nothing for the minion)
 ```
@@ -85,13 +88,15 @@ sequenceDiagram
 1. **Staging** (1–7): a new process stages under its build id and gets new
    keys and a temporary id. A build may skip staging and say `hello` under
    its build id. See [Sessions](sessions/#staging).
-2. **Hello** (8–12): under the temporary id, the minion says what host and
-   process it is; core opens a **session** and answers with its id. Every
-   message after that goes under the session id.
+2. **Hello** (8–12): under the temporary id, alone, the minion says what
+   host and process it is; core opens a **session** and answers with its
+   id. Every message after that goes under the session id, the first of
+   them with its `get_tasks`.
 3. **Check-ins** (13–): the minion sends a message every check-in interval,
    or sooner when it has something to say. With `get_tasks` it takes new
-   tasks; with `result` it sends what they produced; files move in `chunk`s
-   alongside. Core answers each message. See [Tasks and
+   tasks; with `ack` and `result` it says what it got and what the tasks
+   produced; files move in `chunk`s alongside. Core answers each message,
+   with 204 when it has nothing to say. See [Tasks and
    results](tasks-and-results/) and [File transfers](file-transfers/).
 
 On the other kinds the same items go other ways. Over a persistent
@@ -134,7 +139,16 @@ everything as it comes, so operators never see the numbers.
 | 18 | `feedback` | minion | a warning or an error for its operators | [Sessions](sessions/#feedback) |
 | 19 | `reack` | core | which of the tasks core thinks the minion runs it still has | [Tasks and results](tasks-and-results/#tasks-the-minion-lost) |
 | 20 | `identity` | minion | who its tasks, or a task, run as when not its process's own | [Identity](identity/) |
+| 21 | `tunnel` | both | opens a stream of a tunnel task: core's, or the minion's in a reverse tunnel | [Tunnels](tunnels/#streams) |
+| 22 | `tunnel_reply` | both | the open's result: open, or why not | [Tunnels](tunnels/#streams) |
+| 23 | `tunnel_data` | both | a stream's bytes, from an offset, and its end | [Tunnels](tunnels/#streams) |
+| 24 | `tunnel_ack` | both | how far the sender has the other direction's bytes, and the room it gives | [Tunnels](tunnels/#streams) |
+| 25 | `tunnel_close` | both | a stream is over, and why | [Tunnels](tunnels/#streams) |
+| 26 | `tunnel_datagram` | both | one datagram of a UDP association or a UDP stream | [Tunnels](tunnels/#udp) |
+| 27 | `tunnel_listen` | minion | a reverse tunnel's listener is up, and where | [Tunnels](tunnels/#reverse-port-forward) |
+| 28 | `tunnel_ctl` | both | what a stream says besides its bytes: a terminal's size, a signal, a process's exit, who came to an accept | [Tunnels](tunnels/#controls) |
 | 29 | `delegate` | both | one step of what a delegate carries for the minions it serves: a sync and its reply, a call or an open and its answer, a connection's frame or close | [Delegation](delegation/#the-item) |
+| 30 | `packed` | both | one item, deflated | [Wire format](wire-format/#compression) |
 
 ## Mechanics by connection kind
 

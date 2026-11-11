@@ -2,10 +2,10 @@
 title: "Core Responsibilities"
 ---
 
-`logos-core` is the control-plane heart of the system. This page lists what it
-does today, and what it is meant to do once minion payloads and tasking land.
-
-## Built Today
+`logos-core` is the control plane: the server operators work in and every
+module talks to. This page lists what core does, one area at a time, each with
+the page that holds its contract. [Architecture](../architecture/#built-and-planned)
+says what is built and what is planned.
 
 ## 1) Module Registry and Lifecycle
 
@@ -44,63 +44,74 @@ See [Module Management](../contracts/module-management/) and
 See [Minion Connection Schema](../contracts/minion-connection/) and
 [Minion Build](../contracts/minion-build/).
 
-## 4) The Data Plane Endpoint
+## 4) The Data Plane
 
-- Accept channel requests on `POST /api/channel/sync` (the minion's
-  ciphertext as the raw body, its ids in headers), and check their headers and
-  size before reading the body.
-- Admit only registered, unblocked channel instances (403 otherwise, 503 when
-  the registry cannot be read).
-- Answer a message seen before (by `Logos-Message-Id`, within 24 hours) with a
-  no-op.
-- Answer with ciphertext for the minion (200) or nothing (204). Today it is
-  always 204: there is nothing to send minions yet.
+- Take minion traffic from channels three ways: the sync call
+  (`POST /api/channel/sync`, a message per request), a connection socket per
+  minion connection, and each channel's control link, over which core calls
+  `bind-call` minions and opens `bind-persistent` ones
+  ([Three paths](../contracts/channel-core-connections/#three-paths)).
+- Admit only registered, unblocked channel instances, and check sizes before
+  reading a message.
+- Answer a minion's message with its reply (200), with nothing (204), as a
+  replay (409), or as a frame that does not open (422). A message sent again
+  within 10 minutes gets the reply it got
+  ([Freshness and replay](../contracts/minion-messages/wire-format/#freshness-and-replay)).
 
-See [Channel ↔ Core: HTTP Sync](../contracts/channel-core-sync/).
+See [Channel ↔ Core: HTTP Sync](../contracts/channel-core-sync/) and
+[Connections](../contracts/channel-core-connections/).
 
-## 5) Operators and Access
+## 5) Keys and Payload Crypto
+
+- Generate each build's keys for its factory's suite, and give each minion
+  process keys of its own when it stages.
+- Seal and open every frame: core implements `aes-256-cbc-hmac-sha256`, and a
+  factory declaring another suite of core's cannot register. A factory that
+  translates a suite of its own makes its keys, and seals and opens its
+  minions' frames for core over its factory link
+  ([Codecs](../contracts/minion-messages/codecs/)).
+- Keep channels out of it: they relay sealed frames. An
+  [agentless channel](../contracts/agentless-channels/), which acts as the
+  minion, is given the keys of the ids it serves.
+
+See [Wire Format](../contracts/minion-messages/wire-format/).
+
+## 6) Sessions and Tasks
+
+- Open a session for each minion process that says hello, and keep its
+  presence, its connections and what it said of its host.
+- Queue operators' tasks within the commands the minion was built with, send
+  them as the minion's connection allows, and keep their acks, output and
+  results.
+- Take what tasks return into the operation's views: listings into the
+  [file browser](../contracts/file-browser/), files both ways
+  ([File Transfers](../contracts/minion-messages/file-transfers/)), who a task
+  ran as ([Identity](../contracts/minion-messages/identity/)).
+- Run the fronts of minions' tunnels on core's operational ports, and the VPN
+  front ([Tunnels](../contracts/minion-messages/tunnels/),
+  [VPN Front](../contracts/vpn-front/)); carry other minions' traffic through
+  a delegate ([Delegation](../contracts/minion-messages/delegation/)).
+- Hand modules the credentials a field names
+  ([Credentials](../contracts/credentials/)).
+
+See [Minion Messages](../contracts/minion-messages/) and
+[Task Results and Actions](../contracts/task-results-and-actions/).
+
+## 7) Operators and Access
 
 - Accounts, local login or single sign-on through OIDC, sessions, and roles:
   the account's own and its role in each operation (viewer, operator, admin).
 - Enforce them on every operator action, in the web app and the APIs (GraphQL,
   REST, MCP for AI agents).
 
-## Planned
-
-## 6) Key Ownership and Crypto Boundary
-
-- Own key material for minion payloads app-level encryption.
-- Resolve key context using canonical routing `id`.
-- Decrypt/verify inbound encrypted payloads.
-- Encrypt/sign outbound payloads.
-- Keep channels plaintext-blind (channels never decrypt payloads).
-
-Core generates each minion's keys for its factory's suite and implements
-`aes-256-cbc-hmac-sha256`: it seals and opens every frame, and a factory
-declaring another suite of core's cannot register. One that translates a
-suite of its own makes its keys and seals and opens its minions' frames
-([Codecs](../contracts/minion-messages/codecs/)).
-
-## 7) Task and Session Orchestration
-
-- Decide what outbound tasking is pending for each `id`, within the commands
-  its minion was built with.
-- Correlate inbound results with task context.
-- Persist task history and execution state.
-- Apply policy checks before task execution paths.
-
-Minions exist today only as the records successful builds create. The tasks
-board in the web app is the operators' own planning, not minion tasking.
-
 ## Out of Scope for Core
 
-- Transport-specific delivery mechanics (owned by channel modules).
-- Transposition rendering/parsing details in transport payloads (owned by channel modules, using shared SDKs).
-- Minion transport protocol quirks beyond canonical contracts.
+- How a transport carries frames, and its framing: the channel's.
 - How a minion is built: the factory's (core only checks what it builds against
   the factory's declared build schema).
+- What a factory's own codec looks like: the factory translates it.
 
 ## Core Principle
 
-`minion <-> core` is the real protocol conversation.
-Channels are transport relays.
+`minion <-> core` is the real protocol conversation. Channels are transport
+relays; an agentless channel, which acts as the minion, is the one exception.

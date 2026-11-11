@@ -89,9 +89,12 @@ Request:
   },
   "applied_revision": 0,
   "connection": {
-    "schema_version": "1",
-    "version": 1,
-    "fields": [ … ]
+    "schema_version": "2",
+    "version": 3,
+    "kinds": {
+      "reverse-call": { "fields": [ … ] },
+      "reverse-persistent": { "fields": [ … ] }
+    }
   }
 }
 ```
@@ -145,7 +148,8 @@ Request:
   for a fresh process. Core uses it to see whether the module is in sync.
 - `connection` is optional, for channels: the
   [minion connection schema](../minion-connection/), the parameters minions are
-  given to reach this channel. An invalid schema fails the registration with
+  given to reach this channel, by connection kind (`schema_version` `"2"`;
+  core refuses any other). An invalid schema fails the registration with
   `validation_failed`; a registration without one clears the stored schema.
 - `build` is optional, for factories: the
   [build schema](../minion-build/#the-build-schema), what the factory can build

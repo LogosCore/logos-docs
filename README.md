@@ -1,51 +1,44 @@
 # logos-docs
 
-Documentation project for defining early technical requirements and architecture for **Logos**.
+The documentation site for **Logos**: how it works, the contracts between core
+and its modules, and guides for building modules and contributing. Published
+at <https://logoscore.github.io/logos-docs/>.
 
 ## Stack
 
-- [Astro](https://astro.build/) + [Starlight](https://starlight.astro.build/) (docs framework)
-- [Tailwind CSS v4](https://tailwindcss.com/) (custom styling)
-- [Mermaid](https://mermaid.js.org/) diagrams (build-time rendered via `astro-mermaid`)
-- Full-text search via Pagefind (built in to Starlight)
-- GitHub Actions + GitHub Pages
+- [Astro](https://astro.build/) + [Starlight](https://starlight.astro.build/)
+- [Tailwind CSS v4](https://tailwindcss.com/) for the site's own styling
+  (monochrome: Tailwind's neutral scale)
+- [Mermaid](https://mermaid.js.org/) diagrams through `astro-mermaid`, which
+  renders them **in the browser**: the build does not check them
+- Full-text search by Pagefind, built into Starlight
+- GitHub Actions and GitHub Pages
 
-## Local Development
+## Working on the docs
 
 ```bash
 npm install
-npm run dev      # http://localhost:4321/logos-docs/
+npm run dev               # http://localhost:4321/logos-docs/
+npm run check:diagrams    # every Mermaid diagram parses
+npm run build             # the static site, in ./dist
+npm run check:links       # every internal link and anchor in ./dist resolves
 ```
 
-Production build (what CI runs):
+Do not run `npm run build` while the dev server runs: it deletes `.astro/`
+under it. If you did, run `npx astro sync` and touch the pages you edited.
 
-```bash
-npm run build    # outputs static site to ./dist
-npm run preview  # preview the production build locally
-```
+Conventions (page anatomy, status notes, links, diagrams, what to keep in
+step) are on the site: [Writing the Docs](https://logoscore.github.io/logos-docs/contributing/writing-the-docs/).
 
-## Project Structure
+## Structure
 
-- `astro.config.mjs`: site configuration — base path, i18n (en/uk), sidebar, integrations.
-- `src/content/docs/`: Markdown content. English at the root, Ukrainian under `uk/`.
-- `src/content.config.ts`: Starlight docs collection definition.
-- `src/styles/global.css`: Tailwind + Starlight theme layer.
-- `.github/workflows/deploy-docs.yml`: automated build + deploy to GitHub Pages.
-
-## Internationalization
-
-- English is the default locale and is served from the site root (`/`).
-- Ukrainian lives under `/uk/`. Each English page `src/content/docs/<slug>.md` has a
-  Ukrainian counterpart at `src/content/docs/uk/<slug>.md`.
-- The language switcher in the header is provided automatically by Starlight.
-
-## Publish on GitHub Pages
-
-1. Create an empty GitHub repository named `logos-docs`.
-2. Confirm `site` and `base` in `astro.config.mjs` match the Pages URL.
-3. Commit and push to `main`.
-4. In `Settings -> Pages`, ensure the source is `GitHub Actions`.
-
-After the first successful workflow run, the site URL will be:
-
-`https://logoscore.github.io/logos-docs/`
+- `src/content/docs/`: the pages, in Markdown. Every page needs a `title` in
+  its frontmatter.
+- `astro.config.mjs`: the site's configuration: base path, the sidebar
+  (update it when you add, move or rename a page), and redirects from retired
+  pages.
+- `src/styles/`: the theme (`global.css`) and the grayscale code theme.
+- `src/overrides/`: Starlight components the site replaces.
+- `scripts/`: the diagram and link checks.
+- `.github/workflows/deploy-docs.yml`: on every push to `main`, the checks,
+  the build, and the deploy to GitHub Pages.

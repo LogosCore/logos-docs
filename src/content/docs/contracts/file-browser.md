@@ -187,7 +187,7 @@ command and params, as from a listing.
   of any size, taken as they come; an `ls`'s own view is made from its
   first.
 - **Why a machine, not a session.** Sessions come and go (restarts,
-  persisted sessions replaced, a second implant on the same host); the files
+  persisted sessions replaced, a second minion on the same host); the files
   are the machine's. `machine_id` was asked for this.
 - **Why the latest listing wins.** A view per host user is truer to what each
   can see, but most hosts are one or two users, and an operator usually

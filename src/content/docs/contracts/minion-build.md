@@ -2,13 +2,6 @@
 title: "Minion Build"
 ---
 
-:::note[Payload crypto]
-Everything on this page is built (the protocol types, factory-core, core, the
-web app, and BOB as the reference factory). Of payload crypto, core generates a
-minion's keys for its factory's suite and sends them in the build; encrypting
-and decrypting minion traffic waits for the payload crypto contract.
-:::
-
 Factories build minions. What a factory can produce, and what each build needs,
 depends on the factory: one builds Windows services and Linux binaries, another
 only scripts. So **each factory declares it**, as a **build schema** sent at
@@ -22,10 +15,14 @@ the factory to build.
 flowchart LR
     F[Factory instance] -- "module.register: build schema" --> CORE[Core]
     OP[Operator] -- "target, commands, values, files, connections" --> CORE
-    CORE -- "factory.build: + build id, connections" --> F
+    CORE -- "factory.build: + build id, keys, connections" --> F
     F -- "progress, result" --> CORE
-    F -- "artifact upload" --> S3[(SeaweedFS)]
+    F -- "build files, artifact: core's links" --> CORE
+    CORE -- "stores them" --> S3[(SeaweedFS)]
 ```
+
+How to write one with the Go SDK is [Writing a
+Factory](../../guides/writing-a-factory/).
 
 Builds are **asynchronous**: the factory accepts a build at once, reports
 progress while it works, and sends the result when it is done. A build can take
@@ -147,7 +144,7 @@ Declared in `module.register` under `build`:
 | `fields[]` | Build parameters shared by every target. Field specs as in a [management manifest](../module-management/#fields), plus the [types below](#field-types-for-builds). |
 | `targets[]` | What the factory can produce, at least one. |
 | `commands[]` | Optional. What the minions can do. Operators pick each build's [commands](#commands) from its target's. |
-| `error_codes[]` | Optional. What the minions' exit codes mean: the factory's own [minion error codes](#minion-error-codes), for operators to look up. |
+| `error_codes[]` | Optional. What the minions' exit codes mean: the factory's own [minion error codes](#minion-error-codes), for operators to look up. Protocol v0.51.0; factory-core v0.4.1 requires v0.50.0, so a factory that declares them requires v0.51.0 itself. |
 | `failover` | Optional, `false` by default. The minions honor a build's [failover settings](../channel-core-connections/#failover): they move between their connections on their own as those say. Without it the settings still reach the factory, which may ignore them; the build form says so. |
 | `max_tasks` | Optional, `false` by default. The minions' limit of tasks at once is the operators' to set: a build says how many (`max_tasks` in the request, under Commands in the build form), their `hello` says it, and core changes it live ([Max tasks](../minion-messages/tasks-and-results/#max-tasks)). Without it a build has no limit to set, and a minion runs as many as its factory made it (one at a time, say), which its `hello` may report but nothing changes. |
 | `compression` | Optional. The algorithms the minions inflate: `["deflate"]`, the one the protocol has. A build packs its messages with it unless the operator turns that off (`compression` in the request, Compress messages in the build form): core packs the items it sends the minion where that pays, and the minion may pack its own ([Compression](../minion-messages/wire-format/#compression)). Without it core packs nothing for its minions. Protocol v0.47.0; BOB declares it. |
@@ -309,36 +306,10 @@ does when they build it: a minion built for one job carries nothing more.
   the session's Tasks do ([Max tasks](../minion-messages/tasks-and-results/#max-tasks)).
   A schema that declares any of the four is refused
   (`protocol.IsCoreCommand`), and factories do not implement them.
-- A console line that starts with `/` is **the console's own**, run in the
-  browser for the operator typing it: never a task, so no minion and no
-  session's history sees it. A command's `id` starts with a letter, so no
-  build's command can be one. `/fx [lightning|inferno|off]` sets the
-  prompt's effect, kept with the operator's sessions layout (`promptFx`) for
-  every session; none shows when the system asks for less motion. Text
-  pasted or cut, more than a letter at once, plays along the text it moved,
-  as if its letters were typed or deleted at once. Lightning: a charge that
-  builds as keys come fast (as inferno's heat) and runs down in a couple of
-  seconds, crackling across the line's text while it is up (short arcs over
-  its letters, sparks popping off them, more and longer the higher it is),
-  not piled on the key; a bolt at the caret as a key is typed, a little
-  taller and forked as the charge builds; arcs in a set (two to five, each
-  wandering, creased and bright its own way) across a word as it is
-  completed (Tab) and sweeping along a line recalled from the history (↑
-  back, ↓ on; past the oldest, a fizzle that halves the charge), and the
-  same sweep along text pasted (its sparks flying up) or cut (falling); a
-  strike of two to four bolts from the top of the console as a line runs,
-  its flash soft and never three a second. Inferno: fire as the On Fire mark
-  burns it (the Doom fire, in its colors, painted crisp) along the bottom of
-  the console, but quick, as light stuff burns: small puffs that flash up
-  and are gone in a fifth of a second, heat coming into it where things
-  happen: a puff at the caret as a key is typed, taller as the heat builds
-  (keys coming fast, cooling in a couple of seconds), a low bed of fire
-  along the bottom while it is hot; a fuse burning along a completed word or
-  a recalled line; smoke and ash for a key deleted; flames off the letters
-  of text pasted, heating as typing does; flame, smoke and ash where text
-  cut was; a line that runs flashes all at once, its letters glowing hot and
-  burning out in a white-hot puff off the whole line; steam for one that
-  does not read, which halves the fire and the heat.
+- A console line that starts with `/` (`/fx`, the prompt's effect) is
+  **the console's own**, run in the browser for the operator typing it:
+  never a task, so no minion and no session's history sees it, and no
+  command can be one, since a command's `id` starts with a letter.
 - **A task names its command by `op` and its args by their params' `num`**
   ([Tasks](../minion-messages/tasks-and-results/#tasks)), so a minion needs
   no command or param names: it dispatches on numbers the factory compiled
@@ -772,7 +743,7 @@ and when it failed:
   build; the log matters most when it fails.
 - `error.code` is the factory's own, e.g. `compile_failed`: a slug,
   `^[a-z0-9][a-z0-9_.-]{0,62}$`. factory-core reports some
-  [codes of its own](../../implementing-a-module/#results-and-failures).
+  [codes of its own](../../guides/writing-a-factory/#results-and-failures).
 - Limits: up to 32 warnings, each, like `error.message`, at most 1,000 bytes;
   the log at most 64 KiB; the artifact's `filename` a plain file name (no
   path) of 1 to 255 bytes; `sha256` 64 lowercase hex digits. Core refuses a
@@ -883,8 +854,8 @@ build is cancelled first, on its factory too. The build record, its artifact
 and the minion it made are removed for good; the operation's build files stay,
 and become deletable once no build refers to them. A minion of a deleted build
 that is already out can no longer open a session: core no longer has its
-keys. Artifacts will hold the minion's
-keys, so only operators download them, always as an attachment.
+keys. An artifact holds the minion's keys, so only operators download it,
+always as an attachment.
 
 ## Who can do what
 
@@ -1041,9 +1012,12 @@ downloads an artifact.
   factory-core, so only the SDK can count them, refuse new ones or change how
   many run at once. It serves that management itself, with the same keys on
   every factory, rather than leaving each factory to expose its internals.
-- **Core owns identity and keys.** Core generates the build id, and will
-  generate its keys with payload crypto. The keys will only pass through the
-  factory into the artifact: never in a form or a build record.
+- **Core owns identity and keys.** Core generates the build id and, for its
+  own suite, the minion's keys; for a suite of the factory's own, the
+  factory makes them over its link, and core keeps them. The keys pass
+  through the factory into the artifact, and the factory keeps them nowhere
+  else; core holds them for the minion's sessions. No form takes them: a
+  build pasted from its JSON gets keys of its own.
 - **Files and artifacts through core.** A build's links are core's own, paths
   on the address the factory already reaches core at, signed for that build:
   a factory needs no storage credentials and reaches only the objects of the
@@ -1089,9 +1063,8 @@ downloads an artifact.
   what its minions can do, and the operator picks what each one does, the way
   they pick its target and values. What a minion can do is then known before
   it is built, from the build record, rather than reported by the factory
-  afterwards. How tasks reach a command and what comes back belongs to the
-  tasking contract, not written yet; `params` are declared now so a command
-  is described whole.
+  afterwards. How tasks reach a command and what comes back is in [Tasks
+  and Results](../minion-messages/tasks-and-results/).
 - **`file` only in build schemas.** Only a build hands files to a module,
   and a command hands them to its minion. A property or an endpoint holding
   a file would need its own way to deliver it.

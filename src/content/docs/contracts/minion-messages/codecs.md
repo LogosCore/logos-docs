@@ -3,19 +3,11 @@ title: "Codecs"
 ---
 
 :::note[Status]
-Implemented and released on 2026-11-09: the protocol v0.48.1 (the
-schema's and the targets' `crypto`, `envelope` and `codec`, the build
-request's `envelope`, the JSON envelope, packing in either envelope and the
-factory link's frames: [In the protocol package](#in-the-protocol-package)),
-core ([In core](#in-core): core's JSON envelope, the factory link and every
-message through it) and factory-core v0.3.0 (`pkg/codeclink`: a factory
-gives `factory.Config` a `Codec` and `CoreURL`, and Run keeps the link).
-Run end to end that day through [Raven](#raven-the-test-factory) v0.1.2, a
-test factory translating both layers: on the dev stack (its keys made at
-the offer, `hello` and `echo`, the factory stopped and back) and on
-Windows 11 under Windows PowerShell 5.1. What no module uses yet: core's
-JSON envelope (core's tests alone speak it), and a factory's codec outside
-a test: every other build speaks core's CBOR and suite.
+Built and released in the protocol package, core and factory-core
+(`pkg/codeclink`). Not yet used: core's JSON envelope, which core's tests
+alone speak, and a factory's own codec outside a test. The one factory that
+translates is [Raven](#raven-the-test-factory), a test factory: every other
+build speaks core's CBOR and suite.
 :::
 
 A minion message becomes bytes in two layers. Its **envelope** writes the
@@ -334,8 +326,7 @@ core starts waits, and what the minion sends is refused.
 
 ## In the protocol package
 
-`logos-golang-protocol`'s `protocol` package, v0.48.1 (v0.48.0 did not build
-for 32-bit platforms):
+`logos-golang-protocol`'s `protocol` package:
 
 | Go | What |
 |---|---|
@@ -348,7 +339,7 @@ for 32-bit platforms):
 
 ## In core
 
-`logos-core`, released 2026-11-09 (9c68d41, a645db7):
+`logos-core`:
 
 | Where | What |
 |---|---|
@@ -361,7 +352,7 @@ for 32-bit platforms):
 
 ## Raven: the test factory
 
-`logos-raven` (v0.1.1) runs the mechanics end to end with a minion that cannot speak
+`logos-raven` (v0.2.0) runs the mechanics end to end with a minion that cannot speak
 core's codec: PowerShell scripts (Windows PowerShell 5.1, PowerShell 7)
 that check in through the HTTP channel (`reverse-call`) and do two things,
 `hello` and `echo`. Both layers are Raven's:

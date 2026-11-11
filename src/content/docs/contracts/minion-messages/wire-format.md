@@ -31,8 +31,10 @@ new ones staging gives a process ([Sessions](../sessions/#staging)).
 
 `id` is the 16 raw UUID bytes of the id the message is sent under: the build
 id, a temporary id or a session id ([Sessions](../sessions/#staging)). The tag
-covers it, but the frame does not carry it: the transport does, where it
-carries a build id, and the channel hands it to core in `Logos-Build-Id`.
+covers it, but the frame does not carry it: the transport does, and the
+channel hands it to core beside the frame: `Logos-Build-Id` on the sync
+call, key 1 of a connection socket's frame, key 3 of the control link's
+`call` and `answer`.
 
 A receiver checks, in this order, and drops the frame at the first failure:
 
@@ -73,8 +75,14 @@ core-message = {        ; core → minion
                         ;   unix seconds; on every message with id
 }
 
-minion-item = stage / hello / sleep_update / conn_update / get_tasks / max_tasks / feedback / result / chunk / ack / err
-core-item   = stage_response / hello_response / rehello / task / cancel / max_tasks / resume / poll / chunk / ack / err
+minion-item = stage / hello / sleep_update / conn_update / get_tasks / max_tasks
+            / feedback / identity / result / chunk / ack / err
+            / tunnel / tunnel_reply / tunnel_data / tunnel_ack / tunnel_close
+            / tunnel_datagram / tunnel_listen / tunnel_ctl / delegate / packed
+core-item   = stage_response / hello_response / rehello / task / cancel / max_tasks
+            / resume / poll / reack / chunk / ack / err
+            / tunnel / tunnel_reply / tunnel_data / tunnel_ack / tunnel_close
+            / tunnel_datagram / tunnel_ctl / delegate / packed
 
 msg-id  = bstr .size 16
 task-id = bstr .size 16
@@ -129,15 +137,9 @@ seconds, so a minion parses integers only.
 
 ## Compression
 
-:::note[Status]
-Released on 2026-11-09: the protocol v0.47.0 (`Pack`, `Unpack`,
-`UnpackItems`, the build schema's and the build request's `compression`),
-core (it packs and takes packed items; the build form's Compress messages)
-and BOB v0.33.0, whose factory declares `deflate` and whose minion inflates
-and packs. Dumbo's pages and the SSH channel declare none yet. Run end to
-end that day: a task's 400-character command went packed to the
-minion, and 200 000 bytes of output came back packed, in messages of 26 KB.
-:::
+The protocol package (`Pack`, `Unpack`, `UnpackItems`) and core pack and
+take packed items. BOB's factory declares `deflate`, and its minion inflates
+and packs; Dumbo, Raven and the SSH module declare no compression.
 
 A sender may send any item **packed**: deflated, inside a `packed` item,
 which the receiver inflates and takes as the item it holds, in its place in
@@ -208,16 +210,28 @@ who would rather show no such signal turns compression off for the build.
 A minion's messages carry no time: core stamps each with its own receive time. Core's messages that start an exchange say its clock (`at`), for a minion that cannot remember ids (below).
 
 - **A message whose `id` core has seen gets the reply it got**, for 10
-  minutes (a reply of at most 64 KiB): a request whose reply was lost on
-  the way is sent again as it was, the same message, and nothing in it runs
-  twice. A minion sends a message again only so; a new message has a new
-  `id`.
+  minutes (a reply of at most 64 KiB; one core had nothing to say to gets
+  its 204 again): a request whose reply was lost on the way is sent again
+  as it was, the same message, and nothing in it runs twice. A minion sends
+  a message again only so; a new message has a new `id`.
 - **Core refuses a message whose `id` it has seen** in the last 24 hours,
-  past that: the sync call answers **409**, and the channel answers its
-  client as for any failure (the HTTP channel's 404); over a connection
-  socket core drops it and answers nothing. Only a captured message sent
-  again meets this, and it learns nothing from the answer: a reply core
+  when it no longer keeps that message's reply (past the 10 minutes, or a
+  reply over 64 KiB): the sync call answers **409**, and the channel
+  answers its client as for any failure (the HTTP channel's 404); over a
+  connection socket core drops it and answers nothing. A captured message
+  sent again meets this, and learns nothing from the answer: a reply core
   kept is sealed for the minion.
+- **What a minion does after a lost reply.** It keeps its session and sends
+  what was not delivered again: the same message, within the 10 minutes,
+  or the same items in a new message under a new `id`, which every item
+  allows ([How an exchange
+  goes](../tasks-and-results/#how-an-exchange-goes)). A message core
+  refuses as a replay goes again as a new message. Two first messages
+  differ: a `stage` sent as a new message gets a new temporary id (the
+  first expires unused), and a `hello` under the build id sent as a new
+  message opens a second session, so it goes again as the same message. A
+  `hello` again under the same temporary id gets the session the first
+  opened, within 10 minutes of it ([Sessions](../sessions/#hello)).
 - **A reply is fresh** when its `re` is the `id` of a request the receiver is
   still waiting on. An old reply, replayed, matches nothing and is dropped.
 - **The direction byte** stops a frame from being turned around: both sides
@@ -360,12 +374,13 @@ keys](../sessions/#stage), and the data of each of core's
 | Integrity levels | `low` 1, `medium` 2, `high` 3, `system` 4, `root` 5, `user` 6 | [Sessions](../sessions/#hello) |
 | Identity scopes | the session's 1, one task's 2 | [Identity](../identity/) |
 | Identity ways (`how`) | impersonation 1, network 2, become 3 | [Identity](../identity/) |
-| Machine id sources | `smbios-uuid` 1 … `ephemeral` 10 | [Sessions](../sessions/#machine-identity) |
+| Machine id sources | `smbios-uuid` 1 … `ephemeral` 10, `ssh-host-key` 11 | [Sessions](../sessions/#machine-identity) |
+| Feedback levels | warning 1, error 2 | [Sessions](../sessions/#feedback) |
 | Entry types | `dir` 1, `file` 2, `link` 3, `other` 4 | [Listings](../tasks-and-results/#listings) |
 | Listing errors | denied 1, not found 2, other 3 | [Listings](../tasks-and-results/#listings) |
 | Tunnel results | open 0, refused 1, host unreachable 2, network unreachable 3, timed out 4, not allowed 5, failed 6, unsupported 7, not found 8, denied 9, in use 10 (from 0) | [Tunnels](../tunnels/#streams) |
 | Tunnel close reasons | done 1, reset 2, no such stream 3, task ended 4 | [Tunnels](../tunnels/#streams) |
-| Tunnel open kinds | unix socket 1, named pipe 2, process 3, accept 4 | [Tunnels](../tunnels/#streams) |
+| Tunnel open kinds | unix socket 1, named pipe 2, process 3, accept 4, ICMP 5 | [Tunnels](../tunnels/#streams), [VPN front](../../vpn-front/#icmp) |
 | Tunnel signals | interrupt 1, terminate 2, kill 3 | [Tunnels](../tunnels/#controls) |
 | Delegate steps | sync 1, reply 2, call 3, open 4, answer 5, frame 6, close 7 | [Delegation](../delegation/#the-item) |
 | Delegate close reasons | closed 1, no such connection 2, task ended 3 | [Delegation](../delegation/#the-item) |
@@ -427,13 +442,18 @@ the host shows it) and data are named as they come.
   than a truncated one and leaves nothing to argue about.
 - **Why the id is in the tag.** A frame is valid only under the id it was
   sent with, whatever a channel does to the header.
-- **Why two formats, by direction.** Only three item types go both ways, so a
-  minion message with a `task`, or a core message with a `result`, is simply
-  invalid: a frame turned around fails to parse even before `dir` is checked.
-  A minion writes only minion messages and reads only core messages, so its
-  codec covers half the items. Who starts an exchange (`id` or `re`) is kept
-  apart from direction, so the same formats serve every [connection
-  kind](../../../module-types/#connection-kinds): the minion starting, core starting, or both.
+- **Why two formats, by direction.** Each item type has its direction:
+  seventeen go one way (`stage`, `hello`, `get_tasks`, `result` and the
+  rest of the minion's; `task`, `cancel`, `reack` and the rest of core's),
+  and thirteen go both ways (`ack`, `chunk`, `err`, `max_tasks`, the tunnel
+  items but `tunnel_listen`, `delegate` and `packed`). An item of the other
+  direction is not taken: core answers a minion's `task` with
+  `unknown_item`. A minion writes only minion messages and reads only core
+  messages, so its codec covers the items of its direction. The direction
+  byte, not the parse, stops a frame turned around. Who starts an exchange
+  (`id` or `re`) is kept apart from direction, so the same formats serve
+  every [connection kind](../../../module-types/#connection-kinds): the
+  minion starting, core starting, or both.
 - **Why so little time in messages.** Core trusts only its own clock, so
   it stamps messages as they arrive. The sync call is request and
   response, so a minion needs no clock either to know a reply is fresh: it

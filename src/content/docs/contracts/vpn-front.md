@@ -2,16 +2,9 @@
 title: "VPN Front"
 ---
 
-:::note[Released]
-Wave 4 of the tunnels' [Future cases](../minion-messages/tunnels/#future-cases),
-released 2026-11-08: protocol v0.44.0, BOB v0.31.0 (ICMP, and its half of
-the timing, [change 9](../minion-messages/tunnels/#9-timing-that-follows-the-link)),
-core, and `logos-vpn` v0.1.1 (v0.1.0's tag released no binaries). The
-one-line install ([Installing](#installing)) and a self-signed core's pins
-released 2026-11-09: `logos-vpn` v0.2.1 (v0.2.0's `install.ps1` used
-`Get-FileHash`, which Windows PowerShell 5.1 started from PowerShell 7
-lacks), core, logos-nginx. Not yet run on a real network: the user tests
-it once a machine with networks of its own is at hand.
+:::note[Status]
+Built: protocol v0.44.0, BOB v0.31.0, core, and `logos-vpn` (v0.2.2 today,
+with its one-line [install](#installing)). Not yet run on a real network.
 :::
 
 A `tunnel` whose front is **`vpn`** routes an operator's machine into the

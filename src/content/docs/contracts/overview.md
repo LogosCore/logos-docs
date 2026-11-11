@@ -2,34 +2,35 @@
 title: "Contracts Overview"
 ---
 
-This section is the canonical home for the **contracts** between modules and the
-core Server. A contract defines the wire format, transport, and semantics that
-two components rely on to interoperate without sharing implementation.
+This section is the canonical home for the **contracts** between modules and
+core. A contract defines the wire format, transport, and semantics that two
+components rely on to interoperate without sharing implementation. To build a
+module against them, start with the guides:
+[Implementing a Module](../../implementing-a-module/), then
+[Writing a Channel](../../guides/writing-a-channel/) or
+[Writing a Factory](../../guides/writing-a-factory/).
 
-## Two communication surfaces
+## How modules reach core
 
-Logos modules talk to core over two distinct surfaces. Each contract lives on
-exactly one of them.
-
-| Surface | Transport | Carries | Pattern |
+| Path | Transport | Carries | Contract |
 |---|---|---|---|
-| **Data plane** | HTTP (`POST /api/channel/sync`) | Minion traffic — opaque encrypted blobs | Request/response |
-| **Control plane** | RabbitMQ (AMQP) | Module management, coordination, events | RPC + pub/sub |
+| **The sync call** | HTTP, `POST /api/channel/sync` | a minion's message per request, and core's reply in the response (`reverse-call`) | [HTTP Sync](../channel-core-sync/) |
+| **Connection sockets** | a WebSocket per minion connection (`/api/channel/connection`) | sealed frames both ways (`reverse-persistent`, `bind-persistent`) | [Connections](../channel-core-connections/) |
+| **The control link** | a WebSocket per channel instance (`/api/channel/link`) | core's calls and opens (`bind-call`, opening `bind-persistent`) | [Connections](../channel-core-connections/) |
+| **The factory link** | a WebSocket per factory instance that translates a codec (`/api/factory/link`) | messages to translate, and keys | [Codecs](../minion-messages/codecs/) |
+| **The control plane** | RabbitMQ (AMQP) | lifecycle, management, the live log tail, builds, events | [AMQP Envelope](../amqp-envelope/), [Routing](../amqp-conventions/) |
+| **Build files** | HTTP, links core hands each build | a build's files to its factory, its artifact to core | [Minion Build](../minion-build/#build-files) |
 
-- The **data plane** moves minion payloads. It is deliberately minimal and
-  plaintext-blind: channels deliver the build id and its ciphertext, the
-  ciphertext as the raw body of the sync call, and never decrypt. Core cares
-  only about that call — how a channel extracts them from its transport is the
-  channel's business.
-  See [Channel ↔ Core: HTTP Sync](../channel-core-sync/).
-- The **control plane** carries everything else — module lifecycle, channel
-  management, build coordination, health/events. It never carries minion
-  ciphertext. It is built on a shared [AMQP envelope](../amqp-envelope/) and
-  [routing conventions](../amqp-conventions/).
-
-Files take neither surface: a factory downloads a build's files from, and
-uploads its artifact to, core over HTTP, through the links core hands it
-with the build ([Minion Build](../minion-build/#build-files)).
+- The first three are the **data plane**. They carry a minion's sealed frames
+  and the id each was sent under; a channel never opens them. The one
+  exception is an [agentless channel](../agentless-channels/), which acts as
+  the minion and gets the keys of the ids it serves.
+- The **control plane** carries everything else and never carries minion
+  ciphertext. A build request does carry a minion's key material to its
+  factory (`crypto`), which builds it into the artifact.
+- The modules open every path: core never connects to a module. An
+  operator's VPN client is the one other party that reaches core with minion
+  traffic ([VPN Front](../vpn-front/)).
 
 ### The control plane is bidirectional
 
@@ -47,44 +48,45 @@ servers depending on the operation:
 | Lifecycle events | core → any subscriber | — (pub/sub on `logos.events`) | `module.registered`, `.deregistered`, `.declared_dead`, `.blocked`, `.unblocked`, `.deleted` |
 
 Registration bootstraps everything else: core cannot issue a management RPC to a
-module until that module has registered itself. See
+module, nor take its traffic, until that module has registered itself. See
 [Module Lifecycle](../module-lifecycle/).
 
 ```mermaid
 graph LR
-    CH[Channel Module]
-    CS[Core Server]
-    IP[Factory]
+    CH[Channel module]
+    CS[Core]
+    FA[Factory module]
 
-    CH -- "HTTP sync: build id + ciphertext" --> CS
-    CH -- "AMQP RPC: register / heartbeat" --> CS
+    CH -- "sync call, control link, connection sockets" --> CS
+    CH -- "AMQP: register, heartbeat, log batches" --> CS
     CS -- "AMQP RPC: management, log tail" --> CH
-    CH -- "AMQP: log batches" --> CS
-    IP -- "AMQP RPC: register / heartbeat, build progress / result" --> CS
-    CS -- "AMQP RPC: factory.build / cancel, management, log tail" --> IP
-    IP -- "AMQP: log batches" --> CS
+    FA -- "AMQP: register, heartbeat, build progress and result" --> CS
+    CS -- "AMQP RPC: factory.build, cancel, management, log tail" --> FA
+    FA -- "HTTP: build files, artifact. Factory link: codecs" --> CS
 ```
 
 ## Shared rules
 
-Every contract in this section, regardless of surface, follows the same baseline:
+Every contract in this section follows the same baseline:
 
-- **Versioning** — messages carry an explicit `version`. RPC servers reject
-  unknown major versions and tolerate additive minor changes. (Core's sync
-  endpoint does not check `version` yet.)
+- **Versioning** — control-plane messages carry an explicit `version`: RPC
+  servers reject unknown major versions and tolerate additive minor changes.
+  Minion messages carry their format's version (`v`,
+  [Wire Format](../minion-messages/wire-format/)); connection and build
+  schemas carry theirs (`schema_version`) and the module's own (`version`).
 - **Correlation** — every enveloped message carries a `message_id`; RPC
-  exchanges also carry a `correlation_id` to tie a reply to its request. HTTP
-  sync answers in the same response, by `id`. Log batches travel bare, without
+  exchanges also carry a `correlation_id` to tie a reply to its request. The
+  sync call answers in its own response. Log batches travel bare, without
   the envelope, keyed by their stream.
-- **Idempotency** — processing is idempotent where possible: an operation is
-  keyed by what it acts on (a build's `build_id`, an action's
-  `invocation_id`, a configuration `revision`, a log `stream_id`), and the data
-  plane drops a `message_id` it has seen.
-- **Crypto boundary** — minion payload crypto belongs to core Logos services only
-  (or the build's own factory, when it translates its suite: [Codecs](../minion-messages/codecs/)).
-  Control-plane contracts never transport minion ciphertext, and channels stay
-  plaintext-blind on the data plane. A build request carries a minion's key
-  material to its factory (`crypto`), which writes it into the artifact.
+- **Idempotency** — an operation is keyed by what it acts on (a build's
+  `build_id`, an action's `invocation_id`, a configuration `revision`, a log
+  `stream_id`). A minion's message sent again gets the reply it got, and a
+  replay is refused
+  ([Freshness and replay](../minion-messages/wire-format/#freshness-and-replay)).
+- **Crypto boundary** — core holds minions' keys and seals and opens their
+  frames, or the build's own factory, when it translates its suite
+  ([Codecs](../minion-messages/codecs/)). Channels stay blind, but for an
+  agentless one acting as the minion.
 - **Modules describe themselves; core does not interpret them** — what a
   module can be managed on, its status values, action results and log records
   are declared or produced by the module and shown by core as they are. Core
@@ -92,29 +94,26 @@ Every contract in this section, regardless of surface, follows the same baseline
 
 ## Contracts in this section
 
-| Contract | Surface | Parties | Status |
+| Contract | What it covers | Parties | Status |
 |---|---|---|---|
-| [HTTP Sync](../channel-core-sync/) | Data plane | Channel ↔ Core | Implemented; the channel is not authenticated yet |
-| [Connections](../channel-core-connections/) | Data plane: the connection kinds where core starts exchanges, the control link and connection sockets | Channel ↔ Core | `reverse-persistent`, `bind-call` (the control link's `call`, targets) and `bind-persistent` (the link's `open`, policies) implemented; fallback and `add_connection` a draft |
-| [Agentless Channels](../agentless-channels/) | Data plane: `bind` kinds whose channel acts as the minion, and gets the keys and the session's acting task with each call and open | Channel ↔ Core; Factory → Core | Implemented: the SSH module (`logos-ssh`); its tunnels since v0.6.0 (wave 5) |
-| [Module Lifecycle](../module-lifecycle/) | Control plane | Module (client) → Core (server) | Implemented |
-| [Module Management](../module-management/) | Control plane | Core (client) → Module (server) | Prototype |
-| [Module Logs](../module-logs/) | Control plane | Core ↔ Module | Prototype |
-| [Minion Connection Schema](../minion-connection/) | Control plane | Channel → Core | Implemented |
-| [Minion Build](../minion-build/) | Control plane | Core ↔ Factory | Implemented; payload crypto pending |
-| [Credentials](../credentials/) | Credential fields in connection and build schemas: what a module gets, and the logins a channel reports | Core → Channel, Factory, Minion | Implemented; the SSH channel's targets first |
-| [Minion Messages](../minion-messages/) | Data plane, inside the ciphertext | Minion ↔ Core | Implemented (`v` 3: numbered keys, values and commands, `rehello`); [tunnels](../minion-messages/tunnels/) (SOCKS with UDP, port forwards through a minion: protocol v0.36.0, BOB v0.26.0; reverse port forwards, the minion listening, over TCP and UDP, and stop when idle: protocol v0.37.0, BOB v0.27.0; the actions `tunnel` and `reverse_tunnel` with core's fronts (an HTTP proxy, reverse SOCKS), `opens`, `unsupported`, bytes with the open, stream numbers in blocks, timing that follows the link and the bandwidth cap: protocol v0.38.0, BOB v0.28.0; forwards to unix sockets and named pipes, a source address and TLS to the destination: protocol v0.39.0, BOB v0.29.0; a terminal front (processes in a PTY or a ConPTY, raw on the port or in the web app), SOCKS5 BIND and `tunnel_ctl`: protocol v0.40.0, BOB v0.30.0; `stop_idle` one of core's params: protocol v0.41.0, BOB v0.30.1; reverse SOCKS dropped: protocol v0.42.0, BOB v0.30.2); [compression](../minion-messages/wire-format/#compression) (packed items, DEFLATE): protocol v0.47.0, BOB v0.33.0 |
-| [VPN Front](../vpn-front/) | Data plane: an operator's machine routed into a minion's networks, by `logos-vpn`, a client of core's, over a WebSocket of tunnel items; ICMP through a minion | VPN client ↔ Core; Core ↔ Minion | Implemented: protocol v0.44.0, BOB v0.31.0 (ICMP), `logos-vpn` v0.2.1 (installers, pins for a self-signed core); not yet run on a real network |
-| [Delegation](../minion-messages/delegation/) | Data plane: a minion serving a channel kind's transport for another minion, the channel's steps carried in its own messages | Minion ↔ Core | Implemented: protocol v0.46.0, core, BOB v0.32.0 (`delegate` and `reverse_delegate`: the TCP channel's three kinds), the TCP channel v0.2.0 |
-| [Codecs](../minion-messages/codecs/) | Data plane: how a message is written and sealed: core's envelopes (CBOR, JSON) and suite, or a factory's own, translated over a factory link | Core ↔ Factory | Built (released 2026-11-09: protocol v0.48.1, core, factory-core v0.3.0; Raven tests it) |
-| [Task Results and Actions](../task-results-and-actions/) | Data plane: a task's `data`; what core runs a command for | Minion → Core, named in the build schema | Implemented: results `dir_listing`, `dir_walk`, `volumes`, `file_download`, `file_upload`, `file_stream`; actions `list_dir`, `walk_dir`, `list_volumes`, `download_file`, `upload_file`, `upload_stream`, `stream_file`, `delete_path` |
-| [File Browser](../file-browser/) | A machine's file system, as tasks saw it | Core, from tasks' results | Implemented |
+| [AMQP Envelope](../amqp-envelope/) and [Routing](../amqp-conventions/) | The control plane's envelope, exchanges, queues and routing keys | Core ↔ Module | Built |
+| [Module Lifecycle](../module-lifecycle/) | Register, heartbeat, deregister; blocking and deleting instances | Module → Core | Built |
+| [Module Management](../module-management/) | Configuration, actions, status values | Core → Module | Prototype |
+| [Module Logs](../module-logs/) | The live log tail | Core ↔ Module | Prototype |
+| [HTTP Sync](../channel-core-sync/) | The sync call | Channel ↔ Core | Built; channels are not authenticated yet |
+| [Minion Connection Schema](../minion-connection/) | What a minion is given to reach a channel, per connection kind | Channel → Core | Built |
+| [Connections](../channel-core-connections/) | The connection kinds, the control link, connection sockets, targets, failover | Channel ↔ Core | Built; `add_connection` a draft |
+| [Agentless Channels](../agentless-channels/) | `bind` kinds whose channel acts as the minion | Channel ↔ Core | Built: the SSH module |
+| [Minion Build](../minion-build/) | Build schemas, builds, the minion config, minion error codes | Core ↔ Factory | Built |
+| [Credentials](../credentials/) | Credential fields, what a module gets, the logins a channel reports | Core → Channel, Factory, Minion | Built |
+| [Minion Messages](../minion-messages/) | The minion's protocol: the wire format, sessions, tasks, files, identity | Minion ↔ Core | Built (`v` 3) |
+| [Tunnels](../minion-messages/tunnels/) | Streams a minion opens from its host, behind core's fronts | Minion ↔ Core | Built |
+| [VPN Front](../vpn-front/) | An operator's machine routed into a minion's networks | VPN client ↔ Core ↔ Minion | Built; not yet run on a real network |
+| [Delegation](../minion-messages/delegation/) | A minion serving a channel's transport for other minions | Minion ↔ Core | Built |
+| [Codecs](../minion-messages/codecs/) | Core's envelopes and suite, or a factory's own, translated over its factory link | Core ↔ Factory | Built |
+| [Task Results and Actions](../task-results-and-actions/) | A task's data, and the commands core runs for its own views | Minion → Core | Built |
+| [File Browser](../file-browser/) | A machine's file system as tasks saw it | Core, from tasks' results | Built |
 
-To build a module against these contracts, see
-[Implementing a Module](../../implementing-a-module/).
-
-Foundational specs the control-plane contracts build on:
-
-- [AMQP Message Envelope](../amqp-envelope/) — the shared base envelope.
-- [AMQP Routing Conventions](../amqp-conventions/) — exchange/queue/routing-key naming.
-
+A page about a design that is agreed but not built yet opens with a
+**Draft** note, and one built in part with a **Status** note
+([Writing the Docs](../../contributing/writing-the-docs/)).

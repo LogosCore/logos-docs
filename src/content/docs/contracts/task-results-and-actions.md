@@ -91,6 +91,8 @@ A command names them in the [build schema](../minion-build/#commands):
 | [`switch_connection`](#switch_connection) | `conn` (int) | none | a session's connection: Switch to |
 | [`tunnel`](#tunnel) | nothing of the command's; core adds `front`, `port`, `host`, `to`, `stop_idle`, `cap`, and where the command opens them `path`, `source`, `tls`, `program`, `args`, `rows`, `cols` | none | the session's commands: core opens an operational port, a SOCKS proxy, an HTTP proxy, a forward to `host:to` or a terminal in front |
 | [`reverse_tunnel`](#reverse_tunnel) | `bind` (string), `listen` (int); `udp` (bool) in a command that opens `udp`; core adds `host`, `to`, `stop_idle`, `cap` | none | the session's commands: the minion listens at `bind:listen`, core connects each connection there to `host:to` (with `udp`, sends each source's datagrams on) |
+| [`delegate`](#delegate) | nothing of the command's (each of its params has a default); core adds `stop_idle` | none | core, when a target that names the session as its delegate needs one; the session's commands |
+| [`reverse_delegate`](#reverse_delegate) | nothing (its params are the factory's: where it listens); core adds `stop_idle` | none | the session's commands |
 
 More come as commands need them (a process list, a screenshot); each gets
 a section here first, and a release of the protocol and core. Planned:
@@ -859,14 +861,22 @@ result; no place in the minion's max tasks.
 
 ## Changing the vocabulary
 
-A result only grows: a later version may add optional keys to its `data` or
-its entries, never remove one, change its meaning, or make it required. Core
-ignores keys it does not know, so a minion newer than core still fits. An
-action may only gain params core adds itself (the protocol's
-`CommandAction.Adds`: core puts them beside every command's own, and a
-factory declares none of them), so factories built before stay valid. A change that cannot be made that way
-is a new name (`dir_listing_v2`), and the old one stays for the minions
-already built.
+**For now, nothing stays for compatibility.** While Logos is before 1.0
+(the maintainers' decision of 2026-11-07), a result, an action, or one of
+their keys or params is renamed or removed without an alias, and every
+repository it touches (the protocol, core, the factories and their minions)
+moves to the change in the same release round; a build made before it is
+built again ([No backward compatibility, for
+now](../../contributing/changing-the-protocol/#no-backward-compatibility-for-now)).
+
+**Later, the rule is this one.** A result only grows: a later version may
+add optional keys to its `data` or its entries, never remove one, change
+its meaning, or make it required. Core ignores keys it does not know, so a
+minion newer than core still fits. An action may only gain params core adds
+itself (the protocol's `CommandAction.Adds`: core puts them beside every
+command's own, and a factory declares none of them), so factories built
+before stay valid. A change that cannot be made that way is a new name
+(`dir_listing_v2`), and the old one stays for the minions already built.
 
 ## Design notes
 

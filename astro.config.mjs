@@ -9,9 +9,10 @@ import { codeThemes } from "./src/styles/code-theme.mjs";
 export default defineConfig({
   site: "https://logoscore.github.io",
   base: "/logos-docs/",
-  // There is no home page: the site root opens the first sidebar page.
+  // Retired pages: their URLs lead to where their content went.
   redirects: {
-    "/": "/logos-docs/architecture/",
+    "/message-flow/": "/logos-docs/guides/writing-a-channel/",
+    "/message-flow-full/": "/logos-docs/contracts/minion-messages/",
   },
   vite: {
     plugins: [tailwindcss()],
@@ -28,7 +29,7 @@ export default defineConfig({
     starlight({
       title: "Logos Docs",
       description:
-        "Product and technical documentation for the Logos project",
+        "How Logos works, the contracts between its parts, and how to build modules for it and contribute to it",
       social: [
         {
           icon: "github",
@@ -66,54 +67,85 @@ export default defineConfig({
       },
       sidebar: [
         {
-          label: "Foundations",
+          label: "Start here",
           items: [
+            { slug: "index", label: "Welcome" },
             { slug: "architecture" },
-            { slug: "core-infrastructure" },
-            { slug: "core-responsibilities" },
             { slug: "module-types" },
-            { slug: "message-flow-full" },
+            { slug: "core-responsibilities" },
+            { slug: "core-infrastructure" },
+            { slug: "glossary" },
           ],
         },
         {
-          label: "Channels",
+          label: "Guides",
           items: [
-            { slug: "message-flow" },
+            { slug: "implementing-a-module" },
+            { slug: "guides/writing-a-channel" },
+            { slug: "guides/writing-a-factory" },
+            { slug: "guides/writing-a-minion" },
           ],
         },
         {
           label: "Contracts",
           items: [
             { slug: "contracts/overview" },
-            { slug: "contracts/amqp-envelope" },
-            { slug: "contracts/amqp-conventions" },
-            { slug: "contracts/module-lifecycle" },
-            { slug: "contracts/channel-core-sync" },
-            { slug: "contracts/channel-core-connections" },
-            { slug: "contracts/agentless-channels" },
-            { slug: "contracts/module-management" },
-            { slug: "contracts/module-logs" },
-            { slug: "contracts/minion-connection" },
-            { slug: "contracts/minion-build" },
-            { slug: "contracts/credentials" },
+            { slug: "contracts/protocol-releases" },
+            {
+              label: "Modules and core",
+              items: [
+                { slug: "contracts/module-lifecycle" },
+                { slug: "contracts/module-management" },
+                { slug: "contracts/module-logs" },
+                { slug: "contracts/amqp-envelope" },
+                { slug: "contracts/amqp-conventions" },
+              ],
+            },
+            {
+              label: "Channels",
+              items: [
+                { slug: "contracts/minion-connection" },
+                { slug: "contracts/channel-core-sync" },
+                { slug: "contracts/channel-core-connections" },
+                { slug: "contracts/agentless-channels" },
+                { slug: "modules/ssh" },
+              ],
+            },
+            {
+              label: "Builds",
+              items: [
+                { slug: "contracts/minion-build" },
+                { slug: "contracts/credentials" },
+              ],
+            },
             {
               label: "Minion Messages",
               items: [
                 { slug: "contracts/minion-messages" },
                 { slug: "contracts/minion-messages/wire-format" },
-                { slug: "contracts/minion-messages/codecs" },
                 { slug: "contracts/minion-messages/sessions" },
-                { slug: "contracts/minion-messages/identity" },
                 { slug: "contracts/minion-messages/tasks-and-results" },
+                { slug: "contracts/task-results-and-actions" },
                 { slug: "contracts/minion-messages/file-transfers" },
+                { slug: "contracts/file-browser" },
+                { slug: "contracts/minion-messages/identity" },
                 { slug: "contracts/minion-messages/tunnels" },
+                { slug: "contracts/vpn-front" },
                 { slug: "contracts/minion-messages/delegation" },
+                { slug: "contracts/minion-messages/codecs" },
               ],
             },
-            { slug: "contracts/vpn-front" },
-            { slug: "contracts/task-results-and-actions" },
-            { slug: "contracts/file-browser" },
-            { slug: "implementing-a-module" },
+          ],
+        },
+        {
+          label: "Contributing",
+          items: [
+            { slug: "contributing/repositories" },
+            { slug: "contributing/development-stack" },
+            { slug: "contributing/testing-and-ci" },
+            { slug: "contributing/changing-the-protocol" },
+            { slug: "contributing/architecture-rules" },
+            { slug: "contributing/writing-the-docs" },
           ],
         },
       ],

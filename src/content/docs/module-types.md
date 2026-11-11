@@ -10,15 +10,17 @@ to and from core, and **factories**, which build minions.
 Channel modules carry a minion's messages between the minion and core over a
 transport: HTTP, WebSocket, SSH, DNS, whatever the channel speaks. A channel
 never decrypts: what it carries is sealed, and core is the minion's real
-peer.
+peer. The one exception is an [agentless](../contracts/agentless-channels/)
+channel, which acts as the minion itself.
 
 ### Responsibilities
 
 - Carry minion messages over its transport, in the [connection
   kinds](#connection-kinds) it supports, and pass them to core and back
   without reading them.
-- Extract the build id and its ciphertext from the transport (channel-defined
-  logic).
+- Take each sealed frame from its transport, with the id it was sent under
+  (the build's, then the temporary id staging gives, then the session's): how
+  is the channel's own.
 - Register with core on startup via [Module Lifecycle](../contracts/module-lifecycle/),
   declaring its [minion connection schema](../contracts/minion-connection/): the
   settings a minion is given to reach it, which operators keep as endpoints and
@@ -78,8 +80,8 @@ minion's connection, is [Channel ↔ Core: Connections](../contracts/channel-cor
 Well-formed requests from an instance that is registered and not blocked:
 sync calls, and the handshakes of its control link and connection sockets.
 Core answers an unregistered, dead or blocked instance with 403. How a
-channel receives traffic, what transport it uses, and how it extracts the
-canonical fields is the channel's implementation detail. Core defines the
+channel receives traffic, what transport it uses, and how it takes a frame
+from it is the channel's own. Core defines the
 contracts in [Channel ↔ Core: HTTP Sync](../contracts/channel-core-sync/)
 and [Channel ↔ Core: Connections](../contracts/channel-core-connections/).
 
@@ -103,20 +105,19 @@ and [Channel ↔ Core: Connections](../contracts/channel-core-connections/).
 
 ### Notes
 
-- Keep transport logic isolated from business/tasking logic.
-- Channel modules are blind to minion plaintext by design.
-- Channel role is envelope delivery, not Logos semantics.
-- The real protocol peer is core Server, not the channel module.
-- Enforce per-channel authentication and abuse controls.
-- Expose channel health and queue lag metrics.
+- Keep the transport apart from what the minion and core say: the channel
+  relays frames, and core is the minion's peer.
+- A channel never sees a minion's plaintext; an agentless one, acting as the
+  minion, is the exception.
+- [Writing a Channel](../guides/writing-a-channel/) walks through building one.
 
 ## 2) Factory Modules
 
-Factory modules build minions. They define minion families and lifecycle behavior.
+Factory modules build minions. A factory decides what its minions are: the
+targets it builds for, the build parameters, the channels its minions speak
+and the commands they can be built with.
 
 ### Responsibilities
-
-Built:
 
 - Declare what can be built in a [build schema](../contracts/minion-build/)
   at registration: targets and their platforms, the build parameters, the
@@ -127,17 +128,15 @@ Built:
   and progress, upload the artifact to the URL core gives, and report the
   result.
 - Build in the commands the operator picked, and no others.
-
-Planned:
-
 - Translate its minions' codec, their envelope or their suite, when they
   cannot speak core's ([Codecs](#codecs)).
-- Version the command contract per minion family.
 
 ### Examples
 
-- BOB (`logos-bob-factory`), the reference factory: it builds dummy minions, a
-  JSON description of what the minion would be built with.
+- BOB (`logos-bob-factory`), the reference factory: it compiles a Go minion
+  for Linux and Windows (targets `linux-elf` and `windows-exe`) that speaks
+  the HTTP and TCP channels' kinds, with shell, file, tunnel and delegation
+  commands among others.
 - Dumbo (`logos-dumbo`, the factory and its channel in one repo and image):
   PHP pages, `bind-call` minions core reaches through the Dumbo channel; a
   proof of concept with eight commands (hello, files, listings, walks).
@@ -150,12 +149,6 @@ Planned:
 
 ### Codecs
 
-:::note[Status]
-[Codecs](../contracts/minion-messages/codecs/), released 2026-11-09 in the
-protocol (v0.48.1), core and factory-core (v0.3.0); Raven, a test factory,
-runs them. It replaces the translator hooks once sketched here.
-:::
-
 A factory whose minions cannot speak core's codec, the CBOR envelope or the
 `aes-256-cbc-hmac-sha256` suite, may translate either layer itself: its
 build schema names its own (`<module_name>.<name>`), and core hands that
@@ -167,10 +160,14 @@ written, never what it says.
 
 ### Notes
 
-- Keep factory-specific command grammar encapsulated.
-- Version command contracts per factory.
 - Declare the commands its minions can be built with (the build schema's
-  `commands`); operators pick each build's, and the minion has those.
+  `commands`); operators pick each build's, and the minion has those. A task
+  names its command by number (`op`), and its params by theirs (`num`).
+- Raise the build schema's `version` when values saved against the previous
+  one would build something else ([Minion Build](../contracts/minion-build/)).
+- [Writing a Factory](../guides/writing-a-factory/) walks through building one,
+  and [Writing a Minion](../guides/writing-a-minion/) through what its minions
+  implement.
 
 ## Cross-Cutting Module Requirements
 
@@ -188,26 +185,21 @@ All module types should:
 Crypto boundary rules:
 
 - Minion payload crypto (`encrypt/decrypt/verify/sign`) belongs to core Logos services, or to the build's own factory when it translates its suite ([Codecs](../contracts/minion-messages/codecs/)).
-- Channel modules must be plaintext-blind and process only routing metadata + encrypted blobs.
+- Channel modules must be plaintext-blind: they carry sealed frames and the ids they were sent under. An [agentless channel](../contracts/agentless-channels/), which acts as the minion, is the exception.
 
 ## Contracts
 
-The wire-level contracts these modules use are specified in the
-[Contracts](../contracts/overview/) section:
+The contracts these modules implement are in the
+[Contracts](../contracts/overview/) section, whose overview says which
+modules implement each.
 
-1. Base message envelope and versioning — [AMQP Message Envelope](../contracts/amqp-envelope/).
-2. Exchange/queue naming convention — [AMQP Routing Conventions](../contracts/amqp-conventions/).
-3. Data-plane envelope — [Channel ↔ Core: HTTP Sync](../contracts/channel-core-sync/).
-4. Lifecycle — [Module Lifecycle](../contracts/module-lifecycle/).
-5. Management — [Module Management](../contracts/module-management/) and the
-   [live log tail](../contracts/module-logs/).
-6. What minions are given to reach a channel — [Minion Connection Schema](../contracts/minion-connection/).
-7. Builds — [Minion Build](../contracts/minion-build/).
-
-For building a module against them, see [Implementing a Module](../implementing-a-module/):
+To build one, start with [Implementing a Module](../implementing-a-module/):
 `logos-golang-module-core` for every module, with `logos-golang-channel-core`
-for a channel and `logos-golang-factory-core` for a factory.
+for a channel and `logos-golang-factory-core` for a factory. Then
+[Writing a Channel](../guides/writing-a-channel/), or
+[Writing a Factory](../guides/writing-a-factory/) and
+[Writing a Minion](../guides/writing-a-minion/).
 
-Still open: giving a running minion a new connection (a draft:
-[Channel ↔ Core: Connections](../contracts/channel-core-connections/)), and
-module packaging/lifecycle policy.
+Still open: giving a running minion a new connection (`add_connection`, a
+draft on the [Connections](../contracts/channel-core-connections/) page), and
+module packaging.

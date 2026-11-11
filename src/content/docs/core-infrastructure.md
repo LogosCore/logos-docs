@@ -35,16 +35,16 @@ graph TD
     NGX -- "/" --> WEB
     CS -. "OIDC" .-> KC
 
-    CH -- "HTTP: POST /api/channel/sync" --> CS
+    CH -- "sync call, control link, connection sockets" --> CS
     CH -- "AMQP" --> RMQ
     IP -- "AMQP" --> RMQ
     CS -- "AMQP" --> RMQ
 
     CS -- "read/write" --> DB
     HP -- "wiki documents" --> DB
-    CS -- "sessions, cache, dedup" --> RDS
+    CS -- "sessions, caches, recent minion messages" --> RDS
     CS -- "objects (S3 API)" --> SFS
-    IP -- "build files, artifacts (HTTP)" --> CS
+    IP -- "build files, artifacts, factory link" --> CS
 ```
 
 ## RabbitMQ — Message Bus
@@ -57,9 +57,10 @@ graph TD
   - live log batches;
   - core's lifecycle events.
 
-  It does **not** carry minion traffic, which flows through the HTTP sync
-  endpoint. Core does not start without the broker.
-- **Why RabbitMQ**: mature AMQP broker with exchange/queue routing patterns suited to module-type-based message routing, and dead-lettering for reliability.
+  It does **not** carry minion traffic, which takes the data plane's
+  [three paths](../contracts/channel-core-connections/#three-paths). Core does
+  not start without the broker.
+- **Why RabbitMQ**: mature AMQP broker with exchange/queue routing patterns suited to module-type-based message routing.
 - **Connections**: Core Server, Channel Modules, Factory Modules, all over AMQP.
   Today they share one broker account. Per-module accounts and queue
   permissions are planned.
@@ -77,6 +78,10 @@ See [AMQP Routing Conventions](../contracts/amqp-conventions/) for the queues an
   | `module_action_invocations` | the actions operators invoked, and how they ended |
   | `operation_channel_endpoints` | each operation's channel endpoints |
   | `build_files`, `builds`, `minions` | build uploads, build records, and the minions successful builds created |
+  | `minion_stagings`, `minion_sessions`, `minion_targets` | minion processes staging, their sessions, and `bind` minions' targets |
+  | `minion_tasks`, `minion_task_parts`, `minion_files` | tasks, what they returned, and the files minions sent |
+  | `fs_entries`, `fs_listings` | the [file browser](../contracts/file-browser/)'s view of each machine |
+  | `operational_ports`, `minion_listeners` | [tunnels](../contracts/minion-messages/tunnels/)' ports on core, and minions' listeners |
 
   Next to them: users, operations and their members, login sessions (an
   insert-only record of who signed in; live sessions are in Redis), API keys,
@@ -106,8 +111,10 @@ MongoDB resolves the database engine decision listed as pending in the
   - login sessions: refresh tokens and each user's live sessions (required:
     core does not start without Redis);
   - caches, for which Redis may also be disabled;
-  - the data plane's de-duplication of minion messages by `message_id`, for
-    24 hours;
+  - the ids of minion messages seen in the last 24 hours, and the replies
+    core gave in the last 10 minutes
+    ([Freshness and replay](../contracts/minion-messages/wire-format/#freshness-and-replay));
+  - the chunks of a file a minion streams, on their way to the downloader;
   - the sync registration gate's cache of registered instances.
 - **Connections**: Core Server only.
 
@@ -116,7 +123,9 @@ MongoDB resolves the database engine decision listed as pending in the
 - **Role**: object storage behind an S3-compatible API, by bucket:
   - `wiki-images`, `wiki-files`: what operators attach to the wiki;
   - `skills`: AI agent skill bundles operators publish;
-  - `logos-builds`: files uploaded for builds, and build artifacts.
+  - `logos-builds`: files uploaded for builds, and build artifacts;
+  - `minion-files`: the files minions send core (a download, or a stream kept
+    as it passed).
 - **Why SeaweedFS**: lightweight, self-hosted, S3-compatible API. Avoids external cloud dependencies and keeps binary blobs out of the document database.
 - **Connections**: Core Server alone reads and writes. A factory never
   reaches it: a build's files and its artifact go through core, which
@@ -182,7 +191,8 @@ management, builds), and over HTTP(S), at core's base URL (its environment's
 channels' sync call, control link and connection sockets; a factory's
 build files and artifacts (every factory's: the links a build carries are
 paths on that URL) and its factory link. That URL is core itself
-(`http://core:8002` on its network), or its front over HTTPS. Nothing else
+(`http://logos-core-dev:8002` from a module on the dev stack's network), or
+its front over HTTPS. Nothing else
 of core's stack is reached: a module on another host needs core's URL and
 its RabbitMQ, no store.
 
@@ -215,16 +225,17 @@ and every module built on them.
 
 ## Deployment
 
-- **Docker Compose** (`logos-core/docker-compose.yml`) runs the stack: core,
-  the web app and hocuspocus (the `development` profile), nginx, RabbitMQ,
-  MongoDB, Redis, SeaweedFS (master, volume, filer and S3 gateway), and
-  Keycloak (the `sso` profile).
+- **Docker Compose** (`logos-core/docker-compose.yml`) runs the development
+  stack: core (`core-dev`, rebuilt as its code changes), the web app,
+  hocuspocus and nginx (the `development` profile), RabbitMQ, MongoDB, Redis,
+  SeaweedFS (master, volume, filer and S3 gateway), and Keycloak (the `sso`
+  profile). [Development Stack](../contributing/development-stack/) runs it.
 - **Modules** are not part of it. Each module repository has a Compose project
   of its own, which joins core's network (`logos-core_logos`). Its instance
   registers with core when it starts.
 - **Kubernetes**: a Helm chart (`logos-core/deploy/helm/logos`, with a kind
-  configuration for local clusters) deploys core and its stores. It does not
-  deploy RabbitMQ yet.
+  configuration for local clusters) deploys core, its stores and RabbitMQ.
+  Modules are not in it.
 
 ## Observability
 
@@ -251,6 +262,6 @@ traces in SeaweedFS, Grafana) and is planned. None of it runs.
 | Factory Modules | Core Server (or its front) | HTTP(S) | WebSocket: the factory link, for a factory that translates its minions' codec |
 | Core Server | MongoDB | MongoDB wire protocol | Persistence |
 | hocuspocus | MongoDB | MongoDB wire protocol | Wiki documents |
-| Core Server | Redis | RESP | Sessions, caches, sync de-duplication |
+| Core Server | Redis | RESP | Sessions, caches, recent minion messages, stream chunks |
 | Core Server | SeaweedFS | HTTP (S3-compatible) | Object storage |
 | Factory Modules | Core Server (or its front) | HTTP(S) | Build files in, artifacts out (`/api/factory/builds/`) |

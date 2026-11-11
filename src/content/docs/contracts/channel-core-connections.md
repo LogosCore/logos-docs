@@ -2,23 +2,17 @@
 title: "Channel ↔ Core: Connections"
 ---
 
-:::caution[Partly built]
-Built: `reverse-persistent`, in core, channel-core (`pkg/connclient`), the
-HTTP channel and BOB's minion: the connection sockets, pushes within the
-`get_tasks` allowance, presence, and the kinds in connection and build
-schemas, each kind with its own fields on both sides, and endpoints of a
-kind. Connection management is built too: the `hello`'s connection,
-`conn_update`, and `switch_connection` (BOB's `switch`). And `bind-call`:
-the control link's `call` (channel-core `pkg/linkclient`), targets with
-their states, retries and needs editing, calls when there is something to
-send, and the `rehello`, in core, the Dumbo channel and the Dumbo
-factory's PHP pages. And `bind-persistent`: the link's `open`, the
-targets' policies (on demand, manual, always), Connect and Disconnect, idle
-closes, in core, channel-core (`linkclient`'s opener, `connclient`'s open
-request), the TCP channel and BOB's minion (a listener). Failover (the build's
-policy, BOB's minion) is built too, and so are a kind's `max_message` and
-`max_call`, core's `poll`, the `at` a page checks, and commands' `kinds`. `add_connection` is an
-agreed design, not built yet.
+:::note[Status]
+Built: all four kinds, in core, channel-core (`pkg/connclient`,
+`pkg/linkclient`), the HTTP channel (`reverse-persistent`), the TCP channel
+(`bind-persistent` and the reverse kinds), the Dumbo channel and its PHP
+pages (`bind-call`), and BOB's minion: the connection sockets, pushes within
+the `get_tasks` allowance, presence, the control link's `call` and `open`,
+targets with their states, retries and policies, Connect and Disconnect,
+idle closes, the kinds in connection and build schemas (with a kind's
+`max_message`, `max_call` and `max_open`), endpoints of a kind, connection
+management (the `hello`'s connection, `conn_update`, `switch_connection`)
+and failover. `add_connection` is an agreed design, not built yet.
 :::
 
 How a channel carries the [connection kinds](../../module-types/#connection-kinds)
@@ -33,6 +27,24 @@ operators manage a minion's connections.
 | `reverse-persistent` | the minion | both | while the connection is open |
 | `bind-call` | the channel, when core asks | core; the minion only answers | whenever core calls |
 | `bind-persistent` | the channel, when core asks | both | while the connection is open, which core can ask for |
+
+## The channel's side
+
+Most of this page is core's and the factories': targets and their states,
+policies, allowances, failover. What a channel implements is this, by
+kind ([Writing a Channel](../../guides/writing-a-channel/) walks through
+it in Go):
+
+| A channel… | For | Section |
+|---|---|---|
+| opens the control link and answers each request by its id | `bind-call`, `bind-persistent` | [Three paths](#three-paths), [formats](#the-control-link-and-connection-sockets-formats) |
+| makes a `call` and answers what came back, within its deadline | `bind-call` | [When core calls](#bind-call-minions-when-core-calls) |
+| dials on `open`, opens the connection's socket naming the open, and relays | `bind-persistent` | [Opening and closing](#bind-persistent-connections-opening-and-closing), [The TCP channel](#the-tcp-channel) |
+| opens a socket at a minion's first message, and relays | `reverse-persistent` | [Lifetime and presence](#reverse-persistent-connections-lifetime-and-presence) |
+| closes the socket when the minion's connection ends, and the minion's connection when the socket closes | both persistent kinds | [Three paths](#three-paths) |
+| declares its kinds, their fields and targets | every kind | [The connection schema by kind](#the-connection-schema-by-kind) |
+
+`reverse-call` goes through the [sync call](../channel-core-sync/).
 
 ## Three paths
 
@@ -67,12 +79,13 @@ and nothing waits behind a large transfer.
 stays open:
 
 - for `reverse-persistent`, when the minion's connection brings its first
-  message (the channel learns its build id from it);
+  message, which comes with the id it is sent under;
 - for `bind-persistent`, once it has dialed the target `open` named.
 
-Each binary frame is one message: the [sync call](../channel-core-sync/)'s
-values (message id, the id it is sent under, the peer) and the ciphertext,
-raw. Both sides send on it whenever they have something: core starts
+Each binary frame is one message: `{1: the id it is sent under, 2: the
+sealed frame}`, the ciphertext raw ([formats](#the-control-link-and-connection-sockets-formats)).
+The peer goes once, in the handshake's `Logos-Peer-Address`, and a frame
+has no message id. Both sides send on it whenever they have something: core starts
 exchanges (tasks, `cancel`) as well as answering. The socket is the
 connection, one socket for each minion connection (never one for several
 minions' connections): while it is open, core shows the session whose own
@@ -336,8 +349,12 @@ Core calls a `bind-call` minion:
 
 Both are WebSockets the channel opens to core, beside the sync call, behind
 the same registration gate: an instance that is not registered, or is dead
-or blocked, gets **403** at the handshake. An optional `traceparent` passes as
-on the sync call. When [channel
+or blocked, gets **403** at the handshake (the link takes a registered
+channel instance only), and **503** when core cannot read its registry. A
+handshake missing a header gets **400**, as does a socket of another kind
+than the two, or a `bind-persistent` one naming no open; a socket naming an
+open core is not waiting for, or one another socket took, gets **409**. An
+optional `traceparent` passes as on the sync call. When [channel
 authentication](../channel-core-sync/) comes (mTLS or a shared
 secret), it applies to the handshakes: a socket authenticates once, when it
 opens.
@@ -350,17 +367,23 @@ opens.
 **Frames** are binary messages, each one CBOR map with numbered keys, as the
 [minion protocol](../minion-messages/wire-format/#registry) has
 them; the ciphertext stays raw bytes. A text frame closes the socket, and so
-does one over the message limit (with the overhead of a frame; code 1009).
+do a frame that does not decode and one over the message limit (with the
+overhead of a frame; code 1009); on the link, so does a frame from the
+channel that is not an `answer`.
 
 On a **connection socket**, both ways:
 
 | Key | Value |
 |---|---|
 | 1 | the id the message is sent under: build id, temporary id or session id, 16 bytes (on a `reverse-persistent` connection it changes as the minion stages and says `hello`) |
-| 2 | the ciphertext |
+| 2 | the sealed frame: the ciphertext, not empty |
 
-No message id: the sync call's `Logos-Message-Id` lets core drop a request
-the channel retried, and a socket sends a frame once.
+That is all a frame holds (`protocol.ConnFrame`). The peer is the
+handshake's `Logos-Peer-Address`, once for the socket. No message id
+either, here or anywhere: core knows a message by the minion's own message
+id, sealed inside it, and a message sent again over a socket gets the
+reply it got, or nothing when it is a replay ([Freshness and
+replay](../minion-messages/wire-format/#freshness-and-replay)).
 
 On the **control link**, key 0 says what the frame is:
 
@@ -368,11 +391,20 @@ On the **control link**, key 0 says what the frame is:
 |---|---|---|
 | `call` (1) | core → channel | 1 request id; 2 the values: the build connection's and the target's, in one map by the keys the channel [declared](#the-connection-schema-by-kind); 3 the id the message is sent under; 4 the ciphertext; 5 deadline in milliseconds (core says the kind's `max_call` within its 10-minute cap, else 2 minutes; the channel keeps to the shorter of it and its own request timeout); 11 keys, to an [agentless](../agentless-channels/) kind only: the keys of the id, `{1: suite, 2: {1: enc key, 2: mac key}}`; 12 credentials, when the values name any: the [credentials](../credentials/) of the endpoint's and the target's credential fields, by id; 14 acting, to an agentless kind only, beside 11, while the session has one: the task that made its acting identity, `{1: task id, 2: cmd, ? 3: args}` ([the acting task](../agentless-channels/#the-acting-task)) |
 | `open` (2) | core → channel | 1 request id; 2 the values, as for `call`; 5 deadline, 30 seconds unless core says otherwise; 10 under: the id the minion speaks under on the connection, 16 bytes (its target's open session's id, else its build's); 11 keys, to an agentless kind only: under's keys; 12 credentials, as for `call`; 14 acting, as for `call`: under's session's |
-| `answer` (3) | channel → core | 1 request id; then one of: 3 the id and 4 the sealed message that came back, unpacked from the channel's transport format, with 6 the transport's status (the HTTP status, say); 6 the status and 8 the first 512 bytes of what answered, when it is not a minion message (a 404, a WAF's page); or 7 a failure: `{1: kind, 2: message}`, the kind unreachable 1 (DNS, refused), timeout 2, TLS 3, other 4. An answer that reached something may carry 9 the peer: the IP address the channel connected to, which core keeps as the session's external address. Any answer may carry 13 logins: how each credential the channel tried fared, in order, `{1: id, ? 2: true}` (true: taken; else refused), which core notes on the target ([Logins](../credentials/#logins)) |
+| `answer` (3) | channel → core | 1 request id; then one of: 3 the id and 4 the sealed message that came back, unpacked from the channel's transport format, with 6 the transport's status (the HTTP status, say); 6 the status and 8 the first 512 bytes of what answered, when it is not a minion message (a 404, a WAF's page); or 7 a failure: `{1: kind, 2: message}` (the message UTF-8, 512 bytes at most), the kind unreachable 1 (DNS, refused, no route), timeout 2, TLS 3, other 4, login 5 (the target refused the login the channel was given: the message says why, and what the target offers), host_key 6 (the target is not the one its values say: its host key or certificate is another, which the message names). An answer that reached something may carry 9 the peer: the IP address the channel connected to, which core keeps as the session's external address. Any answer may carry 13 logins: how each credential the channel tried fared, in order, `{1: id, ? 2: true}` (true: taken; else refused), which core notes on the target ([Logins](../credentials/#logins)) |
 
 - **Every request gets exactly one `answer`.** An `open` that worked is
   answered once its connection socket is up, the socket naming the request,
-  so core knows the session it serves.
+  so core knows the session it serves: the answer carries the request's id
+  alone, with 13 `logins` when the channel tried credentials, and the
+  socket's `Logos-Peer-Address` says the peer (the TCP channel's
+  `internal/relay`). Core takes a bind-persistent connection's peer from
+  the socket, not from the answer. An open that failed is answered with 7,
+  a failure.
+- **Login and host key failures** (5 and 6) are the target refusing the
+  channel: core shows the target refused and does not retry it until it is
+  edited or an operator asks again, so a channel answers them only for
+  that, and any other trouble as 1 to 4.
 - **Under** (key 10) is for a minion that keeps no ids of its own, such as
   one a channel acts as: it speaks first, as every persistent minion does,
   under that id. A channel whose minion knows its ids leaves it. It is a
@@ -387,17 +419,23 @@ On the **control link**, key 0 says what the frame is:
   list of addresses seen.
 - **Request ids** are core's, unique among its requests waiting on that
   link. Answers come in any order: many targets are called at once.
-- **The channel never opens the message**: it only takes it out of its
-  transport format (for the Dumbo channel: the id's 16 bytes, then the
+- **The channel never opens the message** (an [agentless](../agentless-channels/)
+  kind's channel, which is the minion, excepted): it only takes it out of
+  its transport format (for the Dumbo channel: the id's 16 bytes, then the
   sealed message), as it does a reverse minion's. Core opens it, and tells
   the target's states apart by the status, and by whether it opens under
   the id the call went under and answers that call.
-- **Liveness**: both sides ping every 30 seconds and drop a socket silent for
-  90. The proxy in front of core keeps these sockets open past its own idle
-  timeouts.
+- **Liveness**: core pings the link and every socket every 30 seconds, and
+  drops one over which nothing came, not even a pong, for 90 seconds.
+  channel-core pings every 30 seconds too, and drops the link, or closes
+  the socket, when a ping's pong has not come within 30 seconds (its
+  `linkclient` and `connclient`). The proxy in front of core keeps these
+  sockets open past its own idle timeouts.
 - **The link drops**: its waiting requests fail, and core's rules for a
-  failed call apply; the channel opens it again, backing off. Connection
-  sockets do not depend on it and stay.
+  failed call apply; the channel opens it again, backing off (channel-core:
+  from 1 second, doubling to 30). Connection sockets do not depend on it
+  and stay. A newer link of the same instance replaces an older one, which
+  core closes.
 - **An answer lost** (the link dropped after the channel called) leaves core
   resending what the minion did not acknowledge: a page that cannot remember
   task ids runs those tasks again. Only a lost answer does that; it comes
@@ -411,18 +449,39 @@ cookie or a header), which the page reads and the channel calls with; and
 those of **each target** (the page's URL, a host header, a proxy; for SSH a
 host, a port, a user and a password or key), which only the channel uses.
 The [connection schema](../minion-connection/) a channel declares
-at registration says both, by kind (its `schema_version` `"2"`):
+at registration says both, by kind (its `schema_version` `"2"`). A
+hypothetical example: the HTTP channel's two kinds, cut down, and a
+`bind-call` kind for pages it would call, which no built channel declares
+this way (the Dumbo channel's is its own, `bind-call` alone):
 
 ```json
 {
   "schema_version": "2",
   "version": 3,
   "kinds": {
-    "reverse-call": { "fields": [ "base_url", "checkin_interval", "…" ] },
-    "reverse-persistent": { "fields": [ "base_url", "ws_reconnect_backoff", "…" ] },
+    "reverse-call": {
+      "fields": [
+        { "key": "base_url", "num": 1, "type": "url", "label": "Base URL", "required": true },
+        { "key": "checkin_interval", "num": 11, "type": "duration", "default": "60s" }
+      ]
+    },
+    "reverse-persistent": {
+      "fields": [
+        { "key": "base_url", "num": 1, "type": "url", "label": "Base URL", "required": true },
+        { "key": "ws_reconnect_backoff", "num": 13, "type": "duration", "default": "60s" }
+      ]
+    },
     "bind-call": {
-      "fields": [ "method", "carrier" ],
-      "target": [ "url", "host_header", "proxy", "tls_verify" ],
+      "fields": [
+        { "key": "method", "num": 14, "type": "enum", "default": "POST", "options": [{ "value": "POST" }, { "value": "PUT" }] },
+        { "key": "carrier", "num": 15, "type": "enum", "default": "body", "options": [{ "value": "body" }, { "value": "cookie" }] }
+      ],
+      "target": [
+        { "key": "url", "num": 16, "type": "url", "label": "Page URL", "required": true },
+        { "key": "host_header", "num": 3, "type": "string" },
+        { "key": "proxy", "num": 5, "type": "url" },
+        { "key": "tls_verify", "num": 6, "type": "bool", "default": false }
+      ],
       "max_message": 65536
     }
   }
@@ -437,18 +496,24 @@ at registration says both, by kind (its `schema_version` `"2"`):
 - **`target`**, for the `bind` kinds only: what an operator fills in for each
   target, never built into a minion.
 - **`max_message`**, optional: the largest minion message (its CBOR
-  plaintext, before sealing) the channel carries each way on a connection
-  of the kind, 1 KiB to 768 KiB; left out, 768 KiB. A channel whose
-  transport carries little says so here (a DNS channel, a page called with
-  a cookie). Core gives it to each build's connection of the kind, and keeps
-  what it sends within it; the minion keeps its own messages within it
+  plaintext as sent, before sealing) the channel carries each way on a
+  connection of the kind, 1 KiB to 768 KiB; left out, 768 KiB. A channel
+  whose transport carries little says so here (a DNS channel, a page called
+  with a cookie), leaving room for what sealing and the transport add
+  ([`max_message`](../minion-connection/#the-schema)). Core gives it to each
+  build's connection of the kind, and keeps what it sends within it; the
+  minion keeps its own messages within it
   ([Limits](../minion-messages/wire-format/#limits)). The built channels
   declare none.
 - **A kind's keys are unique** across its fields and its target's: `call` and `open` give the channel one map of them, under the
   keys it declared.
-- **Every field is a field spec**, as now. A target field may be a `secret`
-  (an SSH password or key): core keeps it, shows it masked, and gives it to
-  the channel, which dials with it, never to a minion.
+- **Every field is a field spec** with a `num`, one numbering across the
+  schema's kinds and targets ([Field numbers](../minion-connection/#field-numbers)),
+  and every kind has at least one field, in its `fields` or its `target`. A
+  target field may be a `secret`, or a `credential` or `credential_list`
+  naming the operation's [credentials](../credentials/) (the SSH channel's
+  logins): core keeps it, shows a secret masked, and gives it to the
+  channel, which dials with it, never to a minion.
 - **Endpoints** name a connection kind and keep values for its built-in
   fields: an address for a `reverse` kind, a way of calling for a `bind`
   kind, reused across builds. **Targets** stay apart: one per deployment.
@@ -465,7 +530,7 @@ at registration says both, by kind (its `schema_version` `"2"`):
 
 ## `bind-persistent` connections: opening and closing
 
-A `bind-persistent` minion is a running process (an implant listening on a
+A `bind-persistent` minion is a running process (a minion listening on a
 port, or reached over SSH), and every dial is a connection its network sees.
 Being a process, it stages as any minion does, speaking first once the
 channel has dialed, and keeps its session's keys between connections: a
@@ -835,14 +900,31 @@ preference:
 ```json
 "channels": [
   {
-    "module_name": "http", "versions": [3],
+    "module_name": "http", "num": 1, "versions": [3],
     "kinds": [
-      { "kind": "reverse-call", "fields": [ "method", "path_prefix" ] },
-      { "kind": "reverse-persistent", "fields": [ "path_prefix" ] }
+      {
+        "kind": "reverse-call",
+        "fields": [
+          {
+            "key": "method", "num": 1, "type": "enum", "label": "Method", "default": "POST",
+            "options": [{ "value": "GET" }, { "value": "POST" }, { "value": "PUT" }]
+          },
+          { "key": "path_prefix", "num": 2, "type": "string", "label": "Path prefix", "default": "/" }
+        ]
+      },
+      {
+        "kind": "reverse-persistent",
+        "fields": [{ "key": "path_prefix", "num": 2, "type": "string", "label": "Path prefix", "default": "/" }]
+      }
     ]
   }
 ]
 ```
+
+Each channel has its `num`, its number in a [minion
+config](../minion-build/#the-minion-config), and each of the factory's
+connection parameters a field spec with a `num` of its own, one numbering
+across the channel's kinds (`protocol.ValidateBuildSchema`).
 
 - **`kinds` are the kinds the factory's minions support** with that channel,
   at least one, the first the one a build takes when it names none, **each
@@ -868,7 +950,7 @@ their kind:
   message the connection carries; in the build request, so the factory
   builds it into the minion.
 - **Kinds mix** in one build: a WebSocket first and polling after, or a
-  listening implant that also calls back. The order is the order the minion
+  listening minion that also calls back. The order is the order the minion
   tries its connections and the one failover goes round: a `bind`
   connection is not tried, it waits to be reached, but one that comes first
   is where the minion starts (BOB's listens).

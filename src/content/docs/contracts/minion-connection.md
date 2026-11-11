@@ -58,10 +58,10 @@ Declared in `module.register` under `connection`:
 |---|---|
 | `schema_version` | Format of this structure: `"2"`. (`"1"`, one field list for every kind, is gone.) |
 | `version` | Version of the channel's parameter set, from 1. Raised when minions built against the previous set would read the new one wrongly: a field removed, renamed or given another meaning, in any kind. Adding an optional field does not need it. |
-| `kinds` | The connection kinds the channel carries (`reverse-call`, `reverse-persistent`, `bind-call`, `bind-persistent`), at least one, each with its own `fields`. |
-| `kinds.<kind>.fields[]` | Up to 32, with unique keys within the kind, each a field spec exactly as in a [management manifest](../module-management/#fields): `key`, `type`, label, description, group, order, required, default, bounds, pattern, options. `file` is not allowed. And `num`, required: the field's number ([Field numbers](#field-numbers)). |
-| `kinds.<kind>.target[]` | Bind kinds only: what core needs to reach a minion ([bind-call targets](../channel-core-connections/#bind-call-minions-targets-and-sessions)). Built for `bind-call` and `bind-persistent`. Each with a `num` too, in the kind's numbering. |
-| `kinds.<kind>.max_message` | Optional. The largest minion message (CBOR plaintext) the channel carries each way on a connection of the kind, 1 024 to 786 432 bytes; left out, 786 432 (768 KiB). Core keeps what it sends within it, and gives it to builds ([Limits](../minion-messages/wire-format/#limits)). |
+| `kinds` | The connection kinds the channel carries (`reverse-call`, `reverse-persistent`, `bind-call`, `bind-persistent`), at least one, each with at least one field, in its `fields` or its `target`. |
+| `kinds.<kind>.fields[]` | Up to 32, each a field spec as in a [management manifest](../module-management/#fields) (`key`, `type`, label, description, group, order, required, default, bounds, pattern, options), with two things a manifest refuses: `num`, which every field has ([Field numbers](#field-numbers)), and the [credential](../credentials/) types `credential` and `credential_list` (with `accept`). `file` is not allowed, nor `when` and `advanced`, which only a command's or an action's params take. A key is used once in a kind, across its fields and its target. |
+| `kinds.<kind>.target[]` | Bind kinds only, up to 32: what core needs to reach a minion ([bind-call targets](../channel-core-connections/#bind-call-minions-targets-and-sessions)), field specs as `fields` are, numbered in the same numbering. |
+| `kinds.<kind>.max_message` | Optional. The largest minion message (CBOR plaintext) the channel carries each way on a connection of the kind, 1 024 to 786 432 bytes; left out, 786 432 (768 KiB). Core keeps what it sends within it, and gives it to builds ([Limits](../minion-messages/wire-format/#limits)). It counts the plaintext as sent (packed items at their packed size): the [sealed frame](../minion-messages/wire-format/#sealed-frame) adds 51 to 66 bytes, and the transport adds the 16-byte id it is sent under and its own encoding, so size it from what one message of the transport holds less all of that. |
 | `kinds.<kind>.delegated_only` | Optional: no instance of the channel carries the kind; only [delegates](../minion-messages/delegation/) do, minions serving its transport on their hosts. Core sends no call or open of the kind to the channel's instances, and a target of it names a delegate. Never with `agentless`. |
 | `kinds.<kind>.agentless` | Bind kinds only, optional: the channel acts as the minion on connections of the kind, with nothing on the target ([agentless channels](../agentless-channels/)). Core gives it the keys of each call's and open's id; every other channel never sees a key. The channel's code says it, never an operator or a factory. |
 | `kinds.<kind>.max_call` | `bind-call` only, optional: the longest a call of the kind may take, a duration from `1s` to `1h` (`"10m"`). A slow transport (a DNS tunnel, mail) asks for more, a quick one for less. Core keeps each call within it and its own cap, 10 minutes, and says the result as the call's deadline; left out, 2 minutes ([when core calls](../channel-core-connections/#bind-call-minions-when-core-calls)). |
@@ -73,8 +73,10 @@ may mean something different per kind (its description says how), and a kind
 can gain or drop a field without touching the others.
 
 Core validates the schema at registration (structure, limits, defaults against
-their own specs) and refuses a registration whose schema is invalid. A
-registration without `connection` clears the stored one.
+their own specs: `protocol.ValidateConnectionSchema`) and refuses a
+registration whose schema is invalid (`validation_failed`); channel-core's
+`channel.Run` runs the same check before it starts. A registration without
+`connection` clears the stored one.
 
 The schema belongs to the **channel kind** (`module_name`): every instance of a
 kind is expected to declare the same one for a given `version`, so it must not
@@ -100,7 +102,7 @@ built with, so a number stays its field's: a new field takes a number not used
 before, and a removed field's is never given to another. The HTTP channel
 numbers its fields 1 to 13 (below); the TCP and SSH channels' are with their
 fields ([The TCP channel](../channel-core-connections/#the-tcp-channel),
-[Agentless channels](../agentless-channels/#the-channel)). A channel's page
+[The SSH Module](../../modules/ssh/#the-channel)). A channel's page
 under Modules shows each field with its number, a bind kind's target fields
 under their own row (GraphQL: `ModuleField.num`).
 
@@ -285,11 +287,15 @@ switch between them. A factory that lets operators choose them declares its own
   the endpoint. Checking on every read makes a stale endpoint visible before a
   minion is built from it, instead of silently exporting values the channel no
   longer understands.
-- **No message size in the schema.** The channel's `max_body_bytes` can change
-  after minions are built. Minions choose their own message size; one that sends
-  more than the channel accepts fails like any other failure, and the channel
-  reports it as `too_large` (log outcome and status counter), so lowering the
-  limit too far shows up at once.
+- **A message size per kind, not the channel's body limit.** `max_message`
+  is what a kind's transport can carry at all, for a transport that holds
+  less than the protocol's 768 KiB. A build's connection takes it when the
+  build is made, and the minion and core keep to that value from then on. A
+  channel's own limits are its management properties instead (the HTTP
+  channel's `max_body_bytes`), and can change after minions are built: a
+  minion that sends more than the channel takes fails like any other
+  failure, and the channel reports it as `too_large` (log outcome and status
+  counter), so lowering the limit too far shows up at once.
 - **Defaults resolved in the export.** The minion gets concrete values and never
   interprets a schema; a later change of a default does not change minions
   already built.

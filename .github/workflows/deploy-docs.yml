@@ -31,8 +31,16 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      # Diagrams render in the browser: the build passes a broken one.
+      - name: Check diagrams
+        run: npm run check:diagrams
+
       - name: Build site
         run: npm run build
+
+      # Every internal link and anchor of the built site resolves.
+      - name: Check links
+        run: npm run check:links
 
       - name: Upload GitHub Pages artifact
         uses: actions/upload-pages-artifact@v3
