@@ -694,7 +694,10 @@ The stream shows from the minion's announcement, before the data: GraphQL
 gives it as the task's `stream`: the file's name and size, how far the
 minion has sent and the downloader has, and the stream's state: waiting
 for a downloader, streaming, paused (its downloader went away, or is
-slow), done, or cancelled.
+slow), done, or cancelled. A file within core's limit for kept files is
+kept as it passes ([core's copy](../minion-messages/file-transfers/#cores-copy-of-a-stream)):
+the task's `file`, which the Data tab shows as a download's once it is
+whole.
 
 ### Downloading a stream
 

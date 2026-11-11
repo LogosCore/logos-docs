@@ -4,14 +4,14 @@ title: "File Transfers"
 
 Files move between a minion and core in **chunks**, in either direction, for
 a task. A file is either **kept** by core (up to a size limit) or **streamed**
-through it (any size, nothing kept). Four flows, all made of the same `chunk`
-and `ack` items:
+through it (any size; one within the limit kept too, as it passes). Four
+flows, all made of the same `chunk` and `ack` items:
 
 | Flow | Direction | The task's action | Core keeps it | Who sets the pace |
 |---|---|---|---|---|
 | [A minion sending a file](#a-minion-sending-a-file) | minion → core | [`download_file`](../../task-results-and-actions/#download_file) | yes, in its minion files bucket | the minion, acked by core |
 | [Core sending a file](#core-sending-a-file) | core → minion | [`upload_file`](../../task-results-and-actions/#upload_file) | it was kept already (a task file) | the minion, pulling |
-| [Streaming a file](#streaming-a-file) | minion → core → a downloader | [`stream_file`](../../task-results-and-actions/#stream_file) | no | the downloader |
+| [Streaming a file](#streaming-a-file) | minion → core → a downloader | [`stream_file`](../../task-results-and-actions/#stream_file) | a copy, within its size limit | the downloader |
 | [Streaming a file to a minion](#streaming-a-file-to-a-minion) | an uploader → core → minion | [`upload_stream`](../../task-results-and-actions/#upload_stream) | no | the uploader and the minion |
 
 How operators start and watch each flow in the web app (Download, Upload
@@ -143,8 +143,10 @@ task failed:
 
 ## Streaming a file
 
-A file of any size, sent straight to whoever downloads it, with nothing kept
-in core (a `stream_file` task). It is [a minion sending a
+A file of any size, sent straight to whoever downloads it (a `stream_file`
+task), and kept in core as it passes when it is within core's limit for kept
+files (`MINION_FILE_MAX_SIZE`, 2 GiB by default: [core's
+copy](#cores-copy-of-a-stream)). It is [a minion sending a
 file](#a-minion-sending-a-file) with two differences: the minion first
 announces the file without data, and core's acks may say `hold`. Core acks a
 chunk when its downloader has room for it, so the downloader sets the pace;
@@ -188,6 +190,22 @@ acks, cuts the download, and the minion closes the file), or after **an hour
 with no downloader**, when core cancels the task. A file that grows while
 streamed is sent as far as the size announced; one that shrinks fails the
 task.
+
+### Core's copy of a stream
+
+For a file within the limit, core keeps each chunk it passes to the
+downloader, from the start on, as it keeps [a sent file's](#a-minion-sending-a-file):
+a chunk passed again (a download resumed from earlier) adds only what the
+copy lacks. Once the last comes, core joins them and checks the whole
+against its `sha256`; a stream resumed from the middle may end without one,
+and the copy is kept with its own. The copy is a kept file like a
+download's: the task's Data tab shows it once it is whole, and the
+[file browser](../../file-browser/) opens it.
+
+A stream that goes on past what core has (a download resumed from further
+on), a chunk core cannot keep, or a stream stopped before its end leaves no
+copy; the download goes on all the same. Over the limit core keeps nothing,
+and the file browser marks the file streamed, not downloaded.
 
 ## Streaming a file to a minion
 

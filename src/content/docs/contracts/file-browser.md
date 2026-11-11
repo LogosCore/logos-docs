@@ -66,7 +66,7 @@ command's; the rest as each task ends, done.
 |---|---|
 | A [listing](../minion-messages/tasks-and-results/#listings) (an `ls`'s, a walk's: any command's), as its pieces come | The folder's children become the listing's: entries it has are seen, and once the whole listing is in, those it no longer has are gone (a partial one marks nothing gone). The folder, and its parents up to the root, are entries too. A folder not read (`err`) says so. |
 | `delete_path` (an `rm`) | The entry is gone; a folder, with everything under it. |
-| `file_download`, `file_stream` | The file is seen (its size), and `downloaded` gets the kept file (a download's; a stream keeps none: its SHA-256 only). |
+| `file_download`, `file_stream` | The file is seen (its size), and `downloaded` gets the kept file: a download's, or a stream's [copy](../minion-messages/file-transfers/#cores-copy-of-a-stream), kept whole as it passed. A stream core kept no copy of (over the size limit, or not passed through whole) goes to `streamed` instead, its SHA-256 only. |
 | `file_upload` | The file is seen, with the size the minion wrote, and `uploaded` gets it. |
 | `volumes` (a `list_volumes`) | Each volume's path is a folder holding its `volume` (a Windows drive one of the machine's roots, with its parents up to the root on Linux); a volume a newer list no longer has loses it, and a list older than the newest the machine holds changes nothing (it would bring a drive back). None at all changes nothing either. |
 
@@ -111,7 +111,9 @@ snapshot of the session's machine.
 - **Listed or not**: a folder listed shows amber, in the table and the tree;
   one never listed (known only as the way to another entry) grey and dashed;
   one a task could not read, a red lock, its line saying why.
-- **Marks**: downloaded (opens the kept file's view; a stream keeps none),
+- **Marks**: downloaded (opens the kept file's view), streamed (a stream
+  core kept no copy of: nothing opens, and its name stays dim, as core does
+  not have the file),
   uploaded (when, its SHA-256), deleted (struck through, with when and how).
   **Show deleted** hides them; it is on.
 - **In flight**: a task of the acting session on a path, whatever started it,
