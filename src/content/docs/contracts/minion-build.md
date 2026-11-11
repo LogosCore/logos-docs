@@ -846,13 +846,22 @@ form, made from the factory's schema: what to build (description, target,
 platform), the commands as two lists, available and selected, with the
 required ones fixed in place, the build parameters in the factory's groups,
 and the connections; a JSON tab edits the same build as JSON. A build opens on
-its **Overview**, with its **JSON** and its **Pipeline** next to it; operators
-cancel it there while it runs, download or delete its artifact, **Build
-again**, and delete the build (also from the row's menu in the list). A factory's page under Modules shows what it builds: its targets,
+its **Pipeline** while it is queued or running, or when it failed or was
+cancelled, and on its **Overview** once it succeeded; its **Connections**,
+**Commands**, **Targets** (for a build with a `bind` connection) and **JSON**
+are beside them. The JSON tab has two views: **Build**, what it takes to build
+it again, which pastes into a new build's JSON tab, and **Sent to factory**,
+the `factory.build` request core sent, exactly as it went: core keeps the
+payload's bytes when it offers the build (and drops them when that instance
+does not take it), and Download saves those bytes, to work on a factory away
+from core. Operators cancel a build there while it runs, download or delete its
+artifact, **Build again**, and delete the build (also from the row's menu in
+the list). A factory's page under Modules shows what it builds: its targets,
 build parameters and commands.
 
 The API is GraphQL: the queries `factoryKinds`, `buildFiles`, `builds` (paged,
-with the same search and filters), `build` and `minions`, and the mutations
+with the same search and filters), `build` (its `request` is the
+`factory.build` request as sent, JSON text) and `minions`, and the mutations
 `createBuild` (problems by place in the error's `extensions.problems`),
 `cancelBuild`, `deleteBuild`, `deleteBuildArtifact` and `deleteBuildFile`. Bytes go over REST:
 `POST /api/v1/build-files` uploads a build file (multipart: `operationId` and
