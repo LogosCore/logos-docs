@@ -208,6 +208,10 @@ Its connection schema (`ssh`, version 1), both kinds agentless:
 | `bind-call` | `call_reuse` (`30s`: how long the SSH connection stays open after a call for the next one; `0s` logs in for every call) | `host` (required), `port` (`22`), `host_key`, `user` (who a credential without a username logs in as), `credentials` (required: a `credential_list` of the operation's [credentials](../credentials/), `KEY` and `PLAINTEXT`, up to 8, tried in order), `proxy` (`socks5://`, `socks5h://` or `http://`, CONNECT), `connect_timeout` (`10s`) |
 | `bind-persistent` | `keepalive` (`30s`) | The same |
 
+Its [field numbers](../minion-connection/#field-numbers): `host` 1, `port` 2,
+`host_key` 3, `user` 4, `credentials` 5, `proxy` 6, `connect_timeout` 7,
+`call_reuse` 8, `keepalive` 9.
+
 - **Logging in**: with the target's credentials, in its order, a connection
   each, until one is taken: a `KEY` by its key (OpenSSH or PEM, with its
   passphrase; a key whose line breaks a paste lost is made a block again,

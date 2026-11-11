@@ -88,7 +88,10 @@ credentials in the value's order, each checked against the field's
 A **task** carries the credential itself in its arg, since a minion has no
 way to look one up: a `credential` param's arg is the credential, a
 `credential_list`'s an array of them ([Tasks](../minion-messages/tasks-and-results/#tasks)),
-read with `protocol.ArgCredential` and `ArgCredentials`.
+read with `protocol.ArgCredential` and `ArgCredentials`. A
+[minion config](../minion-build/#the-minion-config) does the same with a
+numbered credential field of a build or a connection: the credential in
+place of the id, read with the same functions.
 
 ```cddl
 credential = {

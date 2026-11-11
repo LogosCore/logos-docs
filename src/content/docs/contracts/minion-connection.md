@@ -37,17 +37,17 @@ Declared in `module.register` under `connection`:
     "reverse-call": {
       "fields": [
         {
-          "key": "base_url", "type": "url", "label": "Base URL", "required": true,
+          "key": "base_url", "num": 1, "type": "url", "label": "Base URL", "required": true,
           "pattern": "^https?://[^/?#\\s]+$", "max_length": 2048, "group": "Address", "order": 1
         },
-        { "key": "tls_verify", "type": "bool", "default": false, "group": "TLS", "order": 6 },
-        { "key": "request_timeout", "type": "duration", "default": "40s", "min": "1s", "max": "10m", "group": "Timing", "order": 10 }
+        { "key": "tls_verify", "num": 6, "type": "bool", "default": false, "group": "TLS", "order": 6 },
+        { "key": "request_timeout", "num": 10, "type": "duration", "default": "40s", "min": "1s", "max": "10m", "group": "Timing", "order": 10 }
       ]
     },
     "reverse-persistent": {
       "fields": [
-        { "key": "base_url", "type": "url", "label": "Base URL", "required": true, "group": "Address", "order": 1 },
-        { "key": "ws_reconnect_backoff", "type": "duration", "default": "60s", "min": "1s", "max": "1h", "group": "Timing", "order": 13 }
+        { "key": "base_url", "num": 1, "type": "url", "label": "Base URL", "required": true, "group": "Address", "order": 1 },
+        { "key": "ws_reconnect_backoff", "num": 13, "type": "duration", "default": "60s", "min": "1s", "max": "1h", "group": "Timing", "order": 13 }
       ]
     }
   }
@@ -59,8 +59,8 @@ Declared in `module.register` under `connection`:
 | `schema_version` | Format of this structure: `"2"`. (`"1"`, one field list for every kind, is gone.) |
 | `version` | Version of the channel's parameter set, from 1. Raised when minions built against the previous set would read the new one wrongly: a field removed, renamed or given another meaning, in any kind. Adding an optional field does not need it. |
 | `kinds` | The connection kinds the channel carries (`reverse-call`, `reverse-persistent`, `bind-call`, `bind-persistent`), at least one, each with its own `fields`. |
-| `kinds.<kind>.fields[]` | Up to 32, with unique keys within the kind, each a field spec exactly as in a [management manifest](../module-management/#fields): `key`, `type`, label, description, group, order, required, default, bounds, pattern, options. `file` is not allowed. |
-| `kinds.<kind>.target[]` | Bind kinds only: what core needs to reach a minion ([bind-call targets](../channel-core-connections/#bind-call-minions-targets-and-sessions)). Built for `bind-call` and `bind-persistent`. |
+| `kinds.<kind>.fields[]` | Up to 32, with unique keys within the kind, each a field spec exactly as in a [management manifest](../module-management/#fields): `key`, `type`, label, description, group, order, required, default, bounds, pattern, options. `file` is not allowed. And `num`, required: the field's number ([Field numbers](#field-numbers)). |
+| `kinds.<kind>.target[]` | Bind kinds only: what core needs to reach a minion ([bind-call targets](../channel-core-connections/#bind-call-minions-targets-and-sessions)). Built for `bind-call` and `bind-persistent`. Each with a `num` too, in the kind's numbering. |
 | `kinds.<kind>.max_message` | Optional. The largest minion message (CBOR plaintext) the channel carries each way on a connection of the kind, 1 024 to 786 432 bytes; left out, 786 432 (768 KiB). Core keeps what it sends within it, and gives it to builds ([Limits](../minion-messages/wire-format/#limits)). |
 | `kinds.<kind>.delegated_only` | Optional: no instance of the channel carries the kind; only [delegates](../minion-messages/delegation/) do, minions serving its transport on their hosts. Core sends no call or open of the kind to the channel's instances, and a target of it names a delegate. Never with `agentless`. |
 | `kinds.<kind>.agentless` | Bind kinds only, optional: the channel acts as the minion on connections of the kind, with nothing on the target ([agentless channels](../agentless-channels/)). Core gives it the keys of each call's and open's id; every other channel never sees a key. The channel's code says it, never an operator or a factory. |
@@ -86,6 +86,23 @@ stays current.
 
 The schema describes **what a minion is given**, not how the channel runs. The
 channel's own settings are its [management properties](../module-management/).
+
+### Field numbers
+
+Every field of every kind has a number, `num`, 1 to 65535, its target
+fields too: core refuses a schema missing one, whether anything reads the
+channel's fields by number yet or not. A minion built from a [minion
+config](../minion-build/#the-minion-config) reads its connection's settings
+by them. A key has the same number in every kind, and a kind's fields and its
+target's share one numbering (core gives a channel both in one map), so a
+number names one key across the schema. Minions keep the numbers they were
+built with, so a number stays its field's: a new field takes a number not used
+before, and a removed field's is never given to another. The HTTP channel
+numbers its fields 1 to 13 (below); the TCP and SSH channels' are with their
+fields ([The TCP channel](../channel-core-connections/#the-tcp-channel),
+[Agentless channels](../agentless-channels/#the-channel)). A channel's page
+under Modules shows each field with its number, a bind kind's target fields
+under their own row (GraphQL: `ModuleField.num`).
 
 ## Channel endpoints
 
@@ -225,21 +242,21 @@ out in each; `ws_reconnect_backoff` is `reverse-persistent`'s alone, and the
 timing fields are described per kind (a check-in over a WebSocket is a frame,
 not a request).
 
-| Key | Type | Default | Notes |
-|---|---|---|---|
-| `base_url` | url | required | `http(s)://host[:port]`, **no path**: the channel accepts any path, the minion picks its own. At most 2048 characters. |
-| `extra_base_urls` | string_list | — | More addresses of the channel in the same form (e.g. other fronts), at most 16. A minion falls back to them, in order, when the base URL cannot be reached; the other parameters apply to each. |
-| `host_header` | string | — | `Host` to send when it must differ from the base URL's host (CDN, reverse proxy). At most 255 characters. |
-| `sni` | string | — | TLS server name, when it must differ. At most 255 characters. |
-| `proxy` | url | — | Outbound proxy for the minion. |
-| `tls_verify` | bool | `false` | Check the certificate against trusted roots. |
-| `tls_pin_sha256` | string | — | SHA-256 of the server certificate (64 hex); authenticates the server with verification off. |
-| `user_agent` | string (`format: user_agent`) | — | Empty: the minion's built-in one. The UI offers a generator for realistic browser User-Agents, and says under the field when a value is outdated or gives itself away ([`format`](../module-management/#fields)). At most 512 characters. |
-| `headers` | string_map | — | Extra headers on every request and WebSocket handshake, name → value (names are header tokens, values have no line breaks and at most 4096 characters; at most 32). |
-| `request_timeout` | duration | `40s` | 1s to 10m. How long to wait for a reply. Keep it above the channel's `CORE_SYNC_TIMEOUT` (30s by default): a minion giving up sooner than the channel waits for core drops replies still on their way. |
-| `checkin_interval` | duration | `60s` | 1s to 168h. `reverse-call`: how often to check in with nothing to send. `reverse-persistent`: how soon core expects the minion back after the WebSocket closed (late, then lost, run by it); while it is open no check-in is needed (core pushes tasks, and the channel closes the WebSocket when its link to core breaks, so the minion reconnects by `ws_reconnect_backoff`). |
-| `checkin_jitter` | int (%) | `20` | 0 to 100. Random spread around the interval. |
-| `ws_reconnect_backoff` | duration | `60s` | `reverse-persistent` only. 1s to 1h. Longest wait between WebSocket reconnects (from 1s, doubling). |
+| Key | Num | Type | Default | Notes |
+|---|---|---|---|---|
+| `base_url` | 1 | url | required | `http(s)://host[:port]`, **no path**: the channel accepts any path, the minion picks its own. At most 2048 characters. |
+| `extra_base_urls` | 2 | string_list | — | More addresses of the channel in the same form (e.g. other fronts), at most 16. A minion falls back to them, in order, when the base URL cannot be reached; the other parameters apply to each. |
+| `host_header` | 3 | string | — | `Host` to send when it must differ from the base URL's host (CDN, reverse proxy). At most 255 characters. |
+| `sni` | 4 | string | — | TLS server name, when it must differ. At most 255 characters. |
+| `proxy` | 5 | url | — | Outbound proxy for the minion. |
+| `tls_verify` | 6 | bool | `false` | Check the certificate against trusted roots. |
+| `tls_pin_sha256` | 7 | string | — | SHA-256 of the server certificate (64 hex); authenticates the server with verification off. |
+| `user_agent` | 8 | string (`format: user_agent`) | — | Empty: the minion's built-in one. The UI offers a generator for realistic browser User-Agents, and says under the field when a value is outdated or gives itself away ([`format`](../module-management/#fields)). At most 512 characters. |
+| `headers` | 9 | string_map | — | Extra headers on every request and WebSocket handshake, name → value (names are header tokens, values have no line breaks and at most 4096 characters; at most 32). |
+| `request_timeout` | 10 | duration | `40s` | 1s to 10m. How long to wait for a reply. Keep it above the channel's `CORE_SYNC_TIMEOUT` (30s by default): a minion giving up sooner than the channel waits for core drops replies still on their way. |
+| `checkin_interval` | 11 | duration | `60s` | 1s to 168h. `reverse-call`: how often to check in with nothing to send. `reverse-persistent`: how soon core expects the minion back after the WebSocket closed (late, then lost, run by it); while it is open no check-in is needed (core pushes tasks, and the channel closes the WebSocket when its link to core breaks, so the minion reconnects by `ws_reconnect_backoff`). |
+| `checkin_jitter` | 12 | int (%) | `20` | 0 to 100. Random spread around the interval. |
+| `ws_reconnect_backoff` | 13 | duration | `60s` | `reverse-persistent` only. 1s to 1h. Longest wait between WebSocket reconnects (from 1s, doubling). |
 
 There is no transport, method or path parameter: the channel accepts plain
 requests and WebSockets, any method, any path, and the minion is free to use and

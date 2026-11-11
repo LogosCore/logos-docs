@@ -601,6 +601,13 @@ the minion listens on a TCP port, the channel dials it on `open`.
 |---|---|
 | `listen_port` (required), `listen_address` (`0.0.0.0`), `max_connections` (1, up to 16: a new dial may come in while an old one has not timed out), `keepalive` (30s) | `host` (required), `port` (the listen port when empty: a port forward), `proxy` (`socks5://`, `socks5h://` or `http://`, CONNECT), `connect_timeout` (10s) |
 
+Its fields have the same [numbers](../minion-connection/#field-numbers)
+in each kind that has them, its targets' fields sharing the numbering:
+`host` 1, `port` 2, `connect_timeout` 3, `keepalive` 4, `reconnect_backoff`
+5, `request_timeout` 6, `checkin_interval` 7, `checkin_jitter` 8 (the
+reverse kinds'), `listen_port` 9, `listen_address` 10, `max_connections` 11
+(`bind-persistent`'s), `proxy` 12 (a target's).
+
 On the TCP connection each message is one frame, both ways:
 `[length: 4 bytes, big-endian][id: 16 bytes][sealed message]`, the length
 counting the id and the message. The minion speaks first once a dial is in

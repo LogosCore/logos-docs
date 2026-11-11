@@ -41,17 +41,17 @@ Declared in `module.register` under `build`:
   "version": 1,
   "channels": [
     {
-      "module_name": "http", "versions": [3],
+      "module_name": "http", "num": 1, "versions": [3],
       "kinds": [
         {
           "kind": "reverse-call",
           "fields": [
             {
-              "key": "method", "type": "enum", "label": "Method", "default": "POST",
+              "key": "method", "num": 1, "type": "enum", "label": "Method", "default": "POST",
               "options": [{ "value": "GET" }, { "value": "POST" }, { "value": "PUT" }]
             },
             {
-              "key": "path_prefix", "type": "string", "label": "Path prefix", "default": "/",
+              "key": "path_prefix", "num": 2, "type": "string", "label": "Path prefix", "default": "/",
               "description": "Every request path starts with it, e.g. /cdn/assets/ when the front forwards only that path.",
               "pattern": "^/[A-Za-z0-9._~!$&'()*+,;=:@%/-]*$", "max_length": 256
             }
@@ -61,7 +61,7 @@ Declared in `module.register` under `build`:
           "kind": "reverse-persistent",
           "fields": [
             {
-              "key": "path_prefix", "type": "string", "label": "Path prefix", "default": "/",
+              "key": "path_prefix", "num": 2, "type": "string", "label": "Path prefix", "default": "/",
               "description": "The WebSocket's path starts with it.",
               "pattern": "^/[A-Za-z0-9._~!$&'()*+,;=:@%/-]*$", "max_length": 256
             }
@@ -69,26 +69,26 @@ Declared in `module.register` under `build`:
         }
       ]
     },
-    { "module_name": "dns", "versions": [1], "kinds": [{ "kind": "reverse-call" }] }
+    { "module_name": "dns", "num": 2, "versions": [1], "kinds": [{ "kind": "reverse-call" }] }
   ],
   "crypto": "aes-256-cbc-hmac-sha256",
   "fields": [
-    { "key": "kill_date", "type": "datetime", "label": "Kill date", "group": "Limits", "order": 1 },
+    { "key": "kill_date", "num": 1, "type": "datetime", "label": "Kill date", "group": "Limits", "order": 1 },
     {
-      "key": "guardrails", "type": "enum_list", "label": "Run only if", "group": "Limits", "order": 2,
+      "key": "guardrails", "num": 2, "type": "enum_list", "label": "Run only if", "group": "Limits", "order": 2,
       "options": [
         { "value": "domain_joined", "label": "Domain-joined" },
         { "value": "no_debugger", "label": "No debugger attached" }
       ]
     },
-    { "key": "debug", "type": "bool", "label": "Debug build", "default": false, "group": "Build", "order": 3 }
+    { "key": "debug", "num": 3, "type": "bool", "label": "Debug build", "default": false, "group": "Build", "order": 3 }
   ],
   "targets": [
     {
       "id": "windows-exe", "label": "Windows executable", "format": "exe",
       "platforms": ["windows/amd64", "windows/386", "windows/arm64"],
       "fields": [
-        { "key": "icon", "type": "file", "label": "Icon", "accept": [".ico"], "max_size": 262144, "group": "Appearance", "order": 4 }
+        { "key": "icon", "num": 4, "type": "file", "label": "Icon", "accept": [".ico"], "max_size": 262144, "group": "Appearance", "order": 4 }
       ]
     },
     {
@@ -96,7 +96,7 @@ Declared in `module.register` under `build`:
       "platforms": ["windows/amd64"],
       "fields": [
         {
-          "key": "service_name", "type": "string", "label": "Service name", "required": true,
+          "key": "service_name", "num": 5, "type": "string", "label": "Service name", "required": true,
           "pattern": "^[A-Za-z0-9_-]{1,64}$", "group": "Service", "order": 4
         }
       ]
@@ -135,7 +135,7 @@ Declared in `module.register` under `build`:
 |---|---|
 | `schema_version` | Format of this structure: `"3"` (connection kinds, each with its own parameters, per channel; commands and their params numbered). `"1"` and `"2"` are no longer taken. |
 | `version` | Version of the factory's parameter set, from 1. Raised when values saved against the previous set would build something else or fail: a field or target removed, renamed or given another meaning. Adding an optional field or a target does not need it. |
-| `channels[]` | At least one: the channel kinds the minions can speak: `module_name`, the connection schema `versions` they read (1 to 16), and `kinds`. |
+| `channels[]` | At least one: the channel kinds the minions can speak: `module_name`, the connection schema `versions` they read (1 to 16), and `kinds`; and `num`, the channel's number in a [minion config](#the-minion-config), 1 to 65535, once in the schema. |
 | `channels[].kinds[]` | At least one, in the factory's order of preference: the [connection kinds](../channel-core-connections/#kinds-in-the-build-schema-and-in-builds) the minions support through that channel, each `kind` with optional `fields`, the factory's own [connection parameters](#connection-parameters) for a connection of that kind, in full. |
 | `crypto` | Optional. The payload crypto suite the minions implement. Core's, whose keys core generates for each minion: only `aes-256-cbc-hmac-sha256` (AES-256-CBC, then HMAC-SHA256 over the ciphertext) for now, and core refuses a registration with another suite without a dot (`validation_failed`). Or the factory's own, `<module_name>.<name>`, which the factory translates and makes the keys of ([Codecs](../minion-messages/codecs/)). |
 | `envelope` | Optional. How the minions write a message as plaintext: `cbor` (the default) or `json`, core's, or the factory's own, `<module_name>.<name>`, which it translates ([Codecs](../minion-messages/codecs/)). |
@@ -147,6 +147,7 @@ Declared in `module.register` under `build`:
 | `max_tasks` | Optional, `false` by default. The minions' limit of tasks at once is the operators' to set: a build says how many (`max_tasks` in the request, under Commands in the build form), their `hello` says it, and core changes it live ([Max tasks](../minion-messages/tasks-and-results/#max-tasks)). Without it a build has no limit to set, and a minion runs as many as its factory made it (one at a time, say), which its `hello` may report but nothing changes. |
 | `compression` | Optional. The algorithms the minions inflate: `["deflate"]`, the one the protocol has. A build packs its messages with it unless the operator turns that off (`compression` in the request, Compress messages in the build form): core packs the items it sends the minion where that pays, and the minion may pack its own ([Compression](../minion-messages/wire-format/#compression)). Without it core packs nothing for its minions. Protocol v0.47.0; BOB declares it. |
 | `persisted_sessions` | Optional, `false` by default. The minions can claim a persisted session: built with a `session_id`, they claim it in their `hello` (see [Persisted sessions](../minion-messages/sessions/#persisted-sessions)). Operators can build such a minion from a session only for a factory that says so. |
+| `minion_config` | Optional, `false` by default. The factory wants each build's settings numbered, as a minion reads them: core sends a [minion config](#the-minion-config) with each build request (`minion_config`), numbered CBOR for the factory to use as it decides. Every schema numbers its channels, fields and connection parameters, so core can make one for any build. BOB declares it, and bakes the config in whole. |
 
 A target:
 
@@ -167,6 +168,14 @@ A target:
   without it clears the stored one. factory-core runs the same check before it
   starts, and does not start with an invalid schema.
 - Field keys are unique across the shared fields and each target's own fields.
+- Every build field (a `file` one too) and every connection parameter has a
+  `num`, its key in a [minion config](#the-minion-config), 1 to 65535, and
+  every `channels` entry its own, unique in the schema: core refuses a schema
+  missing one, whether the factory's minions read numbers yet or not. A
+  number names one key across the shared fields and every target's own, and
+  across a channel's kinds' parameters, and a key numbered in two places has
+  the same number in both. Like a command's `op`, a number once given stays
+  its field's.
 - Target and command ids are unique; a target's `format` takes the same form
   as an id. Platforms are `os/arch` in lowercase letters and digits, each half
   up to 31 characters, unique in their target.
@@ -204,7 +213,8 @@ In the build request, each connection's settings come as an endpoint export,
 next to these values with defaults filled in (see [`factory.build`](#factorybuild)).
 
 A parameter may reuse a key of the channel's schema: the two never mix, since
-the minion reads each from its own place.
+the minion reads each from its own place. In a [minion config](#the-minion-config)
+a parameter goes by its `num`, the channel's settings by the channel's own.
 
 ### Field types for builds
 
@@ -400,6 +410,75 @@ connection's kind, settings, name and description as a new endpoint of the
 operation, for later builds; the factory's parameters stay with the build.
 Either way it is a copy: nothing refers back afterwards.
 
+## The minion config
+
+A factory that wants a build's settings the way a minion reads them,
+numbered rather than named, declares `minion_config`. With each build request
+core then also sends the **minion config**: the request's settings as CBOR
+with numbered keys, base64 in the request's JSON (`minion_config`), beside the
+same settings in JSON. It is a convenience, not a say in the artifact: what
+goes into a minion, and in what form, is the factory's to decide. A factory
+may bake the bytes in whole, take parts of them, or build its own from the
+JSON; core never looks at what it builds. A minion handed the bytes reads them
+with the decoder it reads core's messages with (`protocol.ReadMinionConfig`),
+by numbers alone, so it carries no names of its settings, as it carries none
+of its messages' ([Wire format](../minion-messages/wire-format/)). BOB
+declares it from version 4 of its schema and bakes the bytes in whole; its
+minion's numbers are in `minion/fields.go`.
+
+**Why core makes it.** The numbers come from schemas: the factory's for its
+channels, fields and connection parameters, and each channel's for that
+channel's fields, which a factory does not have (an endpoint's settings come
+to it by name). Core holds them all, at the versions the build's connections
+follow, so it numbers the settings once, the same way for every factory, in
+the forms a minion already reads in a task's arguments. A factory gets them
+without knowing a channel's numbering or writing a translation, in any
+language. The request itself stays JSON: servers read it, and the build's
+JSON tab shows it as it went.
+
+| Key | Value |
+|---|---|
+| 1 | The build id, 16 bytes. |
+| 2 | The payload crypto suite and the minion's keys: `{1: suite, 2: enc key, 3: mac key}` for `aes-256-cbc-hmac-sha256`, 32 bytes each; `{1: suite, 4: material}` for a suite of the factory's own. Absent when the target's builds have no suite. |
+| 3 | The envelope: `json`, or the factory's own; absent for `cbor`. |
+| 4 | The connections, in the order the minion tries them (below). |
+| 5 | The failover policy: `{1: enabled, 2: fail after, 3: fail for, 4: wrap, 5: cycle pause, 6: failback after}`, durations in milliseconds, a key that is 0 or false left out. |
+| 6 | The commands the minion has, by `op`, in the schema's order. |
+| 7 | Max tasks, as in the request; absent for a factory without `max_tasks`. |
+| 8 | The compression the minion packs with, a packed item's `alg` (1, deflate); absent when off. |
+| 9 | The persisted session it claims, 16 bytes; absent for none. |
+| 10 | The build's values, by their fields' `num`. |
+
+A connection is `{1: channel, 2: version, 3: kind, 4: params, 5: values,
+6: failover, 7: max message}`: the channel's `num` in the factory's schema,
+the version of the channel's connection schema it follows, the kind's
+number (1 `reverse-call`, 2 `reverse-persistent`, 3 `bind-call`, 4
+`bind-persistent`), the endpoint's settings by the channel's own [field
+numbers](../minion-connection/#field-numbers), the factory's connection
+parameters by theirs, the connection's `{1: auto, 2: fail after}`, and its
+largest message (absent: 768 KiB). The endpoint's name is not in it.
+
+A value takes the CBOR form a task's arguments take
+([Tasks](../minion-messages/tasks-and-results/#tasks)): a duration in
+milliseconds, a datetime in unix seconds, a list or a map as it is, and a
+`credential` field's value the [credential](../credentials/#what-a-module-gets)
+itself (a `credential_list`'s, the list), in place of the id; the minion
+reads them with the same functions (`protocol.ArgString`, `ArgDuration`,
+`ArgCredential`). A field with no value and every `file` field are left out:
+a file's bytes are the factory's to handle. The request's links, deadline and actor are
+not in it either: they are about the build, not its settings. Maps are
+written in a deterministic order, so the same request gives the same bytes; a
+config is 64 KiB at most.
+
+Core makes it as it makes the request: when the build is created (one that
+cannot be made refuses the build, `minion_config` among the problems), and
+each time it offers it (one that cannot be made then fails the build,
+`minion_config`). It cannot be made through a channel whose registered
+connection schema is not the version the build's connections follow, or
+was stored before numbers were required. factory-core checks it with the rest
+of the request: present exactly when the schema declares it, readable, and
+this build's (its id, and as many connections as the request).
+
 ## Building
 
 ```mermaid
@@ -553,6 +632,7 @@ Request `payload`:
 | `envelope` | Present when the target's envelope is not `cbor`: `json`, or the factory's own. |
 | `max_tasks` | Present for a factory that declares `max_tasks`: how many tasks the minion runs at once as it starts, 0 (none until a session sets more) to 64; 5 unless the operator set another. The factory builds it in. |
 | `compression` | Present for a factory that declares `compression`, unless the operator turned it off: the algorithm the minion packs and inflates (`"deflate"`). The factory builds it in. Protocol v0.47.0. |
+| `minion_config` | Present for a factory that declares `minion_config`, and only then: the [minion config](#the-minion-config), this request's settings numbered, base64. What of it goes into the minion is the factory's to decide. |
 | `session_id` | Present for a build with a persisted session (only to a factory that declares `persisted_sessions`): the session the minion claims in its `hello`, a lowercase UUID; an existing session, or one core reserved with the build. The factory builds it in. |
 | `artifact` | Where to upload the artifact: `upload_url`, a link (as a file's [`url`](#build-files)) to `PUT` it to, with its length (`Content-Length`; none: 411), valid until a minute past the deadline, and `max_size`, the largest artifact the factory may upload (a core setting, default 256 MiB). factory-core refuses to upload a larger one (`artifact_too_large`); core refuses one over the build's limit before reading a byte (413), and holds the factory to it by its result too: see [`factory.build.result`](#factorybuildresult). A second upload replaces the first. |
 | `deadline` | When core stops waiting: the build timeout after the offer. |
@@ -826,6 +906,7 @@ factory's codes:
 | `schema_changed` | No registered instance declares the build's schema version any more, and the factory kind's latest schema is another version. |
 | `artifact_too_large` | The result reports an artifact larger than the `max_size` the instance was given. The upload is deleted. |
 | `artifact_mismatch` | The artifact the result reports is not in the store, differs in size or SHA-256, or could not be read to check it until an hour past the deadline. |
+| `minion_config` | The [minion config](#the-minion-config) the factory reads cannot be made as core offers the build: a channel of the build follows another connection schema version now, or its stored schema predates required numbers. |
 
 ## Settings
 
@@ -857,7 +938,10 @@ does not take it), and Download saves those bytes, to work on a factory away
 from core. Operators cancel a build there while it runs, download or delete its
 artifact, **Build again**, and delete the build (also from the row's menu in
 the list). A factory's page under Modules shows what it builds: its targets,
-build parameters and commands.
+build parameters and commands, each with its number (a field's `num`, a
+channel's in its connection rows, a command's `op` and its params' `num`s),
+for whoever writes a minion that reads them. The GraphQL types carry them too
+(`ModuleField.num`, `BuildChannel.num`, `BuildCommand.op`).
 
 The API is GraphQL: the queries `factoryKinds`, `buildFiles`, `builds` (paged,
 with the same search and filters), `build` (its `request` is the
@@ -886,6 +970,20 @@ downloads an artifact.
   channel schema also keeps endpoints shareable by every factory. They travel
   next to the endpoint export rather than inside it, so a channel that later
   adds a field with the same key changes nothing for minions already built.
+- **Core numbers the settings; the factory decides what to bake.** Numbering
+  needs schemas only core holds together (each channel numbers its own
+  fields), so core makes the numbered form once, alike for every factory, and
+  sends it beside the JSON. Its part ends there: core neither knows nor
+  checks what a factory builds into its minion, and a factory may use the
+  config whole, in part, or not at all. Sending the whole request in CBOR
+  instead would still leave the channels' fields for each factory to number,
+  and would put the build's links, deadline and actor in the same blob as
+  the settings, so baking it whole would no longer be safe.
+- **Every module numbers its fields.** Channels and factories number every
+  field (target fields and files too) whether anything reads them by number
+  yet or not: numbers cost a schema nothing, a config can be made for any
+  build through any channel, and a later reader by number (a target's values,
+  a file) needs no new rule.
 - **A build is building before it is offered.** A factory accepts a build and
   starts on it at once, reporting progress as it goes; its reply can reach core
   after its first report. Core therefore records the build as building on an
