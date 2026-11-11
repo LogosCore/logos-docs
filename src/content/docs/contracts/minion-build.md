@@ -127,6 +127,10 @@ Declared in `module.register` under `build`:
       "params": [{ "key": "path", "num": 1, "type": "string", "label": "Path", "required": true }]
     },
     { "id": "screenshot", "op": 5, "label": "Screenshot", "targets": ["windows-exe"] }
+  ],
+  "error_codes": [
+    { "code": 3, "label": "Its config does not read", "description": "The settings built into the minion are damaged: build it again." },
+    { "code": 4, "label": "Past its kill date" }
   ]
 }
 ```
@@ -143,6 +147,7 @@ Declared in `module.register` under `build`:
 | `fields[]` | Build parameters shared by every target. Field specs as in a [management manifest](../module-management/#fields), plus the [types below](#field-types-for-builds). |
 | `targets[]` | What the factory can produce, at least one. |
 | `commands[]` | Optional. What the minions can do. Operators pick each build's [commands](#commands) from its target's. |
+| `error_codes[]` | Optional. What the minions' exit codes mean: the factory's own [minion error codes](#minion-error-codes), for operators to look up. |
 | `failover` | Optional, `false` by default. The minions honor a build's [failover settings](../channel-core-connections/#failover): they move between their connections on their own as those say. Without it the settings still reach the factory, which may ignore them; the build form says so. |
 | `max_tasks` | Optional, `false` by default. The minions' limit of tasks at once is the operators' to set: a build says how many (`max_tasks` in the request, under Commands in the build form), their `hello` says it, and core changes it live ([Max tasks](../minion-messages/tasks-and-results/#max-tasks)). Without it a build has no limit to set, and a minion runs as many as its factory made it (one at a time, say), which its `hello` may report but nothing changes. |
 | `compression` | Optional. The algorithms the minions inflate: `["deflate"]`, the one the protocol has. A build packs its messages with it unless the operator turns that off (`compression` in the request, Compress messages in the build form): core packs the items it sends the minion where that pays, and the minion may pack its own ([Compression](../minion-messages/wire-format/#compression)). Without it core packs nothing for its minions. Protocol v0.47.0; BOB declares it. |
@@ -345,6 +350,42 @@ does when they build it: a minion built for one job carries nothing more.
 - A command removed or renamed needs a new `version`, like a field. Adding
   one does not, a required one included: core adds it to every build of its
   targets.
+
+### Minion error codes
+
+A minion that stops on an error (a config it cannot read, no connection it
+can use) has nobody to tell but its exit code. `error_codes` (optional) says
+what the factory's minions mean by theirs, so an operator who sees a minion
+exit with 3 looks up what 3 is. Each one:
+
+| Field | Meaning |
+|---|---|
+| `code` | 1 to 255, once in the schema: an exit code every OS keeps whole (a Unix process's is a byte). 0 is success and never one. |
+| `label` | Required: what it means, in a few words (120 characters at most). |
+| `description` | Optional: more, such as when it happens and what to do (1000 characters at most). |
+
+A factory may declare a runtime's own codes too, to say what they mean for
+its minions: Go exits with 2 on a panic, and shells report a process a
+signal killed as 128 and the signal's number (137 for `SIGKILL`). Codes of
+its own between 3 and 125 keep clear of those. A code, once given, keeps its
+meaning: minions already built exit with it.
+
+Core keeps the codes with the factory's schema and shows them, as the
+Minion error codes card on the factory's page under Modules and on each of
+its builds' Overview (the factory's codes today, as the Commands tab's
+labels are). It does nothing else with them for now. They are not the
+[error codes](#error-codes) a failed build carries, which say why the build
+failed.
+
+BOB declares five (`minion/exits.go` in its minion):
+
+| Code | Label |
+|---|---|
+| 1 | Could not start: for a reason without a code of its own (the minion's log says which) |
+| 2 | Crashed: Go's own code for a panic no task recovered, or a fatal error of the Go runtime |
+| 3 | Its config does not read |
+| 4 | Built without core's keys |
+| 5 | No connection it can use |
 
 ## Build files
 
@@ -887,6 +928,10 @@ section.
 
 ## Error codes
 
+Why a build failed: the factory's answers and core's own reasons. What a
+minion's exit code means is another table, the factory's
+[minion error codes](#minion-error-codes).
+
 | Code | Used in | Meaning |
 |---|---|---|
 | `validation_failed` | all | Malformed payload, or a request the factory cannot build. |
@@ -941,7 +986,9 @@ the list). A factory's page under Modules shows what it builds: its targets,
 build parameters and commands, each with its number (a field's `num`, a
 channel's in its connection rows, a command's `op` and its params' `num`s),
 for whoever writes a minion that reads them. The GraphQL types carry them too
-(`ModuleField.num`, `BuildChannel.num`, `BuildCommand.op`).
+(`ModuleField.num`, `BuildChannel.num`, `BuildCommand.op`). Its
+[minion error codes](#minion-error-codes) are there as well, and on each of
+its builds' Overview (`BuildSchema.errorCodes`).
 
 The API is GraphQL: the queries `factoryKinds`, `buildFiles`, `builds` (paged,
 with the same search and filters), `build` (its `request` is the
@@ -1048,3 +1095,8 @@ downloads an artifact.
 - **`file` only in build schemas.** Only a build hands files to a module,
   and a command hands them to its minion. A property or an endpoint holding
   a file would need its own way to deliver it.
+- **Minion error codes are only shown.** An exit code is all a minion that
+  cannot start leaves behind, and only its factory knows what its own mean.
+  So the factory declares them, and core shows them where an operator looks
+  up a minion: nothing in core acts on a code yet. A code is a byte so that
+  it means the same on every OS a target runs on.
