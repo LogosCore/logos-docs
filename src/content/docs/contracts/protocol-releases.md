@@ -13,6 +13,7 @@ to it in the same release round
 
 | Version | Date | What it brought |
 |---|---|---|
+| [v0.54.0](https://github.com/LogosCore/logos-golang-protocol/releases/tag/v0.54.0) | 2026-11-12 | The live build log: `factory.build.log`, a running build's output line by line, each line with its step; optional, the result's `log` kept for a factory without it |
 | [v0.53.0](https://github.com/LogosCore/logos-golang-protocol/releases/tag/v0.53.0) | 2026-11-12 | Build fields for some platforms: `platforms` |
 | [v0.52.0](https://github.com/LogosCore/logos-golang-protocol/releases/tag/v0.52.0) | 2026-11-12 | Minion error codes per build: drawn by core, fixed ones kept |
 | [v0.51.0](https://github.com/LogosCore/logos-golang-protocol/releases/tag/v0.51.0) | 2026-11-11 | Minion error codes |

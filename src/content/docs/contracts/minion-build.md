@@ -582,6 +582,7 @@ sequenceDiagram
     CORE->>S3: stream them from the store
     loop each step
         F->>CORE: factory.build.progress (the step it is on)
+        F->>CORE: factory.build.log (its output, each line with the step)
     end
     F->>CORE: upload artifact (its link)
     CORE->>S3: stream it into the store
@@ -653,11 +654,12 @@ same build at once.
 | `factory.build` | core → factory | Start a build. |
 | `factory.build.cancel` | core → factory | Stop a build. |
 | `factory.build.progress` | factory → core | Report the step of its plan a running build is on. |
+| `factory.build.log` | factory → core | Send a running build's output, line by line, by step (optional). |
 | `factory.build.result` | factory → core | Report how a build ended. |
 
 Core calls the factory on its `rpc_queue` (`logos.factory.rpc.<instance>`), as
 for [management](../module-management/#transport). The factory calls core on
-`logos.core.rpc`, as for [lifecycle](../module-lifecycle/#transport). All four
+`logos.core.rpc`, as for [lifecycle](../module-lifecycle/#transport). All five
 are request/reply.
 
 ---
@@ -785,6 +787,52 @@ reported as done, so a lost one only costs a step its times.
 waits for the build from this instance (it was cancelled, ran out of time, or
 is another instance's), and the factory should stop it.
 
+### `factory.build.log`
+
+A factory may send its output while it builds, so that operators read it as it
+comes, step by step. Request `payload`:
+
+```json
+{
+  "build_id": "5b0c4f6e-8a1d-4c2b-9e7f-3d2a1b0c9e8f",
+  "seq": 3,
+  "lines": [
+    { "step": "compile", "at": "2026-11-12T15:04:05.25Z", "text": "$ GOOS=windows GOARCH=amd64 go build -o .bin/minion.exe ." },
+    { "step": "compile", "at": "2026-11-12T15:04:09.8Z", "text": "github.com/coder/websocket" }
+  ],
+  "dropped": 0
+}
+```
+
+- `lines` are the output written since the last chunk, in order: each with
+  the `id` of the plan's step it was written in (none: in no step), when it
+  was written, and its `text`, one line without its line break.
+- `seq` numbers the chunks from 1, one more each. They go one at a time, in
+  order: a chunk whose call was lost is sent again with the same `seq`, and
+  core keeps the first and answers the same. A `seq` that skips one is a chunk
+  that never arrived, and `dropped` counts the lines the factory dropped itself
+  before this chunk (it fell behind, or gave up on a chunk): core shows both as
+  lines missing there.
+- The factory sends what is left before the result, so core has the whole log
+  when the build ends.
+- Limits: 1 to 500 lines (none only with `dropped`), 64 KiB of text in all, a
+  line at most 4 KiB of valid UTF-8 (`protocol.MaxBuildLogChunkLines`,
+  `MaxBuildLogChunkBytes`, `MaxBuildLogLineBytes`). Core refuses a chunk outside
+  them (`validation_failed`).
+
+Reply `payload`: `{ "build_id": "…", "seq": 3, "ack": true }`. `not_found`
+means core no longer waits for the build from this instance, and the factory
+stops it, as for progress. Any other error means core does not take the live
+log (a core from before it answers `validation_failed`, an unknown
+operation): the factory stops sending it for that build, and its log goes
+with the result.
+
+The live log is optional. A factory that does not send it sends its output
+with the result (`log`, below), as before; core shows that without steps. A
+factory that sends it may still put the log's end in its result: core keeps
+the live log when it got one, and the result's otherwise. Core keeps a build's
+last 8 MiB of live log, dropping its oldest chunks past that.
+
 ### `factory.build.result`
 
 Request `payload` when the build succeeded:
@@ -818,7 +866,9 @@ and when it failed:
 - What the minion can do is no part of the result: it is the request's
   `commands`, which the factory built in, or it failed the build.
 - `warnings` and `log` (the build output, its last 64 KiB) are shown with the
-  build; the log matters most when it fails.
+  build; the log matters most when it fails. Core keeps `log` only for a build
+  that sent no [live log](#factorybuildlog): factory-core sends both, so a
+  core that does not take the live log still has the output.
 - `error.code` is the factory's own, e.g. `compile_failed`: a slug,
   `^[a-z0-9][a-z0-9_.-]{0,62}$`. factory-core reports some
   [codes of its own](../../guides/writing-a-factory/#results-and-failures).
@@ -986,7 +1036,7 @@ minion's exit code means is another table, the factory's
 | `validation_failed` | all | Malformed payload, or a request the factory cannot build. |
 | `busy` | `factory.build` | The instance runs as many builds as it may, is drained, or is stopping. |
 | `unsupported_version` | `factory.build` | The request's `schema_version` is not the one this instance declares, or the envelope's major version is unknown. |
-| `not_found` | `factory.build.progress`, `factory.build.result` | Core no longer waits for this build. |
+| `not_found` | `factory.build.progress`, `factory.build.log`, `factory.build.result` | Core no longer waits for this build. |
 | `internal_error` | all | Unexpected failure. |
 
 Core's own reasons for a failed build, kept in its record next to the

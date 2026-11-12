@@ -44,7 +44,7 @@ servers depending on the operation:
 | Log tail control | core → module | **module** (same queue) | `mgmt.logs.start`, `mgmt.logs.stop` |
 | Log batches | module → core | — (pub/sub on `logos.module.logs`) | live log records, while a stream is open |
 | Builds | core → factory | **factory** (its `rpc_queue`) | `factory.build`, `factory.build.cancel` |
-| Build reports | factory → core | **core** (`logos.core.rpc`) | `factory.build.progress`, `factory.build.result` |
+| Build reports | factory → core | **core** (`logos.core.rpc`) | `factory.build.progress`, `factory.build.log`, `factory.build.result` |
 | Lifecycle events | core → any subscriber | — (pub/sub on `logos.events`) | `module.registered`, `.deregistered`, `.declared_dead`, `.blocked`, `.unblocked`, `.deleted` |
 
 Registration bootstraps everything else: core cannot issue a management RPC to a

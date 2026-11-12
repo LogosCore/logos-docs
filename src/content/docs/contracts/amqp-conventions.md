@@ -12,7 +12,7 @@ the platform on a shared broker.
 
 | Exchange | Type | Purpose |
 |---|---|---|
-| `logos.core.rpc` | `direct` | Module → core RPC requests: lifecycle (register, heartbeat, deregister) and a factory's build reports (`factory.build.progress`, `factory.build.result`). |
+| `logos.core.rpc` | `direct` | Module → core RPC requests: lifecycle (register, heartbeat, deregister) and a factory's build reports (`factory.build.progress`, `factory.build.log`, `factory.build.result`). |
 | `logos.<module-type>.rpc` | `direct` | One per module type: `logos.channel.rpc`, `logos.factory.rpc`. Each module instance binds its request queue to it with routing key `<instance>`; core itself publishes to modules through the default exchange (below). |
 | `logos.module.logs` | `direct` | Module → core [live log batches](../module-logs/), routing key = stream id. |
 | `logos.events` | `topic` | Core's lifecycle events, for any subscriber. |
@@ -30,7 +30,7 @@ request queue; the *caller* is the RPC **client**.
 | Operation class | Client | Server (owns queue) |
 |---|---|---|
 | Lifecycle (`module.*`) | module | **core** — `logos.core.rpc` |
-| Build reports (`factory.build.progress`, `.result`) | factory | **core** — `logos.core.rpc` |
+| Build reports (`factory.build.progress`, `.log`, `.result`) | factory | **core** — `logos.core.rpc` |
 | Management and log tail (`mgmt.*`) | core | **module** — `logos.<module-type>.rpc.<instance>` |
 | Builds (`factory.build`, `.cancel`) | core | **factory** — `logos.factory.rpc.<instance>` |
 

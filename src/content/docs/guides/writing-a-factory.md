@@ -211,8 +211,8 @@ func (b *bob) Build(ctx context.Context, job *factory.Job) (factory.Result, erro
 | `Request`, `Target` | The `factory.build` request, already checked against the schema, and the target being built. `Values` holds every field with a value or a default. |
 | `Steps()` | The plan, as core got it. |
 | `HasCommand(id)` | Whether the minion is built with a command: the operator picked it, or the target requires it. Build in exactly the request's `commands`, or fail the build. |
-| `Step(id, message)` | Report the step of the plan the build is on. |
-| `Log()`, `Logf` | The build log, sent with the result; core keeps its last 64 KiB and shows it with the build. |
+| `Step(id, message)` | Report the step of the plan the build is on; the log's lines from then on are the step's. |
+| `Log()`, `Logf` | The build log. factory-core sends it to core as it is written, line by line, each line with the step it was written in (before the first `Step`, the plan's first step's) and when ([`factory.build.log`](../../contracts/minion-build/#factorybuildlog)); the operators read it by step while the build runs. Its last 64 KiB also go with the result, for a core that does not take the live log. A line not ended yet goes when it ends, at the next `Step`, or when the build ends. |
 | `File(key)` | The file a `file` field names: the field's value is its id, the file is in `Request.Files`. |
 | `ReadFile`, `Download` | Fetch a file from core, into memory (small files) or to a path on disk, its size and SHA-256 checked; nothing is left at the path when it fails. |
 | `UploadArtifact` | Spool the artifact to a temporary file, refuse one over the request's `max_size` (`artifact_too_large`), and upload it to core with its length; its size and SHA-256 go into the result. A second upload replaces the first. |
