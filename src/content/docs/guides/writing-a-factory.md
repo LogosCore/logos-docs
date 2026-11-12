@@ -361,6 +361,9 @@ BOB does. Under v0.50.0, `protocol.BuildSchema` has no `ErrorCodes`.
 `error_codes_per_build` and `fixed` came with v0.52.0, likewise: the request's
 codes are `job.Request.ErrorCodes`, and `job.Request.ExitCode(code)` gives the
 build's for a declared one (the declared code itself when none was drawn).
+A field's `platforms` ([Fields for some platforms](../../contracts/minion-build/#fields-for-some-platforms))
+came with v0.53.0: a request carries such a field only for its platforms,
+and `schema.PlatformFields(target, platform)` gives the fields a build takes.
 
 ## Testing a builder
 
@@ -526,7 +529,7 @@ self-signed certificate).
 11. **Tests with a request as core sends it**: values with defaults, keys,
     connections, and the minion config.
 12. **protocol v0.51.0 in `go.mod`** for a schema with `error_codes`, v0.52.0
-    with `error_codes_per_build`.
+    with `error_codes_per_build`, v0.53.0 with a field's `platforms`.
 13. **A `Codec`** when the schema names a suite or an envelope of the
     factory's own.
 
@@ -543,7 +546,7 @@ otherwise it is a minion ([Writing a Minion](../writing-a-minion/#bobs-minion)).
 
 | Kind | Declared |
 |---|---|
-| Build schema | Version 4. Targets `linux-elf` (`elf`, `linux/amd64` and `linux/386`; its tunnels open no named pipes) and `windows-exe` (`exe`, `windows/amd64`, `windows/386` and `windows/arm64`). Fields `greeting`, `kill_date` (`datetime`), `punches` (`enum_list`) and `badge` (`file`, an image up to 256 KiB, which BOB fetches and checks; it never goes into the minion). Channels `http` (num 1, version 3: `reverse-call` with BOB's `method` and `path_prefix`, `reverse-persistent` with `path_prefix`) and `tcp` (num 2, version 1: `bind-persistent`, `reverse-persistent`, `reverse-call`). Core's suite, `persisted_sessions`, `failover`, `max_tasks`, `compression` (`deflate`), `minion_config` and `error_codes` 1 to 5. |
+| Build schema | Version 6. Targets `linux-elf` (`elf`, `linux/amd64`, `linux/386`, `linux/arm64` and `linux/arm`; its tunnels open no named pipes; its own field `goarm`, num 5, for `linux/arm` alone: the ARM version, 7, 6 or 5, BOB compiles for with `GOARM`) and `windows-exe` (`exe`, `windows/amd64`, `windows/386` and `windows/arm64`). Fields `greeting`, `kill_date` (`datetime`), `punches` (`enum_list`) and `badge` (`file`, an image up to 256 KiB, which BOB fetches and checks; it never goes into the minion). Channels `http` (num 1, version 3: `reverse-call` with BOB's `method` and `path_prefix`, `reverse-persistent` with `path_prefix`) and `tcp` (num 2, version 1: `bind-persistent`, `reverse-persistent`, `reverse-call`). Core's suite, `persisted_sessions`, `failover`, `max_tasks`, `compression` (`deflate`), `minion_config` and `error_codes` 1 to 5. |
 | Commands | `sleep` and `exit` (required); `hello`, `ls`, `switch` and `volumes` (picked by default); `download`, `stream_download`, `upload`, `stream_upload`, `rm`, `walk`, `shell`, `feedback`, `tunnel`, `reverse_tunnel`, `delegate` and `reverse_delegate`. Ops 1 to 19, 16 unused. |
 | Plan | `badge` (when the build has one), `compile`, `upload` |
 | Failure codes | `badge_unreadable`, `no_toolchain`, `compile_failed`, `knocked_out` |

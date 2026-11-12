@@ -98,7 +98,15 @@ Declared in `module.register` under `build`:
         }
       ]
     },
-    { "id": "linux-elf", "label": "Linux binary", "format": "elf", "platforms": ["linux/amd64", "linux/arm64"] },
+    {
+      "id": "linux-elf", "label": "Linux binary", "format": "elf", "platforms": ["linux/amd64", "linux/arm64", "linux/arm"],
+      "fields": [
+        {
+          "key": "goarm", "num": 8, "type": "enum", "label": "ARM version", "default": "7", "platforms": ["linux/arm"],
+          "options": [{ "value": "7", "label": "ARMv7" }, { "value": "6", "label": "ARMv6" }, { "value": "5", "label": "ARMv5" }]
+        }
+      ]
+    },
     {
       "id": "shellcode", "label": "Shellcode", "format": "bin",
       "platforms": ["windows/amd64", "linux/amd64"],
@@ -143,7 +151,7 @@ Declared in `module.register` under `build`:
 | `crypto` | Optional. The payload crypto suite the minions implement. Core's, whose keys core generates for each minion: only `aes-256-cbc-hmac-sha256` (AES-256-CBC, then HMAC-SHA256 over the ciphertext) for now, and core refuses a registration with another suite without a dot (`validation_failed`). Or the factory's own, `<module_name>.<name>`, which the factory translates and makes the keys of ([Codecs](../minion-messages/codecs/)). |
 | `envelope` | Optional. How the minions write a message as plaintext: `cbor` (the default) or `json`, core's, or the factory's own, `<module_name>.<name>`, which it translates ([Codecs](../minion-messages/codecs/)). |
 | `codec` | Required when the schema or a target names a suite or an envelope of the factory's own, refused otherwise: `growth` (percent, 100 to 400), `overhead` (bytes, 0 to 4096) and `timeout` (a duration, 100 ms to 30 s; 5 s by default), what the factory's [translation](../minion-messages/codecs/#a-builds-codec) may take. |
-| `fields[]` | Build parameters shared by every target. Field specs as in a [management manifest](../module-management/#fields), plus the [types below](#field-types-for-builds). |
+| `fields[]` | Build parameters shared by every target. Field specs as in a [management manifest](../module-management/#fields), plus the [types below](#field-types-for-builds); one may be for some platforms alone ([Fields for some platforms](#fields-for-some-platforms)). |
 | `targets[]` | What the factory can produce, at least one. |
 | `commands[]` | Optional. What the minions can do. Operators pick each build's [commands](#commands) from its target's. |
 | `error_codes[]` | Optional. What the minions' exit codes mean: the factory's own [minion error codes](#minion-error-codes), for operators to look up. Protocol v0.51.0; factory-core v0.4.1 requires v0.50.0, so a factory that declares them requires v0.51.0 itself. |
@@ -162,7 +170,7 @@ A target:
 | `label`, `description` | Shown in the UI. |
 | `format` | What the artifact is: `exe`, `dll`, `elf`, `so`, `macho`, `dylib`, `bin` (raw shellcode), `script`, `zip`, or another name of the same form. Shown and filtered on; the factory names the file. |
 | `platforms[]` | Where the artifact runs, as `os/arch` with Go's names (`windows/amd64`, `linux/arm64`, `darwin/arm64`). `any` stands for either half: `any/any` for a script. Checked by form only, so a new platform needs no protocol release. |
-| `fields[]` | Parameters of this target only, added to the shared ones. |
+| `fields[]` | Parameters of this target only, added to the shared ones; one may be for some of its platforms alone ([Fields for some platforms](#fields-for-some-platforms)). |
 | `channels[]` | Optional. Narrows the factory's `channels` for this target, to channel kinds, `versions` and connection `kinds` (names only) the factory lists. The connection parameters stay the factory's. |
 | `opens[]` | Optional. Narrows what this target's tunnel commands open (their `opens[]`), for a platform that has less: a Linux build has no named pipes. Empty: all of them. |
 | `crypto`, `envelope` | Optional. Replace the schema's for this target's builds ([Codecs](../minion-messages/codecs/)): one factory may build a minion in a compiled language and one in a script. A target whose codec is not core's CBOR with core's suite connects through no [agentless](../agentless-channels/) kind: core refuses such a build. |
@@ -184,6 +192,11 @@ A target:
 - Target and command ids are unique; a target's `format` takes the same form
   as an id. Platforms are `os/arch` in lowercase letters and digits, each half
   up to 31 characters, unique in their target.
+- A field's `platforms` take the same form, up to 16, once each, and each one
+  matches a platform its builds can be for: a target field's, one of its
+  target's; a shared field's, one of any target's. Only a build's fields have
+  them: a connection parameter or a command's param with `platforms` is
+  refused.
 - Channel kinds are unique, each with its `versions` unique and from 1. A
   target's `channels` name only kinds and versions the factory lists.
 - Suites and envelopes are slugs (`^[a-z0-9][a-z0-9._-]{0,62}$`): one without a
@@ -265,6 +278,34 @@ names it by the last part of the task's `path` arg, and refuses a task whose
 path names no file. In the command form it is a file picker: a file picked
 there goes from the browser once the task is queued; none picked, it goes
 with curl from the task's view.
+
+### Fields for some platforms
+
+A build field, shared or a target's, may apply to builds for some platforms
+alone: `platforms`, `os/arch` as a target's, where `any` stands for either
+half (`any/arm`: every 32-bit ARM). Empty, it applies to every platform. An
+`any` in a build's own platform is matched by `any` alone: a field for
+`linux/arm` does not apply to a build for `linux/any`.
+
+```json
+{
+  "key": "goarm", "num": 8, "type": "enum", "label": "ARM version", "default": "7", "platforms": ["linux/arm"],
+  "options": [{ "value": "7", "label": "ARMv7" }, { "value": "6", "label": "ARMv6" }, { "value": "5", "label": "ARMv5" }]
+}
+```
+
+For a build on another platform the field does not exist: the build form
+shows it once one of its platforms is picked, core refuses a value given for
+it elsewhere (`values.goarm: only for linux/arm`) and fills in no default, and
+neither the request nor the [minion config](#the-minion-config) carries it.
+A `required` one is required only where it applies. Its `num` is its own all
+the same, as every field's. When the platforms differ in more than a field
+or two (other commands, other channels), a target per platform says it
+better.
+
+The protocol's `BuildSchema.PlatformFields(target, platform)` gives the
+fields a build takes, the ones core checks and fills in; `FieldSpec.OnPlatform`
+says whether one applies.
 
 ### Commands
 
@@ -558,7 +599,9 @@ latest schema:
   operators' note (core keeps it, see [Build records](#build-records-and-minions));
 - the target exists, and the platform is one of its `platforms`;
 - the values follow the field rules (type, bounds, pattern, required, and **no
-  undeclared keys**) for the shared fields plus the target's own;
+  undeclared keys**) for the shared fields plus the target's own, those of
+  the build's platform: a value for a field of other platforms is refused
+  ([Fields for some platforms](#fields-for-some-platforms));
 - each command picked is one of the target's, picked once; core adds the
   target's required ones (see [Commands](#commands) for a build that leaves
   `commands` out);
