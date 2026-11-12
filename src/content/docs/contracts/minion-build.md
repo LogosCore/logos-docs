@@ -125,9 +125,11 @@ Declared in `module.register` under `build`:
     },
     { "id": "screenshot", "op": 5, "label": "Screenshot", "targets": ["windows-exe"] }
   ],
+  "error_codes_per_build": true,
   "error_codes": [
     { "code": 3, "label": "Its config does not read", "description": "The settings built into the minion are damaged: build it again." },
-    { "code": 4, "label": "Past its kill date" }
+    { "code": 4, "label": "Past its kill date" },
+    { "code": 2, "label": "Crashed", "description": "Go's own code for a panic: the minion's output says where.", "fixed": true }
   ]
 }
 ```
@@ -145,6 +147,7 @@ Declared in `module.register` under `build`:
 | `targets[]` | What the factory can produce, at least one. |
 | `commands[]` | Optional. What the minions can do. Operators pick each build's [commands](#commands) from its target's. |
 | `error_codes[]` | Optional. What the minions' exit codes mean: the factory's own [minion error codes](#minion-error-codes), for operators to look up. Protocol v0.51.0; factory-core v0.4.1 requires v0.50.0, so a factory that declares them requires v0.51.0 itself. |
+| `error_codes_per_build` | Optional, `false` by default. Each build's minion exits with codes of its own, which core draws as it queues the build ([Codes per build](#codes-per-build)) and the request carries (`error_codes`), unless the operator turns that off. Needs an error code that is not `fixed`. Protocol v0.52.0; BOB declares it. |
 | `failover` | Optional, `false` by default. The minions honor a build's [failover settings](../channel-core-connections/#failover): they move between their connections on their own as those say. Without it the settings still reach the factory, which may ignore them; the build form says so. |
 | `max_tasks` | Optional, `false` by default. The minions' limit of tasks at once is the operators' to set: a build says how many (`max_tasks` in the request, under Commands in the build form), their `hello` says it, and core changes it live ([Max tasks](../minion-messages/tasks-and-results/#max-tasks)). Without it a build has no limit to set, and a minion runs as many as its factory made it (one at a time, say), which its `hello` may report but nothing changes. |
 | `compression` | Optional. The algorithms the minions inflate: `["deflate"]`, the one the protocol has. A build packs its messages with it unless the operator turns that off (`compression` in the request, Compress messages in the build form): core packs the items it sends the minion where that pays, and the minion may pack its own ([Compression](../minion-messages/wire-format/#compression)). Without it core packs nothing for its minions. Protocol v0.47.0; BOB declares it. |
@@ -331,29 +334,59 @@ exit with 3 looks up what 3 is. Each one:
 
 | Field | Meaning |
 |---|---|
-| `code` | 1 to 255, once in the schema: an exit code every OS keeps whole (a Unix process's is a byte). 0 is success and never one. |
+| `code` | 1 to 255, once in the schema: an exit code every OS keeps whole (a Unix process's is a byte). 0 is success and never one. With `error_codes_per_build`, the default: what a build that draws none exits with. |
 | `label` | Required: what it means, in a few words (120 characters at most). |
 | `description` | Optional: more, such as when it happens and what to do (1000 characters at most). |
+| `fixed` | Optional, with `error_codes_per_build` only: the code is the same in every build. |
 
 A factory may declare a runtime's own codes too, to say what they mean for
 its minions: Go exits with 2 on a panic, and shells report a process a
-signal killed as 128 and the signal's number (137 for `SIGKILL`). Codes of
-its own between 3 and 125 keep clear of those. A code, once given, keeps its
-meaning: minions already built exit with it.
+signal killed as 128 and the signal's number (137 for `SIGKILL`). A code,
+once given, keeps its meaning: minions already built exit with it.
 
-Core keeps the codes with the factory's schema and shows them, as the
-Minion error codes card on the factory's page under Modules and on each of
-its builds' Overview (the factory's codes today, as the Commands tab's
-labels are). It does nothing else with them for now. They are not the
-[error codes](#error-codes) a failed build carries, which say why the build
-failed.
+#### Codes per build
 
-BOB declares five (`minion/exits.go` in its minion):
+With `error_codes_per_build`, each build's minion exits with codes of its
+own: two builds of the factory exit with different codes for the same
+error, and an exit code says nothing of the factory that made the minion.
+As it queues a build, core draws an exit code for every declared code that
+is not `fixed`, at random from 3 to 255, none twice and none a fixed code. 0
+is success, 1 every runtime's generic failure and 2 Go's panic: a factory
+whose minions use them declares them fixed. The pool takes every code from 3
+to 255, those shells also report among them (126 and 127, and 128 and a
+signal's number). The request carries the drawn codes (`error_codes`,
+[below](#factorybuild)), and the factory builds them into the minion. An
+operator can turn that off for a build (Unique error codes in the build
+form, `unique_error_codes` in its JSON): the request then carries none, and
+the minion exits with the declared codes.
+
+- `fixed` is for a code the minions cannot change: a runtime's own, or one a
+  library exits with. Core draws none for it, and never draws its number for
+  another code.
+- The schema needs a code that is not fixed, and room in the pool for every
+  one: 253 codes, less the fixed ones among them. Core refuses a schema
+  otherwise (`validation_failed`).
+- A factory that starts declaring `error_codes_per_build` raises its
+  `version`: an instance of the previous version would ignore the codes, and
+  is never offered a build that carries them.
+- The codes are no part of the [minion config](#the-minion-config): the error
+  they most often report is a config the minion cannot read.
+
+Core keeps each build's codes with the build, as the factory's were when it
+was queued: the Minion error codes card on the build's Overview lists what
+its minion exits with, and says when they were drawn for it. The factory's
+page under Modules shows the declared codes, the fixed ones marked. Core does
+nothing else with them for now. They are not the [error codes](#error-codes)
+a failed build carries, which say why the build failed.
+
+BOB declares five (`minion/exits.go` in its minion), each build drawing its
+own but for 1 and 2. Before it compiles a build, it writes the build's codes
+into its copy of `exits.go`.
 
 | Code | Label |
 |---|---|
-| 1 | Could not start: for a reason without a code of its own (the minion's log says which) |
-| 2 | Crashed: Go's own code for a panic no task recovered, or a fatal error of the Go runtime |
+| 1 | Could not start: for a reason without a code of its own (the minion's log says which). Fixed. |
+| 2 | Crashed: Go's own code for a panic no task recovered, or a fatal error of the Go runtime. Fixed. |
 | 3 | Its config does not read |
 | 4 | Built without core's keys |
 | 5 | No connection it can use |
@@ -624,6 +657,7 @@ Request `payload`:
     }
   },
   "crypto": { "suite": "aes-256-cbc-hmac-sha256", "material": { "enc_key": "<base64, 32 bytes>", "mac_key": "<base64, 32 bytes>" } },
+  "error_codes": [{ "code": 3, "exit_code": 87 }, { "code": 4, "exit_code": 201 }],
   "artifact": { "upload_url": "/api/factory/builds/5b0c4f6e-…/artifact?expires=1793025060&sig=…", "max_size": 268435456 },
   "deadline": "2026-10-26T14:30:00Z",
   "actor": { "type": "user", "id": "f140266c-…", "name": "admin" }
@@ -644,6 +678,7 @@ Request `payload`:
 | `envelope` | Present when the target's envelope is not `cbor`: `json`, or the factory's own. |
 | `max_tasks` | Present for a factory that declares `max_tasks`: how many tasks the minion runs at once as it starts, 0 (none until a session sets more) to 64; 5 unless the operator set another. The factory builds it in. |
 | `compression` | Present for a factory that declares `compression`, unless the operator turned it off: the algorithm the minion packs and inflates (`"deflate"`). The factory builds it in. Protocol v0.47.0. |
+| `error_codes` | Present for a factory that declares `error_codes_per_build`, unless the operator turned that off: the build's exit codes, one `{ "code", "exit_code" }` for every declared code that is not fixed ([Codes per build](#codes-per-build)). The factory builds them into the minion; protocol's `BuildRequest.ExitCode` reads one. Protocol v0.52.0. |
 | `minion_config` | Present for a factory that declares `minion_config`, and only then: the [minion config](#the-minion-config), this request's settings numbered, base64. What of it goes into the minion is the factory's to decide. |
 | `session_id` | Present for a build with a persisted session (only to a factory that declares `persisted_sessions`): the session the minion claims in its `hello`, a lowercase UUID; an existing session, or one core reserved with the build. The factory builds it in. |
 | `artifact` | Where to upload the artifact: `upload_url`, a link (as a file's [`url`](#build-files)) to `PUT` it to, with its length (`Content-Length`; none: 411), valid until a minute past the deadline, and `max_size`, the largest artifact the factory may upload (a core setting, default 256 MiB). factory-core refuses to upload a larger one (`artifact_too_large`); core refuses one over the build's limit before reading a byte (413), and holds the factory to it by its result too: see [`factory.build.result`](#factorybuildresult). A second upload replaces the first. |

@@ -348,6 +348,7 @@ has the items in full.
 | `failover` | `failover`, and each connection's own | Moves between its connections on its own as the policy says, with a `conn_update` each time ([Failover](../../contracts/channel-core-connections/#failover)). |
 | `minion_config` | `minion_config` | Nothing on the wire. A minion built with the bytes reads them by number. |
 | `error_codes` | Nothing | Exits with those codes when it cannot start ([Minion error codes](../../contracts/minion-build/#minion-error-codes)). |
+| `error_codes_per_build` | `error_codes`: the build's exit codes, unless the operator turned them off | Exits with the build's codes instead of the declared ones, but for the fixed ones: the factory builds them in ([Codes per build](../../contracts/minion-build/#codes-per-build)). |
 | A command with a `file` or `stream` param, or a file action | Tasks whose arg is a file offer | Moves files in `chunk`s with `ack`s ([File transfers](../../contracts/minion-messages/file-transfers/)). |
 | A command with the `tunnel` or `reverse_tunnel` action (`opens`) | Tasks, then tunnel items | Opens, relays and closes streams (items 21 to 28: [Tunnels](../../contracts/minion-messages/tunnels/)). |
 | A command with the `delegate` or `reverse_delegate` action (`serves`) | Tasks, then `delegate` items | Serves the channel kinds its command names for other minions ([Delegation](../../contracts/minion-messages/delegation/)). |
@@ -357,6 +358,9 @@ has the items in full.
 requires v0.50.0: a factory that declares them requires
 `github.com/logoscore/logos-golang-protocol` v0.51.0 in its own `go.mod`, as
 BOB does. Under v0.50.0, `protocol.BuildSchema` has no `ErrorCodes`.
+`error_codes_per_build` and `fixed` came with v0.52.0, likewise: the request's
+codes are `job.Request.ErrorCodes`, and `job.Request.ExitCode(code)` gives the
+build's for a declared one (the declared code itself when none was drawn).
 
 ## Testing a builder
 
@@ -521,7 +525,8 @@ self-signed certificate).
     table](#what-the-schema-asks-of-the-minions) is one.
 11. **Tests with a request as core sends it**: values with defaults, keys,
     connections, and the minion config.
-12. **protocol v0.51.0 in `go.mod`** for a schema with `error_codes`.
+12. **protocol v0.51.0 in `go.mod`** for a schema with `error_codes`, v0.52.0
+    with `error_codes_per_build`.
 13. **A `Codec`** when the schema names a suite or an envelope of the
     factory's own.
 

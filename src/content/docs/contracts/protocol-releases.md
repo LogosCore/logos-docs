@@ -13,6 +13,7 @@ to it in the same release round
 
 | Version | Date | What it brought |
 |---|---|---|
+| [v0.52.0](https://github.com/LogosCore/logos-golang-protocol/releases/tag/v0.52.0) | 2026-11-12 | Minion error codes per build: drawn by core, fixed ones kept |
 | [v0.51.0](https://github.com/LogosCore/logos-golang-protocol/releases/tag/v0.51.0) | 2026-11-11 | Minion error codes |
 | [v0.50.0](https://github.com/LogosCore/logos-golang-protocol/releases/tag/v0.50.0) | 2026-11-11 | Minion config; every field numbered |
 | [v0.49.0](https://github.com/LogosCore/logos-golang-protocol/releases/tag/v0.49.0) | 2026-11-10 | Build links: a path on core's address, or an absolute URL |

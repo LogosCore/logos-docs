@@ -140,7 +140,9 @@ writing about it.
 - **Credentials**: credential fields in connection and build schemas; core
   hands modules the credentials an id names (Credentials).
 - **Minion error codes**: what a factory's minions' exit codes mean, declared
-  in its build schema and shown to operators (Minion Build).
+  in its build schema and shown to operators (Minion Build); with
+  `error_codes_per_build`, core draws each build's own (3 to 255, the `fixed`
+  ones kept) and the request carries them.
 - **No backward compatibility for now** (pre-1.0): names are renamed or
   removed without aliases, and the repositories a change affects move in the
   same release round (Changing the Protocol).

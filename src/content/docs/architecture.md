@@ -103,7 +103,7 @@ follows one minion from its build to its tasks.
 | [Codecs](../contracts/minion-messages/codecs/) | Built: core's envelopes (CBOR, JSON), or a factory's own envelope and suite, translated over its factory link. |
 | [Compression](../contracts/minion-messages/wire-format/#compression) | Built: packed items, raw DEFLATE, on by default for a factory that declares it. |
 | [Minion config](../contracts/minion-build/#the-minion-config) | Built: a build's settings as numbered CBOR, for a factory that asks for them. Every channel, field and parameter is numbered. |
-| [Minion error codes](../contracts/minion-build/#minion-error-codes) | Built: what a factory's minions' exit codes mean, shown to operators. |
+| [Minion error codes](../contracts/minion-build/#minion-error-codes) | Built: what a factory's minions' exit codes mean, shown to operators; each build's own, drawn by core, for a factory that takes them per build. |
 
 ## Deployment Shape
 
