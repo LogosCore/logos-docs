@@ -118,10 +118,10 @@ docker compose --profile development up -d core-dev
 
 ### A module's dev container
 
-A module's image builds from the tagged modules alone: logos-tcp-channel's,
-logos-dumbo's and logos-ssh's `.dockerignore` keep the workspace out of it,
-and in the other repositories an image built with a `go.work` present fails.
-So the dev container runs a binary built on the host:
+A module's image builds from the tagged modules alone (every module's
+`.dockerignore` keeps a workspace out of its build), so it cannot carry an
+unreleased protocol. The dev container runs a binary built on the host
+instead:
 
 ```bash
 CGO_ENABLED=0 GOOS=linux go build -o .dev-bin/http-channel ./cmd/http-channel
@@ -186,9 +186,9 @@ While the minion needs the checkout:
 
 The wiring is a developer's own: `go.work`, `go.work.sum`,
 `docker-compose.override.yml`, `.dev-bin/`, and a `replace` naming a
-checkout. Keep it out of commits: logos-dumbo's and logos-raven's
-`.gitignore` list those files, logos-vpn's `go.work` and `go.work.sum`;
-elsewhere, list them in `.git/info/exclude`. A release drops the wiring before it checks a
+checkout. Every repository's `.gitignore` lists the files (the libraries'
+and logos-vpn's the workspace alone, logos-core's its override too): only a
+`replace` is left to drop by hand. A release drops the wiring before it checks a
 repository, `core/go.work` and BOB's `minion/go.mod` included. BOB v0.35.0
 was tagged with its minion's `replace` still in place: its image could not
 compile a minion ("replacement directory … does not exist"), and every

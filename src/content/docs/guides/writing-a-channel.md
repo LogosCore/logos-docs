@@ -315,7 +315,8 @@ does not set:
 | `CHANNEL_ID` | `tcp-main`, `dumbo-main`, `http-main` | The instance id: one per process, unique across every module's instances. |
 | `LOGOS_CORE_BASE_URL` | `http://localhost:8002` | Core's base URL, `http(s)://host[:port]`: the sync call, the link and the sockets go under it. This name is the convention; the HTTP channel's own is `LOGOS_SYNC_BASE_URL`. |
 | `LOGOS_CORE_CA_FILE`, `LOGOS_CORE_CERT_SHA256`, `LOGOS_CORE_TLS_INSECURE` | none: the system's trust | How channel-core's clients trust core's certificate over HTTPS: module-core's `coretls`, which `syncclient`, `connclient` and `linkclient` use when given no client of their own ([How modules reach core](../../core-infrastructure/#how-modules-reach-core)). |
-| `RABBITMQ_HOST`, `RABBITMQ_PORT`, `RABBITMQ_USER`, `RABBITMQ_PASSWORD`, `RABBITMQ_VHOST` | `localhost`, `5672`, `guest`, `guest`, `/` | Core's RabbitMQ, for the control plane. |
+| `RABBITMQ_HOST`, `RABBITMQ_PORT`, `RABBITMQ_USER`, `RABBITMQ_VHOST` | `localhost`, `5672`, `logos`, `/` | Core's RabbitMQ, for the control plane: the defaults are core's dev stack's, seen from the host. |
+| `RABBITMQ_PASSWORD` | none: required | Its password (logos-core's `RABBITMQ_DEFAULT_PASS`). No default could fit, so a channel does not start without it. |
 | `LOG_FORMAT` | `json` | `json` or `text`, on stderr. |
 | `CORE_SYNC_TIMEOUT` | `30s` | `reverse-call`: how long a sync call waits for core. Keep it below the minions' `request_timeout` (40 s in the HTTP and TCP channels' schemas), or a minion gives up on a reply on its way. |
 

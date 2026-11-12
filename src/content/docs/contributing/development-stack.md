@@ -75,7 +75,7 @@ curl -s http://localhost:8080/api/v1/enroll \
 | Service | From the host | Inside the network |
 |---|---|---|
 | nginx: the web app, the APIs, the modules' WebSockets | <http://localhost:8080> (plain HTTP, the same routes), <https://localhost:8443> (TLS, HTTP/2) | `logos-nginx`, 80 and 443 |
-| core (`core-dev`) | not published: through nginx | `http://logos-core-dev:8002` |
+| core (`core-dev`) | <http://localhost:8002> on `127.0.0.1`, for modules run on the host; browsers go through nginx | `http://logos-core-dev:8002` |
 | the web app's Vite server (`frontend-dev`) | not published: through nginx | `logos-frontend-dev:5173` |
 | hocuspocus | not published: through nginx | `logos-hocuspocus:1234` |
 | RabbitMQ | `localhost:5672`; its management UI <http://localhost:15672> | `logos-rabbitmq:5672` |
@@ -85,8 +85,8 @@ curl -s http://localhost:8080/api/v1/enroll \
 | core's operational ports (tunnels' fronts) | `OPERATIONAL_PORTS` on `127.0.0.1`, TCP and UDP; `OPERATIONAL_PUBLISH` names another address of the host | |
 | Keycloak (`make sso`) | <http://keycloak.localhost:8180> | `keycloak.localhost:8180` |
 
-Core listens on 8002 inside the network alone: from the host it is reached
-through nginx, which routes `/api/` to it.
+nginx routes `/api/` to core; core's own 8002 is published on the host's
+loopback alone, so a module run there reaches core at its default address.
 
 ### Make targets
 
@@ -132,17 +132,17 @@ docker compose up -d --build
   listening there, or an SSH server.
 - **What it needs.** Raven's minions check in through the HTTP channel:
   start that first.
-- **`.env` is the compose file's too.** For the stack keep the RabbitMQ
-  settings alone in it. The HTTP channel's `.env.example` is for a run on
-  the host (`go run ./cmd/http-channel --config .env`): copied to `.env`,
-  its `localhost` values would have the container look for core and
-  RabbitMQ in itself.
-- **On the host instead**, with `go run`, a module reaches core through
-  nginx, `http://localhost:8080` (core's 8002 is not published), and
-  RabbitMQ at `localhost:5672` as core's user. The modules' own defaults
-  (`http://localhost:8002`, user `guest`) do not match the dev stack: set
-  `LOGOS_CORE_BASE_URL` (the HTTP channel's `LOGOS_SYNC_BASE_URL`),
-  `RABBITMQ_USER` and `RABBITMQ_PASSWORD`.
+- **`.env` is the compose file's too.** A core URL or broker host set there
+  overrides the compose file's, which reach core inside the network, and
+  the container would look for core and RabbitMQ in itself. For the stack
+  keep the RabbitMQ password alone in it: the HTTP channel's `.env.example`
+  sets only that, its other settings commented out.
+- **On the host instead**, with `go run`, a module's defaults reach the dev
+  stack: core at `http://localhost:8002` (core-dev's port, published on the
+  host's loopback) and RabbitMQ at `localhost:5672` as `logos`. Set
+  `RABBITMQ_PASSWORD` (core's `RABBITMQ_DEFAULT_PASS`): it has no default,
+  and a module does not start without it. The HTTP channel also needs a
+  `LISTEN_ADDR` other than `:8080`, which nginx has.
 
 A module registers with core when it starts. Its README has the rest of its
 settings. A module built against an unreleased protocol or SDK runs a binary
