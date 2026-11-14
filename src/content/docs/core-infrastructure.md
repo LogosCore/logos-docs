@@ -17,6 +17,7 @@ graph TD
         CS[Core Server]
         WEB[Web app]
         HP[hocuspocus]
+        GD[guacd]
         RMQ[(RabbitMQ)]
         DB[(MongoDB)]
         RDS[(Redis)]
@@ -34,6 +35,8 @@ graph TD
     NGX -- "/api/v1/ws/wiki/" --> HP
     NGX -- "/" --> WEB
     CS -. "OIDC" .-> KC
+    CS -- "desktop sessions, Guacamole protocol" --> GD
+    GD -- "a desktop's server, through its task's port" --> CS
 
     CH -- "sync call, control link, connection sockets" --> CS
     CH -- "AMQP" --> RMQ
@@ -217,6 +220,32 @@ and every module built on them.
 - **Role**: the real-time collaboration server behind the wiki editor
   (WebSocket). It reads and writes wiki documents in MongoDB itself.
 
+## guacd — Desktops
+
+- **Role**: Apache Guacamole's proxy daemon, which draws the tunnels'
+  [desktop fronts](../contracts/minion-messages/tunnels/#desktops) (RDP, VNC,
+  SSH, Telnet) for the web app. Core opens each desktop's session there and
+  relays it to the web app's Guacamole client over the desktop's socket;
+  guacd speaks the protocol to the desktop's server through core's
+  operational port for its task, which reaches the server through the
+  minion.
+- **Configuration**: core's `GUACD_ADDRESS` (`guacd:4822`) and
+  `GUACD_CORE_HOST`, the name guacd reaches core's operational ports at on
+  their network (`core-dev` in the development stack). Without them core
+  offers no desktop front; guacd needs no settings of its own.
+- **Reach**: core alone: guacd is never published, and holds nothing.
+  Credentials go from core to guacd on their network, in its connect.
+- **Image**: `logos-guacd` (`logos-core/deploy/guacd`), guacamole-server
+  1.6.0 built by Apache's own Dockerfile against **FreeRDP 3**, every library
+  pinned (`versions.env`), published by CI as
+  `ghcr.io/logoscore/logos-guacd:1.6.0-freerdp3.30.0`. Not the official
+  `guacamole/guacd:1.6.0`: its FreeRDP 2 makes guacd abort an RDP connection
+  whose desktop is resized during a paint (a desktop following the web app
+  to full screen and back), which upstream fixed for FreeRDP 3.8 and later
+  alone (GUACAMOLE-2078).
+- **Version**: the release the web app's vendored Guacamole client is
+  (`frontend/src/vendor/guacamole`): change them together.
+
 ## Keycloak — Single Sign-On (optional)
 
 - **Role**: a development identity provider for OIDC login, under the Compose
@@ -227,14 +256,14 @@ and every module built on them.
 
 - **Docker Compose** (`logos-core/docker-compose.yml`) runs the development
   stack: core (`core-dev`, rebuilt as its code changes), the web app,
-  hocuspocus and nginx (the `development` profile), RabbitMQ, MongoDB, Redis,
+  hocuspocus, guacd and nginx (the `development` profile), RabbitMQ, MongoDB, Redis,
   SeaweedFS (master, volume, filer and S3 gateway), and Keycloak (the `sso`
   profile). [Development Stack](../contributing/development-stack/) runs it.
 - **Modules** are not part of it. Each module repository has a Compose project
   of its own, which joins core's network (`logos-core_logos`). Its instance
   registers with core when it starts.
 - **Kubernetes**: a Helm chart (`logos-core/deploy/helm/logos`, with a kind
-  configuration for local clusters) deploys core, its stores and RabbitMQ.
+  configuration for local clusters) deploys core, its stores, guacd and RabbitMQ.
   Modules are not in it.
 
 ## Observability
@@ -262,6 +291,8 @@ traces in SeaweedFS, Grafana) and is planned. None of it runs.
 | Factory Modules | Core Server (or its front) | HTTP(S) | WebSocket: the factory link, for a factory that translates its minions' codec |
 | Core Server | MongoDB | MongoDB wire protocol | Persistence |
 | hocuspocus | MongoDB | MongoDB wire protocol | Wiki documents |
+| Core Server | guacd | Guacamole protocol (TCP 4822) | Desktop sessions, relayed to the web app |
+| guacd | Core Server's operational ports | RDP, VNC, SSH, Telnet | A desktop's server, through its task's port and minion |
 | Core Server | Redis | RESP | Sessions, caches, recent minion messages, stream chunks |
 | Core Server | SeaweedFS | HTTP (S3-compatible) | Object storage |
 | Factory Modules | Core Server (or its front) | HTTP(S) | Build files in, artifacts out (`/api/factory/builds/`) |

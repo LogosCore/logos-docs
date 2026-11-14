@@ -52,8 +52,8 @@ make services
 - **`make services`** starts the `development` profile, building its images
   the first time: RabbitMQ, MongoDB, Redis and SeaweedFS; `core-dev`, core
   under air, which rebuilds and restarts it when a Go file changes; `frontend-dev`,
-  Vite; hocuspocus; and nginx, the `logos-nginx` image built from
-  `deploy/nginx/`.
+  Vite; hocuspocus; guacd, which draws the tunnels' desktops; and nginx,
+  the `logos-nginx` image built from `deploy/nginx/`.
 
 Then open <https://localhost:8443/>, the browser's way in; port 8080 serves
 the same routes over plain HTTP, for scripts and clients that do not trust
@@ -78,6 +78,7 @@ curl -s http://localhost:8080/api/v1/enroll \
 | core (`core-dev`) | <http://localhost:8002> on `127.0.0.1`, for modules run on the host; browsers go through nginx | `http://logos-core-dev:8002` |
 | the web app's Vite server (`frontend-dev`) | not published: through nginx | `logos-frontend-dev:5173` |
 | hocuspocus | not published: through nginx | `logos-hocuspocus:1234` |
+| guacd (desktops): `logos-guacd`, built from source the first time (FreeRDP and the rest, about ten minutes) | not published: core alone | `logos-guacd:4822` |
 | RabbitMQ | `localhost:5672`; its management UI <http://localhost:15672> | `logos-rabbitmq:5672` |
 | MongoDB | `localhost:27018` | `logos-mongodb:27017` |
 | Redis | `localhost:6379` | `logos-redis:6379` |

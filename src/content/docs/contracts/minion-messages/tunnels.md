@@ -117,21 +117,23 @@ apply, and an optional one takes a word only when it is one of its values:
 
 | Core's | With front | |
 |---|---|---|
-| `front` | (a `tunnel`'s) | one of `socks`, `http`, `forward`, `terminal` (an enum): what core puts in front. A `reverse_tunnel` has none: its one front is a forward. |
+| `front` | (a `tunnel`'s) | one of `socks`, `http`, `forward`, `terminal`, `vpn`, and the [desktops](#desktops) `rdp`, `vnc`, `ssh` and `telnet` (an enum): what core puts in front. The terminal is offered where the command opens `process`, the desktops where core has a guacd and the command opens `tcp`. A `reverse_tunnel` has none: its one front is a forward. |
 | `port` | any | a `tunnel`'s: the operational port core listens on, 0 for any free one |
-| `host`, `to` | `forward` | a forward's destination: reached from the minion's host (a `tunnel`), or from core's network (a `reverse_tunnel`'s, both required); a name or an address, a port from 1 to 65535. The minion never learns a reverse one's; a `tunnel`'s each stream's `tunnel` item names. |
+| `host`, `to` | `forward`, desktops | a forward's destination, or a desktop's server: reached from the minion's host (a `tunnel`), or from core's network (a `reverse_tunnel`'s, both required); a name or an address, a port from 1 to 65535 (a desktop's: none for its protocol's, 3389 RDP, 5900 VNC, 22 SSH, 23 Telnet). The minion never learns a reverse one's; a `tunnel`'s each stream's `tunnel` item names. |
 | `path` | `forward` | a `tunnel`'s forward to a [unix socket or a named pipe](#unix-sockets-and-named-pipes), instead of `host` and `to`: offered where the command opens `unix` or `pipe` |
-| `source` | `socks`, `http`, `forward` | a `tunnel`'s: the address of the minion's host its TCP streams go from (an IP), on a host with two networks: offered where the command opens `source`. More options. |
+| `source` | `socks`, `http`, `forward`, `vpn`, desktops | a `tunnel`'s: the address of the minion's host its TCP streams go from (an IP), on a host with two networks: offered where the command opens `source`. More options. |
 | `tls` | `forward` | a `tunnel`'s forward to a host and a port: the minion speaks TLS to the destination, the tools plain: offered where the command opens `tls` |
 | `program`, `args` | `terminal` | a [terminal](#terminal)'s: the program each connection runs on the minion's host (empty: its shell), and its args as one command line, split as a shell splits words (quotes and backslashes; nothing expanded: `protocol.TunnelArgs`): offered where the command opens `process` |
 | `rows`, `cols` | `terminal` | a terminal's size on its raw port, 24×80 by default, 1 to 1000 each (a web terminal says its own): offered where the command opens `process`. More options. |
+| `credential` | desktops | a [desktop](#desktops)'s login: one of the operation's credentials, a password (`PLAINTEXT`) or, for SSH, a key (`KEY`); none, and the desktop asks for what its server needs |
+| `security`, `ignore_cert` | `rdp` | an RDP desktop's: the security it negotiates (`any`, the default; `nla`, `nla-ext`, `tls`, `vmconnect`, `rdp`), and whether a server certificate guacd cannot check is taken (yes by default: most RDP servers' are self-signed). More options. |
 | `stop_idle` | any | a duration after which, with no stream open, core [stops the task](#the-tunnel-commands) (Stop when idle, below): `1h` by default for a `tunnel`, never (`0s`) for a `reverse_tunnel`; 0 never. More options. |
 | `cap` | any | the [bandwidth cap](#bandwidth-cap): bytes a second each way, 0 (the default) for none. More options. |
 
 | The command's | |
 |---|---|
 | `bind`, `listen`, `udp` | a `reverse_tunnel`'s, numbered: where the minion listens, and whether for UDP datagrams, which it reads from its task; `udp` in a command that opens `udp` alone (required there, refused elsewhere) |
-| `timeout`, `max_streams` | each with a default: how long a connect may take, how many streams at once (below). BOB's are under More options (`advanced`), and its `tunnel`'s `timeout` applies with `socks`, `http` and `forward` alone: a terminal connects to nothing. |
+| `timeout`, `max_streams` | each with a default: how long a connect may take, how many streams at once (below). BOB's are under More options (`advanced`), and its `tunnel`'s `timeout` applies with `socks`, `http`, `forward` and `vpn` alone: a terminal connects to nothing, and a desktop's server is connected to with the minion's default. |
 | `opens` | what its minion opens, and how: `tcp`, and `udp` (a `tunnel`'s UDP associations, a `reverse_tunnel`'s UDP listener); a `tunnel`'s `unix` and `pipe` (a forward to a path), `source` and `tls`, `process` (the [terminal](#terminal) front) and `accept` (SOCKS5 [`BIND`](#socks)); a command that says none, `tcp` alone. A build's target narrows it (its own `opens`: a Linux build has no pipes). Core opens nothing else through it, and offers only the params it opens: a SOCKS `UDP ASSOCIATE` through one that opens no `udp` is refused (command not supported), and a reverse tunnel's `udp` as the task is queued. |
 | Needs result | none: the task's view is core's (the port's address and its streams) |
 | `kinds` | The command's [`kinds`](../../minion-build/#commands) leave out those its minion cannot keep a socket open over between messages: a `bind-call` page keeps nothing between calls, so its factory leaves `bind-call` out. |
@@ -589,6 +591,69 @@ terminal's, both ways, and its close hangs the process up.
   Its origin is checked as the GraphQL socket's (`CORS_ALLOWED_ORIGINS`, or
   the same origin): a cookie signs the upgrade in.
 
+## Desktops
+
+A `tunnel` whose front is `rdp`, `vnc`, `ssh` or `telnet` is a desktop: a
+[port forward](#port-forward) to a server of the protocol's (`host:to`, its
+protocol's port when the task names none), which core also draws in the
+web app through **guacd**, Apache Guacamole's proxy daemon, a service of
+core's stack ([Core Infrastructure](../../../core-infrastructure/#guacd--desktops)).
+The minion sees TCP streams, as a forward's: nothing of the protocol, and
+no module changes for it.
+
+- **Two ways in.** The **raw port**: an operator's own client on core's
+  port, `mstsc /v:core:41009`, `vncviewer core::41010`, `ssh -p 41011 core`,
+  `telnet core 41012`. The **web app**: the task's tab (RDP, VNC, SSH,
+  Telnet) opens a desktop, guacd's session with the server **through the
+  same port**: guacd connects to `GUACD_CORE_HOST:port`, core's name on
+  their network, and each of its connections is a stream of the task, as
+  any client's.
+- **Each desktop opened is its own session** with the server: another
+  operator's, or another tab's, logs in again. Watching another's session,
+  recording sessions, file transfer and audio are not built yet.
+- **The login** is the task's `credential`, which core resolves each time
+  a desktop opens and gives guacd alone: RDP its username, realm (the
+  domain) and password; VNC its password (and a username, for servers that
+  ask one); SSH its username and password, or its key and passphrase;
+  Telnet its username and password. The web app never gets it. With none,
+  the server asks: Guacamole's `required` instruction, which the web app
+  shows as a login form, its answers going to guacd as argument values. A
+  credential gone, or of another type, refuses the desktop, saying so.
+- **No credentials on the raw port**, as on a forward's: whoever reaches it
+  reaches the server. The web app's desktop is an operator's alone.
+- **Only where core has a guacd** (`GUACD_ADDRESS`, and `GUACD_CORE_HOST`):
+  without one, core offers no desktop front, and refuses a task naming one.
+- **On every connection kind**, as a terminal: over a polling minion each
+  screen update waits for its next check-in, slow, and the tab says so.
+
+### The desktop's socket
+
+`GET /api/v1/minion-tasks/{id}/desktop?width=&height=&dpi=&timezone=`, a
+WebSocket with the subprotocol `guacamole`, for an operator of the task's
+operation; its origin is checked as the GraphQL socket's. It speaks
+Guacamole's own protocol with the web app's Guacamole client (its
+WebSocket tunnel), the client and guacd the same release:
+
+1. Core sends the tunnel's id (the internal instruction `0.,36.<uuid>;`).
+2. Core opens the session in guacd, as Guacamole's own web application
+   does: `select` the protocol, guacd's `args`, then the display's `size`
+   (the web app's, in device pixels, with its DPI), `audio` and `video`
+   (none), `image` (PNG, JPEG, WebP), the browser's `timezone`, the
+   operator's `name`, and `connect` with guacd's version and each argument
+   guacd asked for: the server is core's port for the task, the login the
+   credential's, RDP's `security`, `ignore-cert` and `resize-method`
+   (`display-update`: the desktop follows the web app's size).
+3. Once guacd is `ready`, core relays the session: guacd's bytes to the
+   web app as they come (a message never cuts a character), the web app's
+   instructions to guacd, but for its tunnel's own (opcode empty): a ping,
+   which core answers.
+
+A desktop core or guacd does not open sends an `error` instruction (its
+message and Guacamole status code: `0x0207` guacd not reached, `0x0204` the
+task's tunnel not open, `0x0303` its login unusable, guacd's own) and
+closes the socket with the code as the reason, as Guacamole's tunnel reads
+it.
+
 ## Reverse tunnel
 
 A `reverse_tunnel` task goes the other way, as `ssh -R` does: the minion
@@ -756,6 +821,10 @@ tunnel_datagram = {     ; both: one datagram of a UDP stream
 | `reverse-persistent` | as they come, pushed both ways (core waits 5 ms for more of a client's bytes, to send them as one message) |
 | `bind-call` | in core's calls, called again at once while a stream has bytes either way: only for a minion that keeps its sockets between calls. A page does not, and leaves the kind out of the command's `kinds`. |
 | `bind-persistent` | as `reverse-persistent`, while connected |
+
+A [terminal](#terminal) or a [desktop](#desktops) works on each kind, slowly
+where every key and screen update waits for the minion's next message
+(`reverse-call`): the web app says so, and refuses nothing.
 
 The [mechanics checklist](../#changing-these-formats): every step is an
 item keyed by `(task, stream, off)` or `(task, stream)` and harmless sent
