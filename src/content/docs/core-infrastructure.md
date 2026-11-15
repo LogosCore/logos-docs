@@ -128,7 +128,10 @@ MongoDB resolves the database engine decision listed as pending in the
   - `skills`: AI agent skill bundles operators publish;
   - `logos-builds`: files uploaded for builds, and build artifacts;
   - `minion-files`: the files minions send core (a download, or a stream kept
-    as it passed).
+    as it passed);
+  - `desktop-recordings`: the desktops' recordings, each in parts as core
+    kept it
+    ([Recordings](../contracts/minion-messages/tunnels/#recordings)).
 - **Why SeaweedFS**: lightweight, self-hosted, S3-compatible API. Avoids external cloud dependencies and keeps binary blobs out of the document database.
 - **Connections**: Core Server alone reads and writes. A factory never
   reaches it: a build's files and its artifact go through core, which
@@ -235,6 +238,8 @@ and every module built on them.
   offers no desktop front; guacd needs no settings of its own.
 - **Reach**: core alone: guacd is never published, and holds nothing.
   Credentials go from core to guacd on their network, in its connect.
+  guacd records nothing either: core records each desktop as it relays it
+  ([Recordings](../contracts/minion-messages/tunnels/#recordings)).
 - **Image**: `logos-guacd` (`logos-core/deploy/guacd`), guacamole-server
   1.6.0 built by Apache's own Dockerfile against **FreeRDP 3**, every library
   pinned (`versions.env`), published by CI as

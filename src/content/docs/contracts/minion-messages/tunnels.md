@@ -609,7 +609,11 @@ no module changes for it.
   any client's.
 - **Each desktop opened is its own session** with the server: another
   operator's, or another tab's, logs in again. Watching another's session,
-  recording sessions, file transfer and audio are not built yet.
+  file transfer and audio are not built yet.
+- **Each desktop opened is recorded** by core as it relays it, what it
+  showed and the operator's mouse and keys, and plays in the task's
+  Recordings tab, after the task ends too ([below](#recordings)). A client
+  of the operator's own on the raw port is not.
 - **The settings, each time one opens**: quality, keyboard layout,
   clipboard, view only and the rest of its front's
   ([below](#a-desktops-settings)), picked in the web app as it opens. The
@@ -683,7 +687,8 @@ WebSocket tunnel), the client and guacd the same release:
 3. Once guacd is `ready`, core relays the session: guacd's bytes to the
    web app as they come (a message never cuts a character), the web app's
    instructions to guacd, but for its tunnel's own (opcode empty): a ping,
-   which core answers.
+   which core answers. It records the session as it relays it
+   ([Recordings](#recordings)).
 
 A desktop core or guacd does not open sends an `error` instruction (its
 message and Guacamole status code: `0x0207` guacd not reached, `0x0204` the
@@ -691,6 +696,57 @@ task's tunnel not open, `0x0300` a setting refused, each by its key,
 `0x0303` its login unusable, guacd's own) and
 closes the socket with the code as the reason, as Guacamole's tunnel reads
 it.
+
+### Recordings
+
+Core records each desktop the web app opens as it relays it
+(`pkg/recordings`), from the moment it asks guacd for the session:
+
+- **What a recording holds**: guacd's instructions as the web app got
+  them, what the desktop showed (its layers and images, its cursor, a
+  terminal's text as guacd drew it), and the operator's mouse and keys
+  (`mouse` x, y, buttons and `key` keysym, pressed, as guacd's own
+  recordings have them, each with a timestamp on guacd's clock: its last
+  `sync`'s and the time since), each where it came, from guacd's first
+  frame. That is guacd's own recording format: Guacamole's player plays
+  it, and `guacenc` makes a video of it. A view-only desktop's holds no
+  mouse or keys: its server took none. Core's own instructions (the
+  tunnel's id, ping answers) are not in it, nor the web app's answers to a
+  login the server asked for (argument values, not keys).
+- **Not recorded: the raw port.** A client of the operator's own speaks
+  to the server through the port end to end (RDP's and SSH's encrypted):
+  core relays bytes it cannot read. Only the web app's desktops are
+  recorded.
+- **Kept as it goes**, in core's desktop recordings bucket
+  (`DESKTOP_RECORDING_BUCKET`, `desktop-recordings`), in parts
+  (`parts/<recording>/<n>`, from 0): one every 5 seconds, or at 4 MiB. A
+  core that stops loses what it had not kept, its last seconds at most. A
+  part the store does not take is tried again at the head of the next;
+  past 32 MiB held, what comes is dropped, whole instructions at a time,
+  and counted (`lost`): the recording plays past them.
+- **Its record** (`desktop_recordings`): its number in the task, from 1;
+  who opened it and when; the settings it opened with, as the web app sent
+  them; its display's size; its parts and their bytes; how long it plays
+  (guacd's first frame to its last); and its state: `RECORDING`, `SAVED`
+  once it ended, or `FAILED`, the desktop not opened (nothing recorded).
+  How it ended (`end`): `closed` (the web app closed the desktop),
+  `desktop` (guacd ended it: the server's end, or an error, its message in
+  `msg`), `core_stopped` (core stopped while it recorded: a sweep each
+  minute ends a recording whose core has not written its record for 2
+  minutes, as far as its parts go) or `not_opened` (why, in `msg`). The task counts its
+  recordings (`MinionTask.recordings`), and its live updates say it as one
+  starts, ends or is deleted.
+- **Read** by anyone of the operation, viewers too: GraphQL
+  `desktopRecordings(taskId, last, before)`, a task's, the latest first;
+  `GET /api/v1/desktop-recordings/{id}`, one's file, an attachment
+  (`desktop-<front>-<task>-<number>.guac`), its parts one after another. One
+  still recording reads as far as core kept it.
+- **Kept until the operation is deleted**, after the task ends. An
+  operator deletes one that ended (`deleteDesktopRecording`), its parts
+  with it.
+- **In the web app**, the task's Recordings tab lists them, plays one with
+  Guacamole's player as it is read (what was typed beside it, line by
+  line, each line playing from where it began), and downloads its file.
 
 ## Reverse tunnel
 
@@ -929,6 +985,8 @@ restart goes on with it. Core enforces it alone, the minion unchanged:
   so far (every 15 s, and as core stops), so a restart counts on from them;
   its streams' list starts again empty. An older core kept each stream in
   `minion_tunnel_streams`: core drops that collection as it starts.
+- **A desktop's recordings**, kept past the task's end, until the
+  operation is deleted ([Recordings](#recordings)).
 - **The operation's Ports** (a page of its own): every operational port in
   use, the latest opened first: what it serves, its session, who opened it
   and when, its streams; searched by the port, the session's number, who
@@ -1264,6 +1322,19 @@ size or a signal must not wait behind a full window.
 a program and relays its terminal; the raw port and the web terminal are
 core's, as SOCKS is: another front (a recorded session, a terminal shared
 by two operators) would need no minion built again.
+
+**Core records a desktop, not guacd.** guacd can record a session itself,
+but into files on its own disk: core would need to share a volume with it,
+which a chart that runs guacd as a Deployment of its own does not give.
+Core relays every byte of a desktop anyway, and writes what guacd would,
+in guacd's format: the same player plays it, and the parts go to the
+object store core keeps the minions' files in.
+
+**Parts, never joined.** An object in the store is written whole, and a
+recording grows for hours: parts of a few seconds keep what a core that
+stops loses small, and read one after another they are the recording, so
+nothing joins them, and no join is left half done by a core that
+stopped.
 
 **No reverse SOCKS.** A reverse SOCKS front (wave 1, dropped in wave 3.2)
 let a tool on the minion's side reach anywhere in core's network, behind a
