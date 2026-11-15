@@ -125,8 +125,7 @@ apply, and an optional one takes a word only when it is one of its values:
 | `tls` | `forward` | a `tunnel`'s forward to a host and a port: the minion speaks TLS to the destination, the tools plain: offered where the command opens `tls` |
 | `program`, `args` | `terminal` | a [terminal](#terminal)'s: the program each connection runs on the minion's host (empty: its shell), and its args as one command line, split as a shell splits words (quotes and backslashes; nothing expanded: `protocol.TunnelArgs`): offered where the command opens `process` |
 | `rows`, `cols` | `terminal` | a terminal's size on its raw port, 24×80 by default, 1 to 1000 each (a web terminal says its own): offered where the command opens `process`. More options. |
-| `credential` | desktops | a [desktop](#desktops)'s login: one of the operation's credentials, a password (`PLAINTEXT`) or, for SSH, a key (`KEY`); none, and the desktop asks for what its server needs |
-| `security`, `ignore_cert` | `rdp` | an RDP desktop's: the security it negotiates (`any`, the default; `nla`, `nla-ext`, `tls`, `vmconnect`, `rdp`), and whether a server certificate guacd cannot check is taken (yes by default: most RDP servers' are self-signed). More options. |
+| `credential` | desktops | a [desktop](#desktops)'s login: one of the operation's credentials, a password (`PLAINTEXT`) or, for SSH, a key (`KEY`); none, and the desktop asks for what its server needs. How a session draws it is no param: it is picked each time one opens ([A desktop's settings](#a-desktops-settings)). |
 | `stop_idle` | any | a duration after which, with no stream open, core [stops the task](#the-tunnel-commands) (Stop when idle, below): `1h` by default for a `tunnel`, never (`0s`) for a `reverse_tunnel`; 0 never. More options. |
 | `cap` | any | the [bandwidth cap](#bandwidth-cap): bytes a second each way, 0 (the default) for none. More options. |
 
@@ -611,6 +610,10 @@ no module changes for it.
 - **Each desktop opened is its own session** with the server: another
   operator's, or another tab's, logs in again. Watching another's session,
   recording sessions, file transfer and audio are not built yet.
+- **The settings, each time one opens**: quality, keyboard layout,
+  clipboard, view only and the rest of its front's
+  ([below](#a-desktops-settings)), picked in the web app as it opens. The
+  task keeps what is the same for every session: its server and its login.
 - **The login** is the task's `credential`, which core resolves each time
   a desktop opens and gives guacd alone: RDP its username, realm (the
   domain) and password; VNC its password (and a username, for servers that
@@ -626,9 +629,42 @@ no module changes for it.
 - **On every connection kind**, as a terminal: over a polling minion each
   screen update waits for its next check-in, slow, and the tab says so.
 
+### A desktop's settings
+
+How a session draws its desktop is picked as it opens, in the web app's
+Open desktop form, each time at the defaults: core defines the settings
+by front (`pkg/desktops`), GraphQL `minionDesktopSettings(front)` serves
+them as fields, the [socket](#the-desktops-socket) takes the values
+picked (`settings`), and core checks them and gives guacd their params.
+Reconnect opens another session with the settings the last one had;
+nothing remembers them past it. A native client on the raw port has its
+own.
+
+| Setting | Fronts | What it is | guacd |
+|---|---|---|---|
+| `quality` | `rdp`, `vnc` | `speed`, `balanced` (the default), `best`: what the picture costs, the tunnel carrying every change of it | RDP: `speed` `disable-gfx` and `color-depth` 16 (the graphics pipeline takes 32-bit color alone), `balanced` `enable-font-smoothing`, `best` that, every effect (`enable-wallpaper`, `enable-theming`, `enable-desktop-composition`, `enable-full-window-drag`, `enable-menu-animations`) and `force-lossless`. VNC: `speed` Tight first in `encodings` (JPEG where the server speaks it), `quality-level` 3, `compress-level` 9; `balanced` guacd's own; `best` `force-lossless` |
+| `keyboard` | `rdp` | the server's layout, which guacd presses keys for: one of guacd's 22 keymaps (`en-us-qwerty`, the default, `de-de-qwertz`, `fr-fr-azerty`, ...), or `failsafe`, each character as itself whatever the layout. A character no key of the layout makes goes as itself with any. | `server-layout` |
+| `clipboard` | all | `both` (the default); `out`, the desktop's copies reach the operator alone; `in`, the operator's text reaches the desktop alone; `off`. The web app's clipboard panel shows the ways it goes. | `disable-copy`, `disable-paste` |
+| `view_only` | all | no key or click reaches the server | `read-only` |
+| `resize` | `rdp` | `follow` the pane (the default); `reconnect` at the new size, for a server that cannot change it live; `fixed`, the pane scaling it | `resize-method`: `display-update`, `reconnect`, none |
+| `console` | `rdp` | the server's console (admin) session, as `mstsc /admin` opens it | `console` |
+| `program`, `remote_app` | `rdp` | a program the session runs instead of the desktop, where the server's policy allows one; one RemoteApp shown alone (`\|\|notepad`) | `initial-program`, `remote-app` |
+| `security`, `ignore_cert` | `rdp` | the security negotiated (`any`, the default, `nla`, `nla-ext`, `tls`, `rdp`); whether a certificate guacd cannot check is taken (yes by default: most RDP servers' are self-signed) | `security`, `ignore-cert` |
+| `clipboard_encoding`, `cursor` | `vnc` | the server's clipboard text's encoding (`ISO8859-1`, VNC's own and the default; `UTF-8`, `UTF-16`, `CP1252`); the cursor drawn by the browser (`local`, the default) or by the server (`remote`) | `clipboard-encoding`, `cursor` |
+| `color_scheme`, `font_size`, `scrollback` | `ssh`, `telnet` | the terminal's colors (`gray-black`, the default, `white-black`, `green-black`, `black-white`), its text (6 to 48 points, 12), the rows it keeps to scroll back to (0 to 10000, 1000) | `color-scheme`, `font-size`, `scrollback` |
+| `command` | `ssh` | a command the server runs instead of a shell | `command` |
+| `keepalive` | `ssh` | how often an idle session tells the server it is there: a duration, `0s` never (the default), at most `1h` | `server-alive-interval`, in whole seconds |
+| `host_key` | `ssh` | the server's public key, as `ssh-keyscan` or a `known_hosts` line gives it (`ssh-ed25519 AAAA…`): the session opens only if the server holds it | `host-key`: a `known_hosts` line core writes for the address guacd connects to, `[GUACD_CORE_HOST]:port`, which libssh2 checks the key under |
+| `username_prompt`, `password_prompt`, `login_success`, `login_failure` | `telnet` | regular expressions (POSIX extended, any case) for what the server says: the login's username and password typed after their prompts (guacd's defaults `[Ll]ogin:`, `[Pp]assword:`), the terminal hidden until success, the session ended on failure | `username-regex`, `password-regex`, `login-success-regex`, `login-failure-regex` |
+
+The text settings are bounded (a program 1024 characters, a command and a
+host key 2048, a prompt 256): the web app sends them in the socket's URL.
+A password typed is no setting: guacd asks for it (`required`), and the
+answer goes to guacd alone.
+
 ### The desktop's socket
 
-`GET /api/v1/minion-tasks/{id}/desktop?width=&height=&dpi=&timezone=`, a
+`GET /api/v1/minion-tasks/{id}/desktop?width=&height=&dpi=&timezone=&settings=`, a
 WebSocket with the subprotocol `guacamole`, for an operator of the task's
 operation; its origin is checked as the GraphQL socket's. It speaks
 Guacamole's own protocol with the web app's Guacamole client (its
@@ -640,9 +676,10 @@ WebSocket tunnel), the client and guacd the same release:
    (the web app's, in device pixels, with its DPI), `audio` and `video`
    (none), `image` (PNG, JPEG, WebP), the browser's `timezone`, the
    operator's `name`, and `connect` with guacd's version and each argument
-   guacd asked for: the server is core's port for the task, the login the
-   credential's, RDP's `security`, `ignore-cert` and `resize-method`
-   (`display-update`: the desktop follows the web app's size).
+   guacd asked for: the [settings](#a-desktops-settings)' params (`settings`,
+   a JSON object of the front's, each left out at its default), then what
+   no setting changes: the server, core's port for the task, the login, the
+   credential's, and RDP's `client-name` (`logos`).
 3. Once guacd is `ready`, core relays the session: guacd's bytes to the
    web app as they come (a message never cuts a character), the web app's
    instructions to guacd, but for its tunnel's own (opcode empty): a ping,
@@ -650,7 +687,8 @@ WebSocket tunnel), the client and guacd the same release:
 
 A desktop core or guacd does not open sends an `error` instruction (its
 message and Guacamole status code: `0x0207` guacd not reached, `0x0204` the
-task's tunnel not open, `0x0303` its login unusable, guacd's own) and
+task's tunnel not open, `0x0300` a setting refused, each by its key,
+`0x0303` its login unusable, guacd's own) and
 closes the socket with the code as the reason, as Guacamole's tunnel reads
 it.
 
