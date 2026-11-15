@@ -241,9 +241,10 @@ and every module built on them.
   guacd records nothing either: core records each desktop as it relays it
   ([Recordings](../contracts/minion-messages/tunnels/#recordings)).
 - **Image**: `logos-guacd` (`logos-core/deploy/guacd`), guacamole-server
-  1.6.0 built by Apache's own Dockerfile against **FreeRDP 3**, every library
+  1.6.0, patched (an RDP desktop's workstation name), built by Apache's own
+  Dockerfile against **FreeRDP 3**, every library
   pinned (`versions.env`), published by CI as
-  `ghcr.io/logoscore/logos-guacd:1.6.0-freerdp3.30.0`. Not the official
+  `ghcr.io/logoscore/logos-guacd:1.6.0-freerdp3.30.0-logos1`. Not the official
   `guacamole/guacd:1.6.0`: its FreeRDP 2 makes guacd abort an RDP connection
   whose desktop is resized during a paint (a desktop following the web app
   to full screen and back), which upstream fixed for FreeRDP 3.8 and later

@@ -654,6 +654,7 @@ own.
 | `console` | `rdp` | the server's console (admin) session, as `mstsc /admin` opens it | `console` |
 | `program`, `remote_app` | `rdp` | a program the session runs instead of the desktop, where the server's policy allows one; one RemoteApp shown alone (`\|\|notepad`) | `initial-program`, `remote-app` |
 | `security`, `ignore_cert` | `rdp` | the security negotiated (`any`, the default, `nla`, `nla-ext`, `tls`, `rdp`); whether a certificate guacd cannot check is taken (yes by default: most RDP servers' are self-signed) | `security`, `ignore-cert` |
+| `workstation_name` | `rdp` | the computer name NLA's login gives the server, which its logon events show (Security 4624 and 4625, Workstation Name): up to 15 letters, digits and hyphens, not digits alone, sent in capitals as Windows' own client sends it. A login in the session (`tls`, `rdp`) carries none. None (the default): the task's own, `DESKTOP-` and seven capitals and digits as Windows names a new computer, drawn from the task's id, so every desktop of a tunnel is one computer to its server | `workstation-name`: logos-guacd's own ([its patches](#guacd-takes-what-core-sends)) |
 | `clipboard_encoding`, `cursor` | `vnc` | the server's clipboard text's encoding (`ISO8859-1`, VNC's own and the default; `UTF-8`, `UTF-16`, `CP1252`); the cursor drawn by the browser (`local`, the default) or by the server (`remote`) | `clipboard-encoding`, `cursor` |
 | `color_scheme`, `font_size`, `scrollback` | `ssh`, `telnet` | the terminal's colors (`gray-black`, the default, `white-black`, `green-black`, `black-white`), its text (6 to 48 points, 12), the rows it keeps to scroll back to (0 to 10000, 1000) | `color-scheme`, `font-size`, `scrollback` |
 | `command` | `ssh` | a command the server runs instead of a shell | `command` |
@@ -662,7 +663,19 @@ own.
 | `username_prompt`, `password_prompt`, `login_success`, `login_failure` | `telnet` | regular expressions (POSIX extended, any case) for what the server says: the login's username and password typed after their prompts (guacd's defaults `[Ll]ogin:`, `[Pp]assword:`), the terminal hidden until success, the session ended on failure | `username-regex`, `password-regex`, `login-success-regex`, `login-failure-regex` |
 
 The text settings are bounded (a program 1024 characters, a command and a
-host key 2048, a prompt 256): the web app sends them in the socket's URL.
+host key 2048, a prompt 256, a workstation name 15): the web app sends
+them in the socket's URL.
+
+#### guacd takes what core sends
+
+A param with a value that guacd does not ask for (its `args`) refuses the
+desktop, `0x0100`, naming it: guacd would leave it out, and the session
+open as though it were not set. Core's guacd is
+[logos-guacd](../../../core-infrastructure/#guacd--desktops), guacamole-server
+1.6.0 with patches of its own (`logos-core/deploy/guacd/patches`): a
+`workstation-name` for RDP, NTLM's, which FreeRDP 3 takes
+(`FreeRDP_SspiClientHostname`) where it would give the host's name. Another
+guacd opens no RDP desktop, each of them sending a workstation name.
 A password typed is no setting: guacd asks for it (`required`), and the
 answer goes to guacd alone.
 
@@ -683,7 +696,8 @@ WebSocket tunnel), the client and guacd the same release:
    guacd asked for: the [settings](#a-desktops-settings)' params (`settings`,
    a JSON object of the front's, each left out at its default), then what
    no setting changes: the server, core's port for the task, the login, the
-   credential's, and RDP's `client-name` (`logos`).
+   credential's, and RDP's `client-name` (`logos`) and, when no setting
+   gives one, its `workstation-name` (the task's own).
 3. Once guacd is `ready`, core relays the session: guacd's bytes to the
    web app as they come (a message never cuts a character), the web app's
    instructions to guacd, but for its tunnel's own (opcode empty): a ping,
@@ -693,6 +707,7 @@ WebSocket tunnel), the client and guacd the same release:
 A desktop core or guacd does not open sends an `error` instruction (its
 message and Guacamole status code: `0x0207` guacd not reached, `0x0204` the
 task's tunnel not open, `0x0300` a setting refused, each by its key,
+`0x0100` a param guacd does not take,
 `0x0303` its login unusable, guacd's own) and
 closes the socket with the code as the reason, as Guacamole's tunnel reads
 it.
