@@ -606,7 +606,13 @@ no module changes for it.
   Telnet) opens a desktop, guacd's session with the server **through the
   same port**: guacd connects to `GUACD_CORE_HOST:port`, core's name on
   their network, and each of its connections is a stream of the task, as
-  any client's.
+  any client's, its client the operator who opened the desktop
+  (`web: <user>`, as a web terminal's). Core names them by guacd's
+  address, as it reached guacd for the desktop: the first connection from
+  there after that, and a later one (an RDP reconnect) while it is the
+  task's one desktop from there; one no desktop names (two open at once)
+  is `web (guacd <address>)`. That takes core reaching guacd at the
+  address guacd connects from: in Kubernetes, a headless Service.
 - **Each desktop opened is its own session** with the server: another
   operator's, or another tab's, logs in again. Watching another's session,
   file transfer and audio are not built yet. Closing an RDP desktop only
@@ -1009,12 +1015,14 @@ restart goes on with it. Core enforces it alone, the minion unchanged:
   each destination, a reverse port forward's core's; a terminal connects to
   nothing) and its bytes each way; and,
   while the task runs, its streams, live, the latest first, searched (the
-  tool, the destination; a terminal's, who opened it and the program) and filtered (open, ended) by the server. The
+  tool, or who opened a web terminal or desktop; the destination; a
+  terminal's program) and filtered (open, ended) by the server. The
   task's live updates carry the numbers, once a second at most while its
   streams move.
 - **Each stream, in core's memory alone** and only while its task runs:
   every open one and the latest 1000 that ended (the tunnel's `kept`). Each
-  says its number, the client's address (a reverse port forward's: who
+  says its number, the client's address (a web terminal's and a web
+  desktop's, `web: <user>`; a reverse port forward's: who
   connected at the minion), the destination as the tool named it, when it
   opened, the minion's reply (result, `bound`, `msg`; a reverse port
   forward's, core's connect, its own address and why, which the minion

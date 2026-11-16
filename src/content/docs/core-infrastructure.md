@@ -238,6 +238,10 @@ and every module built on them.
   offers no desktop front; guacd needs no settings of its own.
 - **Reach**: core alone: guacd is never published, and holds nothing.
   Credentials go from core to guacd on their network, in its connect.
+  Core reaches guacd at guacd's own address (Helm: a headless Service),
+  the one guacd connects to the operational ports from, by which a
+  tunnel's streams list names each desktop's connections by its
+  operator.
   guacd records nothing either: core records each desktop as it relays it
   ([Recordings](../contracts/minion-messages/tunnels/#recordings)).
 - **Image**: `logos-guacd` (`logos-core/deploy/guacd`), guacamole-server
