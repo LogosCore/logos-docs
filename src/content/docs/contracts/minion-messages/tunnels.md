@@ -690,6 +690,13 @@ The text settings are bounded (a program 1024 characters, a command and a
 host key 2048, a prompt 256, a computer name 15, a time zone 64): the web app sends
 them in the socket's URL.
 
+A VNC desktop never resizes the server's screen: core always sends
+`disable-display-resize` (`true`). guacd would otherwise ask a server that
+can resize (ExtendedDesktopSize: TigerVNC, RealVNC's virtual mode) to take
+the web app's pane size, changing the console's resolution under whoever
+sits at it; the pane scales the server's screen instead, as the web app
+never sends a VNC desktop its size.
+
 #### guacd takes what core sends
 
 A param with a value that guacd does not ask for (its `args`) refuses the
