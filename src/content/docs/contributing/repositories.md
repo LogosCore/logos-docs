@@ -104,17 +104,17 @@ On 2026-11-16:
 | Repository | Latest tag | Requires the protocol |
 |---|---|---|
 | `logos-golang-protocol` | v0.55.0 | |
-| `logos-golang-module-core` | v0.3.3 | v0.55.0 |
-| `logos-golang-channel-core` | v3.9.3 | v0.55.0 |
-| `logos-golang-factory-core` | v0.5.1 | v0.55.0 |
-| `logos-http-channel` | v3.10.1 | v0.55.0 |
-| `logos-tcp-channel` | v0.3.1 | v0.55.0 |
-| `logos-bob-factory` | v0.39.2 | v0.55.0 (its minion too) |
-| `logos-dumbo` | v0.5.1 | v0.55.0 |
-| `logos-ssh` | v0.8.2 | v0.55.0 |
-| `logos-raven` | v0.2.1 | v0.55.0 |
-| `logos-vpn` | v0.2.3 | v0.55.0 |
-| `logos-core` | `main` (carries logos-vpn v0.2.3) | v0.55.0 |
+| `logos-golang-module-core` | v0.3.4 | v0.55.0 |
+| `logos-golang-channel-core` | v3.9.4 | v0.55.0 |
+| `logos-golang-factory-core` | v0.5.2 | v0.55.0 |
+| `logos-http-channel` | v3.10.2 | v0.55.0 |
+| `logos-tcp-channel` | v0.3.2 | v0.55.0 |
+| `logos-bob-factory` | v0.39.3 | v0.55.0 (its minion too) |
+| `logos-dumbo` | v0.5.2 | v0.55.0 |
+| `logos-ssh` | v0.8.3 | v0.55.0 |
+| `logos-raven` | v0.2.2 | v0.55.0 |
+| `logos-vpn` | v0.2.4 | v0.55.0 |
+| `logos-core` | `main` (carries logos-vpn v0.2.4) | v0.55.0 |
 
 ## Which repository to change
 
