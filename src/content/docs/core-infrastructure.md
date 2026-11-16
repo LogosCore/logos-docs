@@ -129,8 +129,8 @@ MongoDB resolves the database engine decision listed as pending in the
   - `logos-builds`: files uploaded for builds, and build artifacts;
   - `minion-files`: the files minions send core (a download, or a stream kept
     as it passed);
-  - `desktop-recordings`: the desktops' recordings, each in parts as core
-    kept it
+  - `desktop-recordings`: the desktops' and the terminals' recordings,
+    each in parts as core kept it
     ([Recordings](../contracts/minion-messages/tunnels/#recordings)).
 - **Why SeaweedFS**: lightweight, self-hosted, S3-compatible API. Avoids external cloud dependencies and keeps binary blobs out of the document database.
 - **Connections**: Core Server alone reads and writes. A factory never

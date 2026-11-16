@@ -578,6 +578,8 @@ terminal's, both ways, and its close hangs the process up.
   raw client past `max_streams` is told so (`[logos: no terminal: as many
   streams open as the task takes]`), and one the minion did not answer in
   time.
+- **Recorded**: each session, the web terminal's and the raw port's, what
+  the process wrote and what was typed ([Recordings](#recordings)).
 - **On every connection kind.** A terminal works over a polling minion too,
   every key waiting for its next check-in (at once while bytes go, below):
   slow, and the web terminal says so, but not refused.
@@ -747,56 +749,87 @@ or its login, guacd's own) and
 closes the socket with the code as the reason, as Guacamole's tunnel reads
 it.
 
-### Recordings
+## Recordings
 
-Core records each desktop the web app opens as it relays it
-(`pkg/recordings`), from the moment it asks guacd for the session:
+Core records each desktop the web app opens, and each terminal session,
+as it relays them (`pkg/recordings`), one recording each:
 
-- **What a recording holds**: guacd's instructions as the web app got
-  them, what the desktop showed (its layers and images, its cursor, a
-  terminal's text as guacd drew it), and the operator's mouse and keys
-  (`mouse` x, y, buttons and `key` keysym, pressed, as guacd's own
-  recordings have them, each with a timestamp on guacd's clock: its last
-  `sync`'s and the time since), each where it came, from guacd's first
-  frame. That is guacd's own recording format: Guacamole's player plays
-  it, and `guacenc` makes a video of it. A view-only desktop's holds no
-  mouse or keys: its server took none. Core's own instructions (the
-  tunnel's id, ping answers) are not in it, nor the web app's answers to a
-  login the server asked for (argument values, not keys).
-- **Not recorded: the raw port.** A client of the operator's own speaks
-  to the server through the port end to end (RDP's and SSH's encrypted):
-  core relays bytes it cannot read. Only the web app's desktops are
-  recorded.
-- **Kept as it goes**, in core's desktop recordings bucket
-  (`DESKTOP_RECORDING_BUCKET`, `desktop-recordings`), in parts
-  (`parts/<recording>/<n>`, from 0): one every 5 seconds, or at 4 MiB. A
-  core that stops loses what it had not kept, its last seconds at most. A
-  part the store does not take is tried again at the head of the next;
-  past 32 MiB held, what comes is dropped, whole instructions at a time,
-  and counted (`lost`): the recording plays past them.
-- **Its record** (`desktop_recordings`): its number in the task, from 1;
-  who opened it and when; the settings it opened with, as the web app sent
-  them; its display's size; its parts and their bytes; how long it plays
-  (guacd's first frame to its last); and its state: `RECORDING`, `SAVED`
-  once it ended, or `FAILED`, the desktop not opened (nothing recorded).
-  How it ended (`end`): `closed` (the web app closed the desktop),
-  `desktop` (guacd ended it: the server's end, or an error, its message in
-  `msg`), `core_stopped` (core stopped while it recorded: a sweep each
-  minute ends a recording whose core has not written its record for 2
-  minutes, as far as its parts go) or `not_opened` (why, in `msg`). The task counts its
-  recordings (`MinionTask.recordings`), and its live updates say it as one
-  starts, ends or is deleted.
+- **A desktop's**, from the moment core asks guacd for the session:
+  guacd's instructions as the web app got them, what the desktop showed
+  (its layers and images, its cursor, a terminal's text as guacd drew
+  it), and the operator's mouse and keys (`mouse` x, y, buttons and `key`
+  keysym, pressed, as guacd's own recordings have them, each with a
+  timestamp on guacd's clock: its last `sync`'s and the time since), each
+  where it came, from guacd's first frame. That is guacd's own recording
+  format: Guacamole's player plays it, and `guacenc` makes a video of it.
+  A view-only desktop's holds no mouse or keys: its server took none.
+  Core's own instructions (the tunnel's id, ping answers) are not in it,
+  nor the web app's answers to a login the server asked for (argument
+  values, not keys).
+- **Not recorded: a desktop's raw port.** A client of the operator's own
+  speaks to the server through the port end to end (RDP's and SSH's
+  encrypted): core relays bytes it cannot read. Only the web app's
+  desktops are recorded.
+- **A terminal's**: every session of a [terminal](#terminal) task, the web
+  terminal's and each client's of its raw port (a terminal's bytes are
+  plain: core reads both), from its open to its end. An **asciicast v2**,
+  which asciinema plays (`asciinema play file.cast`): a header line (its
+  size, when it began, a title: `terminal · <client> · stream <n>`), then
+  an event a line, `[seconds, code, data]`: `o` what the process wrote,
+  `i` what was typed (a password typed at a prompt too: the terminal does
+  not show it, the recording has it), `r` a new size (`COLSxROWS`: a web
+  terminal's as it is resized). Each event's data is text: bytes cut
+  inside a UTF-8 character go with the next of their direction, and bytes
+  that are not UTF-8 are U+FFFD (the format holds text alone). A process
+  that does not start fails its recording, why in `msg`, as the terminal
+  said it.
+- **Kept as it goes**, in core's recordings bucket
+  (`DESKTOP_RECORDING_BUCKET`, `desktop-recordings`: named when desktops
+  alone were recorded), in parts (`parts/<recording>/<n>`, from 0): one
+  every 5 seconds, or at 4 MiB. A core that stops loses what it had not
+  kept, its last seconds at most. A part the store does not take is tried
+  again at the head of the next; past 32 MiB held, what comes is dropped,
+  whole instructions or events at a time, and counted (`lost`): the
+  recording plays past them.
+- **Its record** (`desktop_recordings`, named likewise): its number in the
+  task, from 1; its `format` (`guac`, a desktop's; `asciicast`, a
+  terminal's); who opened it and when (an operator's id and name; none for
+  a raw terminal client) and its `client` as the task's streams say it
+  (`web: <user>`, or the client's address); a terminal's `stream`; the
+  settings a desktop opened with, as the web app sent them; its size (a
+  desktop's display in pixels, a terminal's columns and rows); its parts
+  and their bytes; how long it plays (a desktop's from guacd's first frame
+  to its last, a terminal's to its last event); and its state:
+  `RECORDING`, `SAVED` once it ended, or `FAILED`, not opened (nothing
+  recorded). How it ended (`end`): `closed` (the web app closed the
+  desktop or the terminal, or a raw client left), `desktop` (guacd ended
+  it: the server's end, or an error, its message in `msg`), `process`
+  (the terminal's process ended: its exit in `msg`, `exit 0`),
+  `task_ended` (the task was stopped), `reset` (the minion lost the
+  terminal's stream), `core_stopped` (core stopped while it recorded: a
+  sweep each minute ends a recording whose core has not written its record
+  for 2 minutes, as far as its parts go) or `not_opened` (why, in `msg`).
+  The task counts its recordings (`MinionTask.recordings`), and its live
+  updates say it as one starts, ends or is deleted.
 - **Read** by anyone of the operation, viewers too: GraphQL
-  `desktopRecordings(taskId, last, before)`, a task's, the latest first;
-  `GET /api/v1/desktop-recordings/{id}`, one's file, an attachment
-  (`desktop-<front>-<task>-<number>.guac`), its parts one after another. One
-  still recording reads as far as core kept it.
+  `recordings(taskId, last, before)`, a task's, the latest first;
+  `GET /api/v1/recordings/{id}`, one's file, an attachment
+  (`desktop-<front>-<task>-<number>.guac`, or
+  `terminal-<task>-<number>.cast`, `application/x-asciicast`), its parts
+  one after another. One still recording reads as far as core kept it.
 - **Kept until the operation is deleted**, after the task ends. An
-  operator deletes one that ended (`deleteDesktopRecording`), its parts
-  with it.
-- **In the web app**, the task's Recordings tab lists them, plays one with
-  Guacamole's player as it is read (what was typed beside it, line by
-  line, each line playing from where it began), and downloads its file.
+  operator deletes one that ended (`deleteRecording`), its parts with it.
+- **In the web app**, a desktop or terminal task's Recordings tab lists
+  them, downloads one's file and plays one, what was typed beside it, line
+  by line, each line playing from where it began. A desktop's plays in
+  Guacamole's player as it is read. A terminal's plays in xterm.js, as the
+  Terminal tab draws one, at its sizes: pauses past 2 seconds are skipped
+  unless turned off, at 1× to 16×, its keys named (`<Up>`, `<Ctrl+C>`). Its
+  output also downloads as text (`terminal-<task>-<number>.txt`): the
+  lines the terminal showed, scrollback and all, wrapped lines joined,
+  without colours, made in the browser by xterm.js. A full-screen
+  program's screens (an editor, `top`) are not in it, they are drawn on the
+  terminal's other screen; what the shell wrote around them is.
 
 ## Reverse tunnel
 
