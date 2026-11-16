@@ -132,7 +132,7 @@ apply, and an optional one takes a word only when it is one of its values:
 | The command's | |
 |---|---|
 | `bind`, `listen`, `udp` | a `reverse_tunnel`'s, numbered: where the minion listens, and whether for UDP datagrams, which it reads from its task; `udp` in a command that opens `udp` alone (required there, refused elsewhere) |
-| `timeout`, `max_streams` | each with a default: how long a connect may take, how many streams at once (below). BOB's are under More options (`advanced`), and its `tunnel`'s `timeout` applies with `socks`, `http`, `forward` and `vpn` alone: a terminal connects to nothing, and a desktop's server is connected to with the minion's default. |
+| `timeout`, `max_streams` | each with a default: how long a connect may take, how many streams at once (below). BOB's are under More options (`advanced`), and its `tunnel`'s `timeout` (the SSH module's too) applies with every front but `terminal`, which connects to nothing. |
 | `opens` | what its minion opens, and how: `tcp`, and `udp` (a `tunnel`'s UDP associations, a `reverse_tunnel`'s UDP listener); a `tunnel`'s `unix` and `pipe` (a forward to a path), `source` and `tls`, `process` (the [terminal](#terminal) front) and `accept` (SOCKS5 [`BIND`](#socks)); a command that says none, `tcp` alone. A build's target narrows it (its own `opens`: a Linux build has no pipes). Core opens nothing else through it, and offers only the params it opens: a SOCKS `UDP ASSOCIATE` through one that opens no `udp` is refused (command not supported), and a reverse tunnel's `udp` as the task is queued. |
 | Needs result | none: the task's view is core's (the port's address and its streams) |
 | `kinds` | The command's [`kinds`](../../minion-build/#commands) leave out those its minion cannot keep a socket open over between messages: a `bind-call` page keeps nothing between calls, so its factory leaves `bind-call` out. |
@@ -636,7 +636,9 @@ no module changes for it.
   Telnet its username and password. The web app never gets it. With none,
   the server asks: Guacamole's `required` instruction, which the web app
   shows as a login form, its answers going to guacd as argument values. A
-  credential gone, or of another type, refuses the desktop, saying so.
+  credential gone, or of another type, refuses the desktop, saying so; the
+  task's tab says it before one opens (GraphQL `MinionTunnel.login`, the
+  credential's name, and `loginProblem`, why it would be refused).
 - **No credentials on the raw port**, as on a forward's: whoever reaches it
   reaches the server. The web app's desktop is an operator's alone.
 - **Only where core has a guacd** (`GUACD_ADDRESS`, and `GUACD_CORE_HOST`):
@@ -717,18 +719,25 @@ WebSocket tunnel), the client and guacd the same release:
    a JSON object of the front's, each left out at its default), then what
    no setting changes: the server, core's port for the task, the login, the
    credential's, and RDP's computer names that no setting gives (its
-   `workstation-name` and `client-name`, as `client_name` says).
+   `workstation-name` and `client-name`, as `client_name` says). guacd has
+   10 seconds to be `ready`: core says why it is not before the web app's
+   Guacamole tunnel gives up waiting for a word (15 seconds), which core
+   sends none of meanwhile.
 3. Once guacd is `ready`, core relays the session: guacd's bytes to the
    web app as they come (a message never cuts a character), the web app's
    instructions to guacd, but for its tunnel's own (opcode empty): a ping,
    which core answers. It records the session as it relays it
-   ([Recordings](#recordings)).
+   ([Recordings](#recordings)). The session ends as either side ends it,
+   and as either is gone: a web app that says nothing for a minute (its
+   client pings every half second), or takes nothing for 10 seconds; guacd
+   that takes nothing for 10 seconds.
 
 A desktop core or guacd does not open sends an `error` instruction (its
 message and Guacamole status code: `0x0207` guacd not reached, `0x0204` the
 task's tunnel not open, `0x0300` a setting refused, each by its key,
 `0x0100` a param guacd does not take,
-`0x0303` its login unusable, guacd's own) and
+`0x0303` its login unusable, `0x0200` core could not read the task's port
+or its login, guacd's own) and
 closes the socket with the code as the reason, as Guacamole's tunnel reads
 it.
 
