@@ -654,7 +654,9 @@ own.
 | `console` | `rdp` | the server's console (admin) session, as `mstsc /admin` opens it | `console` |
 | `program`, `remote_app` | `rdp` | a program the session runs instead of the desktop, where the server's policy allows one; one RemoteApp shown alone (`\|\|notepad`) | `initial-program`, `remote-app` |
 | `security`, `ignore_cert` | `rdp` | the security negotiated (`any`, the default, `nla`, `nla-ext`, `tls`, `rdp`); whether a certificate guacd cannot check is taken (yes by default: most RDP servers' are self-signed) | `security`, `ignore-cert` |
-| `workstation_name` | `rdp` | the computer name NLA's login gives the server, which its logon events show (Security 4624 and 4625, Workstation Name): up to 15 letters, digits and hyphens, not digits alone, sent in capitals as Windows' own client sends it. A login in the session (`tls`, `rdp`) carries none. None (the default): the task's own, `DESKTOP-` and seven capitals and digits as Windows names a new computer, drawn from the task's id, so every desktop of a tunnel is one computer to its server | `workstation-name`: logos-guacd's own ([its patches](#guacd-takes-what-core-sends)) |
+| `workstation_name` | `rdp` | the computer name NLA's login gives the server, which its logon events show (Security 4624 and 4625, Workstation Name): up to 15 letters, digits and hyphens, not digits alone, sent in capitals as Windows' own client sends it. A login in the session (`tls`, `rdp`) carries none | `workstation-name`: logos-guacd's own ([its patches](#guacd-takes-what-core-sends)) |
+| `timezone` | `rdp`, `ssh` | the time zone the server is told the client is in, an IANA name (`Europe/Berlin`, `UTC`) that core checks: RDP's in the session's client info (RdpCoreTS 104 says its offset), SSH's as the session's `TZ`, where the server takes it (`AcceptEnv TZ`). None (the default): the browser's, the socket's `timezone` | `timezone` (logos-guacd has the time zones FreeRDP reads it by: Apache's image has none, and told every server UTC) |
+| `client_name` | `rdp` | the computer name the server's session shows (its `CLIENTNAME`, and Security 4778 and 4779, Client Name), as the workstation name is checked and sent. One computer has one name: either left out is the other, and with neither (the default) both are the task's own, `DESKTOP-` and seven capitals and digits as Windows names a new computer, drawn from the task's id, so every desktop of a tunnel is one computer to its server | `client-name` |
 | `clipboard_encoding`, `cursor` | `vnc` | the server's clipboard text's encoding (`ISO8859-1`, VNC's own and the default; `UTF-8`, `UTF-16`, `CP1252`); the cursor drawn by the browser (`local`, the default) or by the server (`remote`) | `clipboard-encoding`, `cursor` |
 | `color_scheme`, `font_size`, `scrollback` | `ssh`, `telnet` | the terminal's colors (`gray-black`, the default, `white-black`, `green-black`, `black-white`), its text (6 to 48 points, 12), the rows it keeps to scroll back to (0 to 10000, 1000) | `color-scheme`, `font-size`, `scrollback` |
 | `command` | `ssh` | a command the server runs instead of a shell | `command` |
@@ -663,7 +665,7 @@ own.
 | `username_prompt`, `password_prompt`, `login_success`, `login_failure` | `telnet` | regular expressions (POSIX extended, any case) for what the server says: the login's username and password typed after their prompts (guacd's defaults `[Ll]ogin:`, `[Pp]assword:`), the terminal hidden until success, the session ended on failure | `username-regex`, `password-regex`, `login-success-regex`, `login-failure-regex` |
 
 The text settings are bounded (a program 1024 characters, a command and a
-host key 2048, a prompt 256, a workstation name 15): the web app sends
+host key 2048, a prompt 256, a computer name 15, a time zone 64): the web app sends
 them in the socket's URL.
 
 #### guacd takes what core sends
@@ -696,8 +698,8 @@ WebSocket tunnel), the client and guacd the same release:
    guacd asked for: the [settings](#a-desktops-settings)' params (`settings`,
    a JSON object of the front's, each left out at its default), then what
    no setting changes: the server, core's port for the task, the login, the
-   credential's, and RDP's `client-name` (`logos`) and, when no setting
-   gives one, its `workstation-name` (the task's own).
+   credential's, and RDP's computer names that no setting gives (its
+   `workstation-name` and `client-name`, as `client_name` says).
 3. Once guacd is `ready`, core relays the session: guacd's bytes to the
    web app as they come (a message never cuts a character), the web app's
    instructions to guacd, but for its tunnel's own (opcode empty): a ping,
