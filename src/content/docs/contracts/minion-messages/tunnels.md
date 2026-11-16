@@ -609,7 +609,18 @@ no module changes for it.
   any client's.
 - **Each desktop opened is its own session** with the server: another
   operator's, or another tab's, logs in again. Watching another's session,
-  file transfer and audio are not built yet.
+  file transfer and audio are not built yet. Closing an RDP desktop only
+  disconnects it, Windows keeping the session signed in: the web app
+  reminds the operator to sign out first as one connected closes (with
+  Ctrl+Alt+Del, whose menu has Sign out), and the browser asks before the
+  page is left.
+- **Nothing of the operator's own** reaches the server by default: an RDP
+  desktop is a monitor's size (not the pane's), in UTC (not the
+  browser's time zone), Windows' as its client says, and named as a
+  Windows computer is. A desktop closed while it opens is abandoned there:
+  the web app opens none until its view has settled, and guacd stops
+  connecting as its user leaves. What the server still sees is in [Design
+  notes](#design-notes).
 - **Each desktop opened is recorded** by core as it relays it, what it
   showed and the operator's mouse and keys, and plays in the task's
   Recordings tab, after the task ends too ([below](#recordings)). A client
@@ -650,12 +661,13 @@ own.
 | `keyboard` | `rdp` | the server's layout, which guacd presses keys for: one of guacd's 22 keymaps (`en-us-qwerty`, the default, `de-de-qwertz`, `fr-fr-azerty`, ...), or `failsafe`, each character as itself whatever the layout. A character no key of the layout makes goes as itself with any. | `server-layout` |
 | `clipboard` | all | `both` (the default); `out`, the desktop's copies reach the operator alone; `in`, the operator's text reaches the desktop alone; `off`. The web app's clipboard panel shows the ways it goes. | `disable-copy`, `disable-paste` |
 | `view_only` | all | no key or click reaches the server | `read-only` |
-| `resize` | `rdp` | `follow` the pane (the default); `reconnect` at the new size, for a server that cannot change it live; `fixed`, the pane scaling it | `resize-method`: `display-update`, `reconnect`, none |
+| `screen` | `rdp` | the desktop's size: a monitor's (`1920x1080`, the default, `1366x768`, `1536x864`, `1440x900`, `1280x720`, `1600x900`, `1280x1024`, `1680x1050`, `1920x1200`, `2560x1440`, `3840x2160`) at 96 DPI, the pane scaling it; or the pane's, `pane` changed live as the pane changes (RdpCoreTS 168 logs each), `pane-reconnect` reconnecting at each new size, for a server that cannot change it live. The pane's own size is odd (1320×541) and changes: a monitor's is what a server sees of Windows' own client | `width`, `height`, `dpi` 96; `resize-method` `display-update`, `reconnect` |
 | `console` | `rdp` | the server's console (admin) session, as `mstsc /admin` opens it | `console` |
 | `program`, `remote_app` | `rdp` | a program the session runs instead of the desktop, where the server's policy allows one; one RemoteApp shown alone (`\|\|notepad`) | `initial-program`, `remote-app` |
 | `security`, `ignore_cert` | `rdp` | the security negotiated (`any`, the default, `nla`, `nla-ext`, `tls`, `rdp`); whether a certificate guacd cannot check is taken (yes by default: most RDP servers' are self-signed) | `security`, `ignore-cert` |
 | `workstation_name` | `rdp` | the computer name NLA's login gives the server, which its logon events show (Security 4624 and 4625, Workstation Name): up to 15 letters, digits and hyphens, not digits alone, sent in capitals as Windows' own client sends it. A login in the session (`tls`, `rdp`) carries none | `workstation-name`: logos-guacd's own ([its patches](#guacd-takes-what-core-sends)) |
-| `timezone` | `rdp`, `ssh` | the time zone the server is told the client is in, an IANA name (`Europe/Berlin`, `UTC`) that core checks: RDP's in the session's client info (RdpCoreTS 104 says its offset), SSH's as the session's `TZ`, where the server takes it (`AcceptEnv TZ`). None (the default): the browser's, the socket's `timezone` | `timezone` (logos-guacd has the time zones FreeRDP reads it by: Apache's image has none, and told every server UTC) |
+| `timezone` | `rdp`, `ssh` | the time zone the server is told the client is in, an IANA name (`Europe/Berlin`, `UTC`) that core checks: RDP's in the session's client info (RdpCoreTS 104 says its offset; the session's clock takes it only where the server allows time zone redirection, a policy Windows leaves off), SSH's as the session's `TZ`, where the server takes it (`AcceptEnv TZ`). None (the default): `UTC`, never the operator's own | `timezone` (logos-guacd reads it in again after setting `TZ`, which FreeRDP 3 read before, and has the time zones it reads it by) |
+| `client_os` | `rdp` | the operating system the server is told the client runs (RdpCoreTS 169 logs it): `windows` (the default, 1 and 3, as `mstsc`), `linux` (4 and 7, as `xfreerdp`), `none` (0 and 0, guacd's own, which no other client sends) | `os-major-type`, `os-minor-type`: logos-guacd's own |
 | `client_name` | `rdp` | the computer name the server's session shows (its `CLIENTNAME`, and Security 4778 and 4779, Client Name), as the workstation name is checked and sent. One computer has one name: either left out is the other, and with neither (the default) both are the task's own, `DESKTOP-` and seven capitals and digits as Windows names a new computer, drawn from the task's id, so every desktop of a tunnel is one computer to its server | `client-name` |
 | `clipboard_encoding`, `cursor` | `vnc` | the server's clipboard text's encoding (`ISO8859-1`, VNC's own and the default; `UTF-8`, `UTF-16`, `CP1252`); the cursor drawn by the browser (`local`, the default) or by the server (`remote`) | `clipboard-encoding`, `cursor` |
 | `color_scheme`, `font_size`, `scrollback` | `ssh`, `telnet` | the terminal's colors (`gray-black`, the default, `white-black`, `green-black`, `black-white`), its text (6 to 48 points, 12), the rows it keeps to scroll back to (0 to 10000, 1000) | `color-scheme`, `font-size`, `scrollback` |
@@ -676,14 +688,19 @@ open as though it were not set. Core's guacd is
 [logos-guacd](../../../core-infrastructure/#guacd--desktops), guacamole-server
 1.6.0 with patches of its own (`logos-core/deploy/guacd/patches`): a
 `workstation-name` for RDP, NTLM's, which FreeRDP 3 takes
-(`FreeRDP_SspiClientHostname`) where it would give the host's name. Another
-guacd opens no RDP desktop, each of them sending a workstation name.
+(`FreeRDP_SspiClientHostname`) where it would give the host's name;
+`os-major-type` and `os-minor-type`, which guacd otherwise sends as 0;
+the `timezone` read in again once guacd sets it; and an RDP connection
+still opening abandoned as its last user leaves (FreeRDP's abort), rather
+than logging in for no one, and failed rather than tried again without a
+login when that user left at the login form. Another guacd opens no RDP
+desktop, each of them sending a workstation name.
 A password typed is no setting: guacd asks for it (`required`), and the
 answer goes to guacd alone.
 
 ### The desktop's socket
 
-`GET /api/v1/minion-tasks/{id}/desktop?width=&height=&dpi=&timezone=&settings=`, a
+`GET /api/v1/minion-tasks/{id}/desktop?width=&height=&dpi=&settings=`, a
 WebSocket with the subprotocol `guacamole`, for an operator of the task's
 operation; its origin is checked as the GraphQL socket's. It speaks
 Guacamole's own protocol with the web app's Guacamole client (its
@@ -692,9 +709,10 @@ WebSocket tunnel), the client and guacd the same release:
 1. Core sends the tunnel's id (the internal instruction `0.,36.<uuid>;`).
 2. Core opens the session in guacd, as Guacamole's own web application
    does: `select` the protocol, guacd's `args`, then the display's `size`
-   (the web app's, in device pixels, with its DPI), `audio` and `video`
-   (none), `image` (PNG, JPEG, WebP), the browser's `timezone`, the
-   operator's `name`, and `connect` with guacd's version and each argument
+   (a fixed screen's, RDP's by default, else the web app's pane in device
+   pixels, with its DPI), `audio` and `video` (none), `image` (PNG, JPEG,
+   WebP), the operator's `name` (no `timezone`: the browser's is not
+   sent), and `connect` with guacd's version and each argument
    guacd asked for: the [settings](#a-desktops-settings)' params (`settings`,
    a JSON object of the front's, each left out at its default), then what
    no setting changes: the server, core's port for the task, the login, the
@@ -1305,6 +1323,16 @@ proxy, a terminal, a VPN) is core's work alone, with no factory release
 and no minion built again. Actions named after fronts (`socks_proxy`,
 `port_forward`) had a command serve one front, a minion that could carry a
 forward unable to, and every new front a protocol action and a rebuild.
+
+**What an RDP desktop still shows its server.** Its defaults say nothing
+of the operator (above), but a desktop is still guacd's, not Windows'
+own client, and a server's logs can tell: each connection comes from
+127.0.0.1 where the minion forwards to its own host's port; the graphics
+offered have no H.264 (guacd cannot decode it); the sign-in itself
+(Security 4624 type 3 and 10, RCM 1149, LSM 21 to 25), and on a desktop
+edition of Windows the console's user put out of their session. What is
+done in the session leaves what it leaves for any client. These are
+inherent, not settings.
 
 **An open is read strictly.** A receiver ignores the keys it does not know,
 so either side can add optional ones; for data and acks that is right. An
