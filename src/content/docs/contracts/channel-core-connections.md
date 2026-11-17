@@ -301,7 +301,8 @@ Core calls a `bind-call` minion:
 5. **On the minion's schedule, if it has one**: the `sleep` its `hello` says
    (and `sleep_update` changes) means, for a page, call every interval, with
    an empty message, to collect what background tasks produced and to see it
-   is still there. Without a schedule core makes no periodic calls: the quiet
+   is still there (every second at most: an interval of 0, or under a
+   second, is called every second). Without a schedule core makes no periodic calls: the quiet
    default for a page that finishes its tasks within the call. Late and lost
    count from the last call that succeeded.
 6. **On Check now.**

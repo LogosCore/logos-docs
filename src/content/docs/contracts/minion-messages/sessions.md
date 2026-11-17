@@ -114,7 +114,8 @@ hello = {
 }
 
 sleep = (
-  1: uint,              ; interval: milliseconds between check-ins
+  1: uint,              ; interval: milliseconds between check-ins;
+                        ;   0: no wait, the next as soon as the last ends
   2: uint,              ; jitter: spread either way, percent of interval,
                         ;   0 to 100
 )
@@ -348,7 +349,8 @@ sleep_update = { 0: 5, sleep }   ; t: sleep_update
 - With it core sets **`lost_at`**: the last check-in plus three intervals
   stretched by their jitter, plus the same grace. A minion that sleeps an
   hour is lost after about three hours; one that checks in every second,
-  after about half a minute.
+  after about half a minute. One whose interval is 0 (no wait) is late
+  and lost at once after the grace: 30 seconds without a check-in.
 - A minion that never said its schedule is taken to keep a day's, on a
   reverse kind: its session goes late after a day without a check-in, and
   lost after three. A `bind-call` page that says none is neither: core

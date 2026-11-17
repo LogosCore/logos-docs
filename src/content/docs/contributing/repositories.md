@@ -103,7 +103,7 @@ On 2026-11-17:
 
 | Repository | Latest tag | Requires the protocol |
 |---|---|---|
-| `logos-golang-protocol` | v0.56.0 | |
+| `logos-golang-protocol` | v0.57.0 | |
 | `logos-golang-module-core` | v0.3.4 | v0.55.0 |
 | `logos-golang-channel-core` | v3.9.4 | v0.55.0 |
 | `logos-golang-factory-core` | v0.5.2 | v0.55.0 |
@@ -114,7 +114,7 @@ On 2026-11-17:
 | `logos-ssh` | v0.8.3 | v0.55.0 |
 | `logos-raven` | v0.2.2 | v0.55.0 |
 | `logos-vpn` | v0.2.4 | v0.55.0 |
-| `logos-core` | `main` (carries logos-vpn v0.2.4) | v0.56.0 |
+| `logos-core` | `main` (carries logos-vpn v0.2.4) | v0.57.0 |
 
 ## Which repository to change
 
