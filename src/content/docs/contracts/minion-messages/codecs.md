@@ -3,10 +3,9 @@ title: "Codecs"
 ---
 
 :::note[Status]
-Built and released in the protocol package, core and factory-core
+Built in the protocol package, core and factory-core
 (`pkg/codeclink`). Not yet used: core's JSON envelope, which core's tests
-alone speak, and a factory's own codec outside a test. The one factory that
-translates is [Raven](#raven-the-test-factory), a test factory: every other
+alone speak, and a factory's own codec outside a test factory. Every other
 build speaks core's CBOR and suite.
 :::
 
@@ -349,35 +348,6 @@ core starts waits, and what the minion sends is refused.
 | `pkg/builds` | A target's codec kept on the build (`envelope`, `codec`), a factory suite's keys asked at the offer, the request's `envelope`, a codec an agentless kind cannot speak refused |
 | Registration | A suite without a dot core does not implement, and a factory's name of another module, refused |
 | GraphQL and the web app | `Build.envelope`, `Build.codec`, `BuildTarget.crypto`/`envelope`, `MinionSession.codecDownSince`; the build overview's Codec row and the session's Codec notice |
-
-## Raven: the test factory
-
-`logos-raven` (v0.2.0) runs the mechanics end to end with a minion that cannot speak
-core's codec: PowerShell scripts (Windows PowerShell 5.1, PowerShell 7)
-that check in through the HTTP channel (`reverse-call`) and do two things,
-`hello` and `echo`. Both layers are Raven's:
-
-- **`raven.clixml`**, the envelope: a message as PowerShell's own CLIXML,
-  what `PSSerializer` writes and reads, so the script needs no encoder.
-  The protocol's maps are Hashtables, numbered keys `Int32` (`Int64` past
-  it), byte strings `byte[]`, arrays `Object[]`. Raven reads it as CBOR and
-  writes core's CBOR as it, both ways typed, so nothing is guessed.
-- **`raven.raven`**, the suite: a lie to core. It seals nothing: Raven makes
-  each build's keys and the candidates arrive with every call, but the
-  script sends its CLIXML in the clear, and the first key "opens" every
-  message. It protects nothing, and exists to test the mechanics.
-- **`codec`**: growth 400 %, overhead 4096 B (CLIXML is some 20 times CBOR on
-  a small message, a third more on bytes; core sends fewer items when a
-  message outgrows it). No staging: Raven answers `refused`, and its
-  minions say hello under the build id. No compression.
-
-Run end to end on 2026-11-09 against the dev stack: a build's keys made by
-Raven at the offer, a session opened under the build id, `hello` and
-`echo` (text with XML's specials, a literal `_x000A_`, a newline and an
-emoji) answered exactly; with Raven stopped, the minion's messages refused
-(the channel's 404) and the session flagged, cleared once Raven was back.
-The same day on Windows 11 under Windows PowerShell 5.1, a session played by
-hand through the HTTP channel.
 
 ## Open questions
 

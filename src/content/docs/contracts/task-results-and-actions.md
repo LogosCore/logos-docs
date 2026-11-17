@@ -565,13 +565,12 @@ Removes a file, a link or a folder on the host: what a listing's
   to show: the task's output says what went (`removed /tmp/x (file)`), and
   its commands name no result either.
 - A link goes itself, never what it points to. A command should refuse a
-  filesystem's root (`/`, `C:\`), whatever `recursive` says: BOB's `rm`
-  does.
+  filesystem's root (`/`, `C:\`), whatever `recursive` says.
 
 ## dir_walk
 
 A walk through a directory and the folders under it: the result of a command
-that lists many folders in one task (BOB's `walk`). What it read goes to
+that lists many folders in one task (a `walk`, say). What it read goes to
 core as [listings](../minion-messages/tasks-and-results/#listings), one a folder, into the
 machine's [file browser](../file-browser/) as they come; its `data` only says
 where the walk stands:
@@ -594,20 +593,20 @@ On the wire: `root` 1, `folders` 2, `entries` 3, `unread` 4, `skipped` 5,
 
 - **Every part says it whole**, `root` included, and core shows the latest
   (`DirWalk`, `ReadDirWalk` in the protocol package). A minion sends one as
-  the walk goes (BOB's every 2 seconds) and one at its end.
+  the walk goes (every few seconds, say) and one at its end.
 - **Core keeps only the newest**, by `seq`, on the task itself rather than
   on each part: reading a walk's data is one row however many parts came,
   and it takes the task's 4 MiB once (its size), so a long walk's progress
   is never cut off. A part resent late does not take an older progress
   back.
-- **How it walks is the command's**: Dumbo's page goes depth first, folders
-  in name order, so where it stands fits a `resume`'s ctx (the last folder
-  it listed), across as many calls as it takes; BOB's goes breadth first
-  (the top levels first), never follows a link, and stays on its file system and
-  (unless asked not to) goes into hidden folders; `depth` and `max_folders`
-  limit it. It reads on only while few of its pieces wait to be
-  sent, so a walk goes as fast as the channel takes it and does not crowd
-  out other tasks.
+- **How it walks is the command's**: a minion that answers calls may go
+  depth first, folders in name order, so where it stands fits a `resume`'s
+  ctx (the last folder it listed), across as many calls as it takes; one on
+  a persistent connection may go breadth first (the top levels first).
+  Whether it follows links, leaves its file system or enters hidden
+  folders, and how deep and how far it goes, are the command's to say. One
+  that reads on only while few of its pieces wait to be sent goes as fast
+  as the channel takes it, and does not crowd out other tasks.
 - **Its view** shows the folder walked, the folders and entries so far, how
   many it could not read or did not enter, and the folder it is reading,
   with **Open in File Browser** at the folder walked.
@@ -618,15 +617,15 @@ Walks a folder and those under it: what **Walk from here** runs, on a
 listing's folder, and in the file browser on a folder or the folder shown.
 
 - **Core gives** `path`, a `string`: the folder to walk. How deep and how
-  far are the command's own params, with defaults (BOB's `depth` 5,
-  `max_folders` 10 000; 0 for either is no limit).
+  far are the command's own params, with defaults of its own (a `depth` and
+  a `max_folders`, say, 0 for no limit).
 - **The result is a `dir_walk`.** The file browser shows the walk's folders
   as their listings come, the folder walked marked "walking…".
 
 ## volumes
 
 The host's volumes: the result of a command that says what file systems
-the host has (BOB's `volumes`). On Windows, its drives, `A:` to `Z:`, its
+the host has (a `volumes`, say). On Windows, its drives, `A:` to `Z:`, its
 mapped network drives with them; on Linux, the file systems mounted where
 the minion sees them (a container's own), less the kernel's own (`/proc`,
 `/sys`, cgroups) and the like:
@@ -660,8 +659,8 @@ On the wire: `sep` 1, `volumes` 2, `x` 3; a volume's `path` 1, `kind` 2,
 `no_media` 9, `x` 10.
 
 - **In parts, if it takes several** (a host with many mounts, a connection
-  that carries little: BOB's keep to half a message each, as a listing's
-  pieces do). Core joins them by the generic rule, the volumes appended in
+  that carries little: half a message each, say, as a listing's pieces
+  may be). Core joins them by the generic rule, the volumes appended in
   `seq` order (`Volumes`, `ReadVolumes` in the protocol package). Every
   path is checked absolute for the host's `sep`.
 - **A kind a later version adds** reads as `other`.
@@ -761,8 +760,7 @@ runs.
 
 ## screenshot
 
-A picture of the host's screen: the result of a command that takes one
-(BOB's `screenshot`).
+A picture of the host's screen: the result of a command that takes one.
 The picture is no file on the host: the minion makes it, and sends it as
 [a minion sends a file](../minion-messages/file-transfers/#a-minion-sending-a-file),
 its first chunk's `name` a file name it picks, without a path
@@ -844,8 +842,8 @@ Moves the minion to another of its build's connections: what a session's
   answer, staying on 1", "already on connection 2"). A minion that moved
   tells core with a `conn_update` over the new connection, which the session
   shows.
-- A command may take more, each with a default: BOB's `switch` takes `for`,
-  a duration after which it moves back (`0s`, its default, stays).
+- A command may take more, each with a default: a `for`, say, a duration
+  after which the minion moves back (`0s` staying).
 - It goes as tasks go, within the minion's `get_tasks` allowance: a minion
   that takes no tasks takes no switch.
 
@@ -881,8 +879,8 @@ tunnel items. No result: the task's view is core's.
   no default. `source`, `rows`, `cols`, `stop_idle` and `cap` are
   `advanced`: under the form's More options.
 - Its command's own params, each with a default, are the minion's
-  (`timeout`, `max_streams`; a param may apply by core's `front` too:
-  BOB's `timeout` is a connection's, none a terminal's), and it says what its minion opens (`opens`:
+  (`timeout`, `max_streams`, say; a param may apply by core's `front` too:
+  a connect `timeout` means nothing to a terminal), and it says what its minion opens (`opens`:
   `tcp`, `udp`, `unix`, `pipe`, `source`, `tls`, `process`, `accept`; none
   said, `tcp` alone; a target narrows it): core opens nothing else through it.
 - Its task holds no place in the minion's max tasks. Core adds `stop_idle`
@@ -900,8 +898,8 @@ that comes there as a stream. With `udp` (a `bool`, the param of a command
 that opens `udp` alone), it listens for datagrams instead: a stream for each
 address they come from. Core connects each stream to `host` and `to`
 from its own network, sending a UDP one's datagrams on: a reverse port
-forward, its one front, which no param names (reverse SOCKS was dropped in
-wave 3.2, the `front` param in 3.3). No operational port, no result.
+forward, its one front, which no param names. No operational port, no
+result.
 
 - **`host` and `to` (both required), `stop_idle` (never by default) and
   `cap` are core's alone**, added to every command of the action. They carry no `num`, so a task never takes them to
@@ -910,7 +908,7 @@ wave 3.2, the `front` param in 3.3). No operational port, no result.
   at, when it queues the task.
 - The command may require `bind`, `listen` and, if it opens `udp`, `udp`
   (the action's own: `udp` is required of a command that opens `udp` and
-  refused in one that does not, since protocol v0.45.0); its other params
+  refused in one that does not); its other params
   need defaults (`timeout`, `max_streams`). Its task holds no place in the
   minion's max tasks.
 
@@ -943,7 +941,7 @@ result; no place in the minion's max tasks.
 ## Changing the vocabulary
 
 **For now, nothing stays for compatibility.** While Logos is before 1.0
-(the maintainers' decision of 2026-11-07), a result, an action, or one of
+(the maintainers' decision), a result, an action, or one of
 their keys or params is renamed or removed without an alias, and every
 repository it touches (the protocol, core, the factories and their minions)
 moves to the change in the same release round; a build made before it is

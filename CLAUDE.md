@@ -54,21 +54,21 @@ renamed). The groups:
   `guides/writing-a-channel`, `guides/writing-a-factory`,
   `guides/writing-a-minion`.
 - **Contracts**: `contracts/overview` (how modules reach core, and the
-  contracts table with each one's status), `contracts/protocol-releases`
-  (generated from `logos-golang-protocol`'s tags: add the new version when the
-  protocol is tagged), then the module plumbing (AMQP envelope and routing,
+  contracts table with each one's status), then the module plumbing (AMQP envelope and routing,
   lifecycle, management, logs), the channel contracts (minion connection
-  schema, HTTP sync, connections, agentless channels, and `modules/ssh` for
-  the SSH module), the build contracts (minion build, credentials), and the
-  minion's protocol (`contracts/minion-messages/*`, with task results and
-  actions, the file browser and the VPN front).
+  schema, HTTP sync, connections, agentless channels), the build contracts
+  (minion build, credentials), and the minion's protocol
+  (`contracts/minion-messages/*`, with task results and actions, the file
+  browser and the VPN front).
 - **Contributing**: `contributing/*`: repositories, development stack,
   testing and CI, changing the protocol (and releasing), architecture rules,
   writing the docs (`contributing/writing-the-docs.md` holds the page
   conventions).
 
 Retired pages keep their URLs through redirects (`message-flow`,
-`message-flow-full`). Other repositories link to `core-infrastructure`,
+`message-flow-full`; `modules/ssh` to logos-ssh's README,
+`contracts/protocol-releases` to the protocol's tags). Other
+repositories link to `core-infrastructure`,
 `contracts/channel-core-connections`, `contracts/channel-core-sync`,
 `contracts/minion-connection`, `contracts/minion-messages` (and its `codecs`)
 and `contracts/vpn-front`: keep those slugs, or add a redirect.
@@ -77,6 +77,14 @@ and `contracts/vpn-front`: keep those slugs, or add a redirect.
 
 The site's Contributing → Writing the Docs page is the reference; in short:
 
+- **Logos, never one module.** The site covers core, the contracts, the
+  protocol, the SDKs and how to write a module. A module's own docs (its
+  schemas, kinds, framing, commands, settings, tests) are its README's, in
+  its repository: no page or section for one, no module's behavior as an
+  example (a hypothetical one instead: "a channel over HTTP"), generic code
+  examples (module `example`). Module repositories are named only in
+  Contributing, where the project's process needs them, and linked from
+  Repositories alone.
 - **Contract pages state facts from the code** (the protocol's types, the
   SDKs, core): check a field, limit or name there before documenting it. A
   page's design reasoning goes in a **Design notes** section at its end, each
@@ -84,7 +92,9 @@ The site's Contributing → Writing the Docs page is the reference; in short:
 - **Status notes**: `:::caution[Draft]` opens a page about an agreed design
   not built yet; `:::note[Status]` one built in part, saying what is not; a
   built page has none, and the overview's contracts table says it is built.
-  Release histories do not go in pages: versions are on Protocol Releases.
+  No versions or dates in pages: no release histories, no "since vX.Y.Z",
+  no dated status; each repository's tags say what a release brought.
+  Toolchain versions (Go, golangci-lint) stay: they are requirements.
 - **One home per fact**: link instead of restating. The kinds table and the
   three paths (Connections), the sync call's answers (HTTP Sync), lost
   replies and replays (Wire Format, "Freshness and replay"), the item numbers
@@ -123,9 +133,9 @@ writing about it.
   for a frame that does not open, among others (HTTP Sync). A message sent
   again within 10 minutes gets the reply it got: core keys this on the
   minion's own message id, not on `Logos-Message-Id`.
-- **Agentless channels** act as the minion (the SSH channel: `modules/ssh`):
-  core gives them the keys of the ids they serve (key 11) and the acting task
-  (key 14) with each call and open.
+- **Agentless channels** act as the minion: core gives them the keys of the
+  ids they serve (key 11) and the acting task (key 14) with each call and
+  open.
 - **Numbers**: every channel, build field, connection parameter, kind field
   and target field is numbered (one numbering per schema; a number is never
   reused); commands by `op`, params by `num`. A minion reads the **minion

@@ -13,7 +13,7 @@ sees a client of its own protocol, and nothing is installed on the server.
 ```mermaid
 sequenceDiagram
     participant C as Core
-    participant CH as SSH channel (the minion)
+    participant CH as Channel over SSH (the minion)
     participant S as SSH server
     C->>CH: call {target's values, rehello, the build's keys}
     CH->>S: SSH login (a password or a key)
@@ -28,7 +28,6 @@ sequenceDiagram
 |---|---|
 | Protocol | `agentless` on a `bind` kind of a connection schema; `keys` (key 11) on a call or an open to such a kind: the keys of its id; `acting` (key 14) on them too: the task that made the session's acting identity; an `open`'s `under` (key 10): the id the minion speaks under; the link failure kinds `login` (5) and `host_key` (6); the machine id source `ssh-host-key` (11); a hello's `pid` optional (0: no process of its own) |
 | Core | a call or an open to an agentless kind carries its id's keys (the build's under the build id, the session's under the session id), and the task that made its session's acting identity while it has one; an `open` says the id the minion speaks under (core never speaks first); the session's connection taken from its target; the failures `login` and `host_key` shown as refused, not retried, for calls and opens |
-| SSH module | `logos-ssh`: the `ssh` factory, and the `ssh` channel with its own minion (for calls as the Dumbo page answers, for a persistent connection as a listening minion): [The SSH Module](../../modules/ssh/) |
 | Unchanged | Targets and their states, sessions, tasks, results, file transfers, streams, the file browser, the console |
 
 ## Keys for the channel
@@ -48,8 +47,8 @@ What an agentless kind changes is who opens the messages at the other end:
   relays sealed frames it cannot read, as channels do. A channel from
   before `keys` decodes the frame and skips the key.
 - **A minion that does not stage keeps its build's keys** as its
-  session's: the SSH minion's session keys are its build's, and the
-  factory's artifact holds none of them (core keeps them).
+  session's. An agentless kind's factory need build none of them into its
+  artifact: core keeps them, and gives them with every call and open.
 - **Everything else is unchanged in core**: the same sealing, the same
   sessions, the same checks, for a page and for an SSH server alike.
 
@@ -77,7 +76,9 @@ made the session's identity, beside the keys:
 - **While the session has one.** From the `identity` that sets it to the
   one that clears it (back to the process's own: an `unbecome`), every
   call and open under the session's id carries the task. A change replaces
-  it, so it is always the last. None while the session runs as its
+  it, so it is always the last alone: an identity made from another (a
+  become from a become) is made again from the login. None while the
+  session runs as its
   process, for an acting identity that names no task, and under a build
   id, where there is no session yet: a new target's first call, an open for
   a target with no open session.
@@ -85,8 +86,8 @@ made the session's identity, beside the keys:
   or an open without `keys`, and on an answer. A channel from before
   `acting` decodes the frame and skips the key.
 - **The channel takes it up again** as its minion would have kept it: the
-  command is its own, so it reads the task as when it ran it (the SSH
-  channel: [Become](../../modules/ssh/#become)). An open's is where the connection starts:
+  command is its own, so it reads the task as when it ran it (a become,
+  say, elevated again when the first command that needs it comes). An open's is where the connection starts:
   on it, the minion keeps its identity itself, as any persistent minion
   does, until the connection closes.
 - **Core still records what the minion says**: a task runs as the session's
@@ -144,6 +145,10 @@ On such a kind:
   so its `hello` says no `conn`, and core records the target's.
 - **No `at` check** ([Freshness and replay](../minion-messages/wire-format/#freshness-and-replay)):
   nothing but core reaches the channel's minion.
+- **A limit of its own**: a minion that keeps nothing between calls, nor
+  past a connection, could not keep a limit core sets, so its factory
+  leaves `max_tasks` out, and the minion's `hello` says its own
+  ([Max tasks](../minion-messages/tasks-and-results/#max-tasks)).
 - **A target keeps one connection**, as every target does: moving a server
   to the other kind is adding a target on the build's other connection,
   which opens a new session.
@@ -164,8 +169,8 @@ open's `Under` and `Keys`.
 
 The direction byte keeps the two apart: a frame sealed for the other
 direction does not open ([Sealed frame](../minion-messages/wire-format/#sealed-frame)).
-`logos-ssh` does all of it (`internal/agent`, `internal/minion`), and its
-tests run every item it sends through those checks.
+A channel's tests can run every item it sends through those checks, as
+core will.
 
 ### What it must answer
 
@@ -196,13 +201,6 @@ The least core needs of a channel acting as the minion:
 - **An item it does not take with `unknown_item`.** It skips the item,
   takes the rest of the message, and answers with an `err` `unknown_item`
   naming it (`item`, its place in core's message), which core logs.
-
-## The SSH module
-
-`logos-ssh` is the agentless channel built so far, with its own factory:
-its build schema, its connection schema, how its minion does each command
-over SSH, `become`, tunnels and Windows servers are on [The SSH
-Module](../../modules/ssh/).
 
 ## Trust
 
@@ -239,7 +237,7 @@ core's Docker network, or a VPN.
   the channel, the minion protocol stays the only one, and core changes
   little.
 - **Why keys, not a suite of no crypto.** A `none` suite was built first,
-  and dropped: it made the SSH factory a special case everywhere in core
+  and dropped: it made an agentless channel's factory a special case everywhere in core
   (unsealed messages, no keys, no staging, its own marks in the UI), while
   a page and an SSH server are reached the same way. With keys, core seals
   every message alike, and `agentless` means one thing: the channel gets

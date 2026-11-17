@@ -26,11 +26,13 @@ connection kind](../#mechanics-by-connection-kind)):
   page's answer carries `re`.
 - **Core answers every message it takes.** When it has something to say,
   with a sealed reply whose `re` is the request's `id`. When it has
-  nothing, through the sync call, with **204** (an HTTP channel's empty
-  reply), after it took the message's items; over a socket every request
-  gets a sealed reply, empty or not, so the minion knows it arrived.
+  nothing, through the sync call, with **204** (no reply: the channel tells
+  the minion as its transport says nothing), after it took the message's
+  items; over a socket every request gets a sealed reply, empty or not, so
+  the minion knows it arrived.
 - **Items count as delivered on a sealed reply with the matching `re`, or a
-  204.** On a 404, a timeout, or no answer, the minion sends them again: in
+  204.** On a failure from the channel, a timeout, or no answer, the
+  minion sends them again: in
   a later message under a new `id`, or as the same message, which gets the
   reply core kept for it ([Freshness and
   replay](../wire-format/#freshness-and-replay)). Core does the same with
@@ -159,9 +161,9 @@ max_tasks = {
   replaces it (failed, saying which). Nothing goes to the minion as a task:
   a task would wait for a free slot, the very limit it changes.
 
-BOB runs each task in a goroutine of its own, its parts sharing each
-message's room; its `exit` stops the tasks running beside it first, so each
-ends cancelled, its end sent before exit's.
+A minion may run its tasks side by side, their parts sharing each
+message's room; an `exit` that stops the tasks running beside it ends each
+cancelled, their ends sent before exit's.
 
 ## Tasks
 

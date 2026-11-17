@@ -138,8 +138,9 @@ seconds, so a minion parses integers only.
 ## Compression
 
 The protocol package (`Pack`, `Unpack`, `UnpackItems`) and core pack and
-take packed items. BOB's factory declares `deflate`, and its minion inflates
-and packs; Dumbo, Raven and the SSH module declare no compression.
+take packed items. A factory declares what its minions inflate
+(`compression` in its [build schema](../../minion-build/#the-build-schema));
+the builds of one that declares none get no packed items.
 
 A sender may send any item **packed**: deflated, inside a `packed` item,
 which the receiver inflates and takes as the item it holds, in its place in
@@ -217,7 +218,7 @@ A minion's messages carry no time: core stamps each with its own receive time. C
 - **Core refuses a message whose `id` it has seen** in the last 24 hours,
   when it no longer keeps that message's reply (past the 10 minutes, or a
   reply over 64 KiB): the sync call answers **409**, and the channel
-  answers its client as for any failure (the HTTP channel's 404); over a
+  answers its client as for any failure; over a
   connection socket core drops it and answers nothing. A captured message
   sent again meets this, and learns nothing from the answer: a reply core
   kept is sealed for the minion.
@@ -240,7 +241,7 @@ A minion's messages carry no time: core stamps each with its own receive time. C
   connection) needs no replay protection of its own: core does not rely on
   it. Without it, a captured core message sent to the minion again runs its
   tasks again. A minion guards against that by remembering recent `id`s
-  (BOB's remembers task ids for a day), or, when it can remember nothing
+  (task ids for 24 hours: [Limits](#limits)), or, when it can remember nothing
   (a `bind-call` page), by **`at`**: every message core starts says core's
   clock, and a minion refuses one further than 10 minutes from its own
   (`protocol.StaleWindow`) with an `err` `stale`, saying its time. Within
@@ -287,7 +288,7 @@ when an exchange fails is in [Sessions](../sessions/#when-an-exchange-fails).
 
 | | |
 |---|---|
-| A message (plaintext) | 768 KiB: sealed and packed, it fits the HTTP channel's 1 MiB default `max_body_bytes`. Less on a connection whose channel says it carries less (`max_message`, below) |
+| A message (plaintext) | 768 KiB: sealed and framed, it fits a 1 MiB request body. Less on a connection whose channel says it carries less (`max_message`, below) |
 | Items in a message | 256 |
 | Elements of an array or map inside an item (a result's `data`) | 65 536 |
 | Nesting | 16 levels |
@@ -312,8 +313,9 @@ listing pieces and result parts.
 Session timings (the first check-in, tombstones, replaced keys, the
 backstop) are in [Sessions](../sessions/).
 
-Example sizes, CBOR plaintext → sealed → packed by the HTTP channel, with
-the same message's text-keyed forms for comparison:
+Example sizes, CBOR plaintext → on the wire (sealed, plus 17 bytes a
+channel might frame it with: a byte and the 16-byte id), with the same
+message's text-keyed forms for comparison:
 
 | Message | CBOR | With text keys (v 1) | JSON | On the wire |
 |---|---|---|---|---|

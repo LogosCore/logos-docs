@@ -41,19 +41,19 @@ the docs explain it.
    module knows what its own actions mean. [What stays in the
    module](../../implementing-a-module/#what-stays-in-the-module).
 
-5. **Minions share only the protocol.** BOB's minion, the Dumbo page, the
-   SSH channel's minion and Raven's script each keep their own task runner
-   and workings; there is no shared minion library. Why: none waits on
-   another's changes. [The SSH Module, Design
-   notes](../../modules/ssh/#design-notes).
+5. **Minions share only the protocol.** Every minion, a factory's or an
+   agentless channel's own, keeps its own task runner and workings; there is
+   no shared minion library. What they share is `logos-golang-protocol`: its
+   types, its checks and its helpers. Why: none waits on another's changes.
+   [Writing a Minion](../../guides/writing-a-minion/).
 
 6. **Module instance ids are global.** Core keys registrations by instance
    id alone, whatever the module's type or name: a module that registers
    under an id in use takes that instance over, its stored configuration and
    history included. So no two modules default to the same id, a channel
-   and a factory of one repository included (the dev stack's: `http-local`,
-   `tcp-local`, `bob-local`, `dumbo-local` and `dumbo-factory-local`,
-   `ssh-local` and `ssh-factory-local`, `raven-local`). Why: heartbeats,
+   and a factory of one repository included (in the dev stack, such a
+   repository's channel takes `<name>-local` and its factory
+   `<name>-factory-local`). Why: heartbeats,
    deregistering and management address an instance by its id alone.
    [`module.register`](../../contracts/module-lifecycle/#moduleregister).
 
@@ -80,8 +80,8 @@ the docs explain it.
 
 9. **Secrets are never logged.** Key material, credentials, secret values
    and files go where they are for alone: never into logs, build progress
-   or a build's log, and never back to core. Channels log no frame, and the
-   SSH channel, which reads messages, logs none of their contents. Why: a
+   or a build's log, and never back to core. Channels log no frame, and an
+   agentless channel, which reads messages, logs none of their contents. Why: a
    module's log goes to its log store and, live, to any operator who opens
    its tail. [What a module
    gets](../../contracts/credentials/#what-a-module-gets), [The

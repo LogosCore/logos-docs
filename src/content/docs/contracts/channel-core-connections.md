@@ -3,10 +3,8 @@ title: "Channel ↔ Core: Connections"
 ---
 
 :::note[Status]
-Built: all four kinds, in core, channel-core (`pkg/connclient`,
-`pkg/linkclient`), the HTTP channel (`reverse-persistent`), the TCP channel
-(`bind-persistent` and the reverse kinds), the Dumbo channel and its PHP
-pages (`bind-call`), and BOB's minion: the connection sockets, pushes within
+Built: all four kinds, in core and channel-core (`pkg/connclient`,
+`pkg/linkclient`): the connection sockets, pushes within
 the `get_tasks` allowance, presence, the control link's `call` and `open`,
 targets with their states, retries and policies, Connect and Disconnect,
 idle closes, the kinds in connection and build schemas (with a kind's
@@ -39,7 +37,7 @@ it in Go):
 |---|---|---|
 | opens the control link and answers each request by its id | `bind-call`, `bind-persistent` | [Three paths](#three-paths), [formats](#the-control-link-and-connection-sockets-formats) |
 | makes a `call` and answers what came back, within its deadline | `bind-call` | [When core calls](#bind-call-minions-when-core-calls) |
-| dials on `open`, opens the connection's socket naming the open, and relays | `bind-persistent` | [Opening and closing](#bind-persistent-connections-opening-and-closing), [The TCP channel](#the-tcp-channel) |
+| dials on `open`, opens the connection's socket naming the open, and relays | `bind-persistent` | [Opening and closing](#bind-persistent-connections-opening-and-closing) |
 | opens a socket at a minion's first message, and relays | `reverse-persistent` | [Lifetime and presence](#reverse-persistent-connections-lifetime-and-presence) |
 | closes the socket when the minion's connection ends, and the minion's connection when the socket closes | both persistent kinds | [Three paths](#three-paths) |
 | declares its kinds, their fields and targets | every kind | [The connection schema by kind](#the-connection-schema-by-kind) |
@@ -93,9 +91,9 @@ connection it is **connected**; when either side closes it, the connection
 is gone, at both ends.
 
 - **The channel closes the socket when the minion's connection ends**, or
-  stops answering the channel's own liveness check (the HTTP channel pings
-  the minion every 30 seconds and drops one silent for its
-  `ws_idle_timeout`). Core's pings reach the channel, not the minion: the
+  stops answering the channel's own liveness check (a channel over
+  WebSockets may ping the minion every 30 seconds, say, and drop one that
+  stays silent too long). Core's pings reach the channel, not the minion: the
   socket staying open is the channel saying the minion is there, so a
   channel that cannot tell a dead minion connection from a quiet one must
   not keep its socket open for it.
@@ -110,7 +108,7 @@ is gone, at both ends.
 - **A request over a socket always gets its reply**, empty when core has
   nothing to say (through the sync call that is the 204): the minion knows
   its message arrived. A minion may answer what core starts (`re`), or
-  acknowledge in its next message, as BOB's does: core takes either.
+  acknowledge in its next message: core takes either.
 - **Pushes** follow every change to a session's tasks (queued, cancelled, a
   part taken), coalesced over a tenth of a second: core sends cancels, and
   tasks within the allowance, on the connection that carried the session's
@@ -118,10 +116,12 @@ is gone, at both ends.
   on ([Streaming a file](../minion-messages/file-transfers/#streaming-a-file)).
   What a push carries is what every message core sends a minion carries
   ([Mechanics by connection kind](../minion-messages/#mechanics-by-connection-kind)).
-- **BOB's minion** checks in at once over a new socket, which links the
-  connection to its session and sets its allowance, then on its schedule;
-  a WebSocket that closes it opens again after a second, doubling up to the
-  endpoint's `ws_reconnect_backoff`.
+- **A minion checks in at once over a new socket**: its first message ties
+  the connection to its session, and its `get_tasks` sets the allowance.
+  After that it needs no schedule ([Check-ins are
+  optional](#reverse-persistent-connections-lifetime-and-presence)). One
+  whose connection closed connects again, backing off (from a second,
+  doubling, say).
 
 One socket per connection rather than one for everything: each gets TCP's own
 flow control, a slow minion or a large transfer holds up nobody else, and a
@@ -154,8 +154,9 @@ sequenceDiagram
   minion is in place, not when it is built.
 - A factory declares, for each target and channel of its [build
   schema](../minion-build/), the kinds its minions support: a PHP
-  page only `bind-call`; BOB's minion `reverse-call` and `reverse-persistent`
-  through the HTTP channel, and `bind-persistent` through the TCP channel.
+  page only `bind-call`, say; a compiled program `reverse-call` and
+  `reverse-persistent` through one channel, and `bind-persistent` through
+  another.
   A build's connection names the kind it uses ([kinds in
   builds](#kinds-in-the-build-schema-and-in-builds)).
 
@@ -296,7 +297,7 @@ Core calls a `bind-call` minion:
    (a walk's) is answered with a
    [`resume`](../minion-messages/tasks-and-results/#resuming-a-task), at
    once, until a part says done. Each call takes what fits its answer and
-   timeout (the Dumbo page: listings up to 600 KB, or 10 seconds); a call
+   timeout (listings up to 600 KB, say, or 10 seconds); a call
    that fails leaves the walk where it stood, and the next call goes on.
 5. **On the minion's schedule, if it has one**: the `sleep` its `hello` says
    (and `sleep_update` changes) means, for a page, call every interval, with
@@ -322,8 +323,7 @@ Core calls a `bind-call` minion:
   timeout. Core says on every call what the channel's connection schema
   declares for the kind ([`max_call`](../minion-connection/), 1 s to 1 h)
   within its own cap of 10 minutes, and 2 minutes when it declares none;
-  it waits that long for the answer, and a few seconds more. The Dumbo
-  channel's `CALL_TIMEOUT` is 30 s by default, the SSH channel's 2 minutes.
+  it waits that long for the answer, and a few seconds more.
   No call goes on past core's wait: one that did would run its tasks for an
   answer core no longer takes, and the next call would carry them again, as
   they were never acknowledged. A task meant to run longer belongs in the
@@ -341,7 +341,7 @@ Core calls a `bind-call` minion:
   message ids, refuses a call further than 10 minutes from its own clock (a
   replay, or a clock that is off) with an `err` `stale`, running nothing; the
   target shows *refused*, the page's time in the detail, until the clocks
-  agree. The Dumbo page does.
+  agree.
 - **What a call carries** is what every message core sends a minion carries
   ([Mechanics by connection kind](../minion-messages/#mechanics-by-connection-kind)),
   with the resumes of every task under way, as the page keeps nothing.
@@ -398,8 +398,7 @@ On the **control link**, key 0 says what the frame is:
   answered once its connection socket is up, the socket naming the request,
   so core knows the session it serves: the answer carries the request's id
   alone, with 13 `logins` when the channel tried credentials, and the
-  socket's `Logos-Peer-Address` says the peer (the TCP channel's
-  `internal/relay`). Core takes a bind-persistent connection's peer from
+  socket's `Logos-Peer-Address` says the peer. Core takes a bind-persistent connection's peer from
   the socket, not from the answer. An open that failed is answered with 7,
   a failure.
 - **Login and host key failures** (5 and 6) are the target refusing the
@@ -422,8 +421,8 @@ On the **control link**, key 0 says what the frame is:
   link. Answers come in any order: many targets are called at once.
 - **The channel never opens the message** (an [agentless](../agentless-channels/)
   kind's channel, which is the minion, excepted): it only takes it out of
-  its transport format (for the Dumbo channel: the id's 16 bytes, then the
-  sealed message), as it does a reverse minion's. Core opens it, and tells
+  its transport format (the id's 16 bytes, then the sealed message, say),
+  as it does a reverse minion's. Core opens it, and tells
   the target's states apart by the status, and by whether it opens under
   the id the call went under and answers that call.
 - **Liveness**: core pings the link and every socket every 30 seconds, and
@@ -451,9 +450,8 @@ those of **each target** (the page's URL, a host header, a proxy; for SSH a
 host, a port, a user and a password or key), which only the channel uses.
 The [connection schema](../minion-connection/) a channel declares
 at registration says both, by kind (its `schema_version` `"2"`). A
-hypothetical example: the HTTP channel's two kinds, cut down, and a
-`bind-call` kind for pages it would call, which no built channel declares
-this way (the Dumbo channel's is its own, `bind-call` alone):
+hypothetical example: a channel over HTTP with both reverse kinds, cut
+down, and a `bind-call` kind for pages it would call:
 
 ```json
 {
@@ -504,16 +502,15 @@ this way (the Dumbo channel's is its own, `bind-call` alone):
   ([`max_message`](../minion-connection/#the-schema)). Core gives it to each
   build's connection of the kind, and keeps what it sends within it; the
   minion keeps its own messages within it
-  ([Limits](../minion-messages/wire-format/#limits)). The built channels
-  declare none.
+  ([Limits](../minion-messages/wire-format/#limits)).
 - **A kind's keys are unique** across its fields and its target's: `call` and `open` give the channel one map of them, under the
   keys it declared.
 - **Every field is a field spec** with a `num`, one numbering across the
   schema's kinds and targets ([Field numbers](../minion-connection/#field-numbers)),
   and every kind has at least one field, in its `fields` or its `target`. A
   target field may be a `secret`, or a `credential` or `credential_list`
-  naming the operation's [credentials](../credentials/) (the SSH channel's
-  logins): core keeps it, shows a secret masked, and gives it to the
+  naming the operation's [credentials](../credentials/) (logins, say):
+  core keeps it, shows a secret masked, and gives it to the
   channel, which dials with it, never to a minion.
 - **Endpoints** name a connection kind and keep values for its built-in
   fields: an address for a `reverse` kind, a way of calling for a `bind`
@@ -597,25 +594,25 @@ an `on-demand` target is opened again for it. Over each new connection core
 asks the minion which of its session's running tasks it still has (a
 [`reack`](../minion-messages/tasks-and-results/#tasks-the-minion-lost)), in
 the reply to its first message there: a minion that keeps its tasks between
-connections (BOB) acks them, and they are the new connection's, which stays
+connections acks them, and they are the new connection's, which stays
 open while they run; a channel acting as the minion, whose commands ran
-inside the connection that went (SSH's), answers `unknown_task` for each,
+inside the connection that went, answers `unknown_task` for each,
 and core ends them. A minion that does not take a `reack` leaves them
 running in core: they hold no connection open (the new one did not carry
 them), and an operator's cancel ends them (a cancel is work, which opens
 the connection, and the minion answers `unknown_task`).
 
-**A minion with other connections** (BOB built with reverse ones and a
-listening one) is on one at a time. Core opens a target's connection on its
+**A minion with other connections** (reverse ones and a listening one,
+say) is on one at a time. Core opens a target's connection on its
 own (on demand, always, and their retries) only when the session uses that
 connection, is switching to it (a `switch_connection` task naming it is
 under way), or has gone late where it is; otherwise the target shows *not
 connected*, saying which connection the minion uses. Check now and Connect
 dial whatever the minion is on. A target may be added from a session that
 uses another connection: it takes the session over, and a switch then gets
-its dial. BOB's switch to a listening connection opens the port, says so in
-the task (core's cue), and moves through the dial; with no dial in 10
-minutes it closes the port and fails.
+its dial. A minion's switch to a listening connection opens the port, says
+so in the task (core's cue), and moves through the dial; with no dial in
+time (10 minutes, say) it closes the port and fails.
 
 **`connect` and `disconnect`** are core's own commands in the console of a
 session whose connection is `bind-persistent` (reserved, as `help` is: a
@@ -657,46 +654,6 @@ target's connection is the target's).
   is closed on purpose. It is `connected`, `connecting`, `not connected`, or
   `unreachable since` when opens fail; while connected, the socket's pings
   say it is alive.
-
-### The TCP channel
-
-The built `bind-persistent` channel (`logos-tcp-channel`, module `tcp`):
-the minion listens on a TCP port, the channel dials it on `open`.
-
-| Built into the minion (`fields`) | Per target (`target`) |
-|---|---|
-| `listen_port` (required), `listen_address` (`0.0.0.0`), `max_connections` (1, up to 16: a new dial may come in while an old one has not timed out), `keepalive` (30s) | `host` (required), `port` (the listen port when empty: a port forward), `proxy` (`socks5://`, `socks5h://` or `http://`, CONNECT), `connect_timeout` (10s) |
-
-Its fields have the same [numbers](../minion-connection/#field-numbers)
-in each kind that has them, its targets' fields sharing the numbering:
-`host` 1, `port` 2, `connect_timeout` 3, `keepalive` 4, `reconnect_backoff`
-5, `request_timeout` 6, `checkin_interval` 7, `checkin_jitter` 8 (the
-reverse kinds'), `listen_port` 9, `listen_address` 10, `max_connections` 11
-(`bind-persistent`'s), `proxy` 12 (a target's).
-
-On the TCP connection each message is one frame, both ways:
-`[length: 4 bytes, big-endian][id: 16 bytes][sealed message]`, the length
-counting the id and the message. The minion speaks first once a dial is in
-(its stage, its `hello`, or a check-in under its session); the channel
-relays frames between the TCP connection and the connection socket without
-reading them, and closes one when the other closes. BOB's minion takes the
-newest connection when another comes in (the older is likely stale). It
-listens from the start when its listening connection comes first in its
-build, and otherwise once a switch moves it there (above).
-
-It carries the reverse kinds too, minions that dial it, with the same
-frames, each kind on a port of its own (`REVERSE_PERSISTENT_LISTEN`,
-`REVERSE_CALL_LISTEN`; none by default, `:4790` and `:4791` in its dev
-stack):
-
-| Kind | Built into the minion (`fields`) | The exchange |
-|---|---|---|
-| `reverse-persistent` | `host` and `port` (required: the channel as the minion reaches it), `connect_timeout` (10s), `keepalive` (30s), `reconnect_backoff` (60s), `checkin_interval` (60s) and `checkin_jitter` (20) | the minion's first frame opens the connection's socket (its address the peer); frames go both ways until either side closes; the minion dials again when it closes, backing off |
-| `reverse-call` | `host`, `port`, `connect_timeout` (10s), `request_timeout` (40s), `checkin_interval` (60s), `checkin_jitter` (20) | a connection for each exchange: the minion's frame through the sync call, core's reply back under the same id (the id alone when core has nothing: the 204), then the channel closes; no reply at all when core refused it (as the HTTP channel's 404) |
-
-A minion that dials and sends nothing within 30 seconds is closed; a
-reverse call waits for core within `CORE_SYNC_TIMEOUT` (30s). BOB's minion
-speaks all three kinds.
 
 ## `get_tasks` on a persistent connection
 
@@ -776,8 +733,8 @@ there, better than check-ins do.
 - **Check-ins are optional.** On an open persistent connection a minion
   sends only what it has (output, acks, a new `get_tasks`): core pushes
   tasks and cancels as they come, so no scheduled check-in is needed for
-  them. Whether a minion checks in anyway is its factory's choice; BOB's
-  does not, and pings the channel to find a link that died silently.
+  them. Whether a minion checks in anyway is its factory's choice; one that
+  does not may ping the channel to find a link that died silently.
 - **A channel closes the minion's connection when its socket to core
   closes** (core restarted, or closed it), and when a send to core fails.
   Core ties a socket to a session only through a message the minion
@@ -794,7 +751,7 @@ there, better than check-ins do.
   hour.
 - **Quiet is not idle.** A channel's idle timeout counts answered pings on a
   connection that carries sessions, so a minion waiting for tasks is not cut
-  off (the HTTP channel's `ws_idle_timeout` counts them).
+  off.
 - **A session closed** (its operation deleted) is told within 30 seconds
   over its open connections (`session_closed`, pushed as a reply would
   carry it), which no longer serve it, and every message after gets the
@@ -809,7 +766,7 @@ there, better than check-ins do.
 
 ## Connection management
 
-A minion may be built with several connections, of several kinds: BOB's
+A minion may be built with several connections, of several kinds: one
 could poll (`reverse-call`) and keep a WebSocket (`reverse-persistent`) through
 the same channel. Which one it uses first is its build's choice; operators
 need to see which one it uses, and to move it to another. It goes as the
@@ -831,8 +788,8 @@ the changes it reported.
 
 **Switching** is an [action](../task-results-and-actions/#switch_connection):
 **`switch_connection`**, core giving the connection's place (`conn`). A
-factory maps it to a command of its own, which may take more: BOB's
-`switch` takes `for`, a duration after which the minion goes back. So:
+factory maps it to a command of its own, which may take more: a `for`,
+say, a duration after which the minion goes back. So:
 
 - the session's connection list has a **Switch to** button on each
   connection, which runs the action, and the console has the factory's
@@ -842,10 +799,10 @@ factory maps it to a command of its own, which may take more: BOB's
   something to report, and who switched what stays on record;
 - it is the factory's to offer: a minion built without such a command shows
   no button, and one built with a single connection has nothing to switch to;
-- BOB's minion moves only once a check-in through the new connection
+- the minion moves only once a check-in through the new connection
   worked, carrying the `conn_update` (on a WebSocket, that check-in also
   sets the allowance, so pushes start at once); one that does not answer
-  leaves it where it was, and the task fails saying so. With `for`, it moves
+  leaves it where it was, and the task fails saying so. With a `for`, it moves
   back when the time is up, with a `conn_update` saying "back after 10m";
 - it goes as tasks go, within the [allowance](#get_tasks-on-a-persistent-connection):
   a minion that takes no tasks takes no switch. `cancel` is the one thing that
@@ -883,9 +840,9 @@ A **failure** is an exchange with no usable reply: none, a timeout, a TLS or
 HTTP error, a WebSocket that does not open, a reply that does not open. A
 reply that says the session is closed is core's answer, not a failure.
 
-BOB fails over only between connections it reaches out through: a listening
-one waits for core's dial, which a switch asks for, so failover passes it by
-whatever its `auto` says.
+A listening connection waits for core's dial, which a switch asks for: a
+minion may leave it out of failover whatever its `auto` says, and fail over
+only between the connections it reaches out through.
 
 **Giving a running minion a new connection** (a fresh redirector when one is
 burned) is planned the same way: an action, `add_connection`, with the kind,
@@ -929,7 +886,7 @@ across the channel's kinds (`protocol.ValidateBuildSchema`).
 
 - **`kinds` are the kinds the factory's minions support** with that channel,
   at least one, the first the one a build takes when it names none, **each
-  with the factory's own parameters for it in full** (BOB's minion picks a
+  with the factory's own parameters for it in full** (a minion may pick a
   request method for each call, but a WebSocket has one handshake). A list,
   not a map as a channel's connection schema has, because its order is what
   picks a build's kind. This is the build schema's `schema_version` `"3"`.
@@ -954,7 +911,7 @@ their kind:
   listening minion that also calls back. The order is the order the minion
   tries its connections and the one failover goes round: a `bind`
   connection is not tried, it waits to be reached, but one that comes first
-  is where the minion starts (BOB's listens).
+  is where the minion starts.
 - **Endpoints are of a kind**: each holds values for one kind's fields, and
   its export (`logos.channel-endpoint.v2`) carries the `kind`. A build
   connection's `endpoint` is such an export, so the factory reads the kind

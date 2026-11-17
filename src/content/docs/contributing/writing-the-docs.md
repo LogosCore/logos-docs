@@ -7,6 +7,27 @@ with Starlight, its pages Markdown files in `src/content/docs/`. The contract
 pages state what the code does: each fact is checked in the code (the
 protocol's types, the SDKs, core) before it is written.
 
+## What the site covers
+
+Logos itself: core, the contracts and the protocol, the SDKs, the module
+types, and how to write a channel, a factory or a minion. Never one module:
+a module's schemas, kinds, framing, commands, settings and tests are its
+README's, in its own repository.
+
+- **No page or section for a module**, and no module's behavior as an
+  example. Where an example helps, it is hypothetical ("a channel over HTTP
+  may answer a plain 404"), not what one module does.
+- **Code examples are generic**: a module named `example`, not code
+  condensed from a module.
+- **Module repositories are named where the project's process needs
+  them**: in Contributing (the repositories, their order and versions, CI,
+  releases), and linked from [Repositories](../repositories/) alone.
+- **No versions or dates**: a page says what Logos does now, not when it
+  came or in which release: no release notes, no "since vX.Y.Z", no dated
+  status. A repository's tags say what each release brought. The toolchain
+  a contributor needs (Go, golangci-lint) keeps its versions: those are
+  requirements, not history.
+
 ## Page anatomy
 
 - **Frontmatter.** Every page starts with a `title`: Starlight's docs
@@ -45,7 +66,7 @@ top, or at the top of the section the design is:
 | Aside | When |
 |---|---|
 | `:::caution[Draft]` | A design agreed but not built yet: the page records it before the code. |
-| `:::note[Status]` | Built in part, or built with something still to come: what is built and released, and what is not, or not yet used or run. |
+| `:::note[Status]` | Built in part, or built with something still to come: what is built, and what is not, or not yet used or run. |
 | none | Built: the page states what the code does. |
 
 ```md
@@ -122,7 +143,7 @@ deploy. The docs have no tags: `main` is the site.
 ## Keep in step
 
 - **The [contracts overview](../../contracts/overview/#contracts-in-this-section)**:
-  each contract's status, when one is agreed, built or released.
+  each contract's status, when one is agreed or built.
 - **The minion messages' tables**: the
   [items](../../contracts/minion-messages/#items), and [Mechanics by
   connection kind](../../contracts/minion-messages/#mechanics-by-connection-kind)
@@ -137,5 +158,3 @@ deploy. The docs have no tags: `main` is the site.
   action conditions; the [Codecs](../../contracts/minion-messages/codecs/#the-json-envelope)
   page's JSON envelope check-in. An edit to one is an edit to
   `logos-golang-protocol`'s tests.
-- **Versions**: [Repositories](../repositories/#tags-and-main) and [Protocol
-  Releases](../../contracts/protocol-releases/), after a release round.

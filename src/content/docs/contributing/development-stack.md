@@ -16,8 +16,8 @@ core's network.
 | Go | 1.25.7 | every Go repository: each `go.mod` says `go 1.25.7`, CI installs that version, the images build on `golang:1.25` |
 | Node.js and npm | 22 | core's web app and hocuspocus, whose CI and images run Node 22; the docs too (their deploy runs Node 20, and Astro takes either) |
 | golangci-lint | v2.13.2 | every Go repository: the version CI pins |
-| PHP | | Dumbo's page tests, which skip without `php` on `PATH` |
-| PowerShell 7 (`pwsh`) | | Raven's script tests and logos-vpn's installer tests, which skip without it |
+| PHP | | logos-dumbo's tests, which skip without `php` on `PATH` |
+| PowerShell 7 (`pwsh`) | | logos-raven's tests and logos-vpn's installer tests, which skip without it |
 
 A newer Go builds the repositories too, but their dependencies stay on
 versions that build with Go 1.25 (logos-ssh's and logos-vpn's `CLAUDE.md`
@@ -126,24 +126,22 @@ docker compose up -d --build
   RabbitMQ at `logos-rabbitmq:5672` as `logos`: the compose file's
   defaults. Set `RABBITMQ_USER` too when core's `RABBITMQ_DEFAULT_USER` is
   not `logos`.
-- **What it publishes.** The HTTP channel on 8090 (`HTTP_CHANNEL_PORT`);
-  the TCP channel on 4790 and 4791, for minions that dial it; Dumbo's
-  `dumbo-www`, a PHP server for trying pages put in `./www`, on 8095. The
-  TCP and SSH channels reach the host as `host.docker.internal`: a minion
-  listening there, or an SSH server.
-- **What it needs.** Raven's minions check in through the HTTP channel:
-  start that first.
+- **What it publishes.** A channel publishes the ports its minions reach
+  it on (its README says which), and reaches the host as
+  `host.docker.internal`: a minion listening there, or a server it logs in
+  to.
+- **What it needs.** A factory's minions check in through a channel: start
+  that channel too.
 - **`.env` is the compose file's too.** A core URL or broker host set there
   overrides the compose file's, which reach core inside the network, and
   the container would look for core and RabbitMQ in itself. For the stack
-  keep the RabbitMQ password alone in it: the HTTP channel's `.env.example`
-  sets only that, its other settings commented out.
+  keep the RabbitMQ password alone in it.
 - **On the host instead**, with `go run`, a module's defaults reach the dev
   stack: core at `http://localhost:8002` (core-dev's port, published on the
   host's loopback) and RabbitMQ at `localhost:5672` as `logos`. Set
   `RABBITMQ_PASSWORD` (core's `RABBITMQ_DEFAULT_PASS`): it has no default,
-  and a module does not start without it. The HTTP channel also needs a
-  `LISTEN_ADDR` other than `:8080`, which nginx has.
+  and a module does not start without it. A module that listens needs a
+  port other than 8080, which nginx has.
 
 A module registers with core when it starts. Its README has the rest of its
 settings. A module built against an unreleased protocol or SDK runs a binary

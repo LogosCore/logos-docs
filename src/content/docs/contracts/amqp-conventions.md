@@ -80,7 +80,7 @@ The module also binds its queue to its type's exchange with routing key
 Examples:
 
 - `logos.channel.rpc.http-1`, bound to `logos.channel.rpc` with key `http-1`
-- `logos.factory.rpc.bob-1`, bound to `logos.factory.rpc` with key `bob-1`
+- `logos.factory.rpc.example-1`, bound to `logos.factory.rpc` with key `example-1`
 
 ### Replies
 
@@ -161,7 +161,7 @@ is an [envelope](../amqp-envelope/) of type `module.<event>` with payload
 | `blocked`, `unblocked` | an operator blocked or unblocked it |
 | `deleted` | an operator deleted what core kept of it |
 
-Examples: `channel.http-1.registered`, `factory.bob-1.declared_dead`. A
+Examples: `channel.http-1.registered`, `factory.example-1.declared_dead`. A
 subscriber binds with wildcards: `channel.*.*` for every channel's events,
 `*.*.blocked` for every block, `#` for everything. Nothing subscribes yet, and
 modules publish no events of their own.

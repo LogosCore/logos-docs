@@ -99,12 +99,9 @@ by them. A key has the same number in every kind, and a kind's fields and its
 target's share one numbering (core gives a channel both in one map), so a
 number names one key across the schema. Minions keep the numbers they were
 built with, so a number stays its field's: a new field takes a number not used
-before, and a removed field's is never given to another. The HTTP channel
-numbers its fields 1 to 13 (below); the TCP and SSH channels' are with their
-fields ([The TCP channel](../channel-core-connections/#the-tcp-channel),
-[The SSH Module](../../modules/ssh/#the-channel)). A channel's page
-under Modules shows each field with its number, a bind kind's target fields
-under their own row (GraphQL: `ModuleField.num`).
+before, and a removed field's is never given to another. A channel's page
+under Modules, in the web app, shows each field with its number, a bind
+kind's target fields under their own row (GraphQL: `ModuleField.num`).
 
 ## Channel endpoints
 
@@ -236,35 +233,6 @@ a channel kind and connection schema version the build's target supports, or
 the build is refused; a build needs at least one. Creating minions with these
 settings is the factory's job: see [Minion Build](../minion-build/).
 
-## HTTP channel, version 3
-
-The HTTP channel carries `reverse-call` (a request per exchange) and
-`reverse-persistent` (a WebSocket). Both kinds have the fields below, spelled
-out in each; `ws_reconnect_backoff` is `reverse-persistent`'s alone, and the
-timing fields are described per kind (a check-in over a WebSocket is a frame,
-not a request).
-
-| Key | Num | Type | Default | Notes |
-|---|---|---|---|---|
-| `base_url` | 1 | url | required | `http(s)://host[:port]`, **no path**: the channel accepts any path, the minion picks its own. At most 2048 characters. |
-| `extra_base_urls` | 2 | string_list | — | More addresses of the channel in the same form (e.g. other fronts), at most 16. A minion falls back to them, in order, when the base URL cannot be reached; the other parameters apply to each. |
-| `host_header` | 3 | string | — | `Host` to send when it must differ from the base URL's host (CDN, reverse proxy). At most 255 characters. |
-| `sni` | 4 | string | — | TLS server name, when it must differ. At most 255 characters. |
-| `proxy` | 5 | url | — | Outbound proxy for the minion. |
-| `tls_verify` | 6 | bool | `false` | Check the certificate against trusted roots. |
-| `tls_pin_sha256` | 7 | string | — | SHA-256 of the server certificate (64 hex); authenticates the server with verification off. |
-| `user_agent` | 8 | string (`format: user_agent`) | — | Empty: the minion's built-in one. The UI offers a generator for realistic browser User-Agents, and says under the field when a value is outdated or gives itself away ([`format`](../module-management/#fields)). At most 512 characters. |
-| `headers` | 9 | string_map | — | Extra headers on every request and WebSocket handshake, name → value (names are header tokens, values have no line breaks and at most 4096 characters; at most 32). |
-| `request_timeout` | 10 | duration | `40s` | 1s to 10m. How long to wait for a reply. Keep it above the channel's `CORE_SYNC_TIMEOUT` (30s by default): a minion giving up sooner than the channel waits for core drops replies still on their way. |
-| `checkin_interval` | 11 | duration | `60s` | 1s to 168h. `reverse-call`: how often to check in with nothing to send. `reverse-persistent`: how soon core expects the minion back after the WebSocket closed (late, then lost, run by it); while it is open no check-in is needed (core pushes tasks, and the channel closes the WebSocket when its link to core breaks, so the minion reconnects by `ws_reconnect_backoff`). |
-| `checkin_jitter` | 12 | int (%) | `20` | 0 to 100. Random spread around the interval. |
-| `ws_reconnect_backoff` | 13 | duration | `60s` | `reverse-persistent` only. 1s to 1h. Longest wait between WebSocket reconnects (from 1s, doubling). |
-
-There is no transport, method or path parameter: the channel accepts plain
-requests and WebSockets, any method, any path, and the minion is free to use and
-switch between them. A factory that lets operators choose them declares its own
-[connection parameters](../minion-build/#connection-parameters).
-
 ## Design notes
 
 - **The channel owns its parameters.** Core cannot know what a DNS or GitHub
@@ -291,8 +259,8 @@ switch between them. A factory that lets operators choose them declares its own
   is what a kind's transport can carry at all, for a transport that holds
   less than the protocol's 768 KiB. A build's connection takes it when the
   build is made, and the minion and core keep to that value from then on. A
-  channel's own limits are its management properties instead (the HTTP
-  channel's `max_body_bytes`), and can change after minions are built: a
+  channel's own limits are its management properties instead (a largest
+  request body, say), and can change after minions are built: a
   minion that sends more than the channel takes fails like any other
   failure, and the channel reports it as `too_large` (log outcome and status
   counter), so lowering the limit too far shows up at once.

@@ -193,7 +193,7 @@ MongoDB resolves the database engine decision listed as pending in the
 
 A module reaches core two ways: over AMQP, through RabbitMQ (registration,
 management, builds), and over HTTP(S), at core's base URL (its environment's
-`LOGOS_CORE_BASE_URL`; the HTTP channel's `LOGOS_SYNC_BASE_URL`): the
+`LOGOS_CORE_BASE_URL`, by convention): the
 channels' sync call, control link and connection sockets; a factory's
 build files and artifacts (every factory's: the links a build carries are
 paths on that URL) and its factory link. That URL is core itself
@@ -223,10 +223,9 @@ channel-core and factory-core for every request to core):
 | `LOGOS_CORE_TLS_INSECURE=true` | any certificate: none is verified, and anyone between the module and core can read and change what passes. Logged as a warning at start. |
 
 One at a time: the first set of insecure, the fingerprint, the CA file
-decides. A setting that does not read stops the module at start (the HTTP
-channel), or fails every request to core saying which (the others).
-Released in module-core v0.3.0, channel-core v3.9.0, factory-core v0.3.1,
-and every module built on them.
+decides. A setting that does not read stops the module at start
+(factory-core checks it in `factory.Run`), or fails every request to core,
+saying which (channel-core's clients).
 
 ## hocuspocus — Wiki Collaboration
 
@@ -254,15 +253,15 @@ and every module built on them.
   operator.
   guacd records nothing either: core records each desktop as it relays it
   ([Recordings](../contracts/minion-messages/tunnels/#recordings)).
-- **Image**: `logos-guacd` (`logos-core/deploy/guacd`), guacamole-server
-  1.6.0, patched (an RDP desktop's workstation name and client OS, its
+- **Image**: `logos-guacd` (`logos-core/deploy/guacd`), guacamole-server,
+  patched (an RDP desktop's workstation name and client OS, its
   time zone reaching the server, and a connection abandoned as its user
   leaves) and with the time
   zones (`tzdata`), built by Apache's own
   Dockerfile against **FreeRDP 3**, every library
-  pinned (`versions.env`), published by CI as
-  `ghcr.io/logoscore/logos-guacd:1.6.0-freerdp3.30.0-logos4`. Not the official
-  `guacamole/guacd:1.6.0`: its FreeRDP 2 makes guacd abort an RDP connection
+  pinned (`versions.env`), published by CI as `ghcr.io/logoscore/logos-guacd`
+  (the tag core runs is in its Compose file and Helm values). Not the
+  official `guacamole/guacd`: its FreeRDP 2 makes guacd abort an RDP connection
   whose desktop is resized during a paint (a desktop following the web app
   to full screen and back), which upstream fixed for FreeRDP 3.8 and later
   alone (GUACAMOLE-2078).

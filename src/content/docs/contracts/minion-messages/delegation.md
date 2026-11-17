@@ -3,18 +3,15 @@ title: "Delegation"
 ---
 
 :::note[Status]
-Implemented and released on 2026-11-09: the protocol v0.46.0 (the item
-and its pieces, the two actions, `serves`, `delegated_only`), core (all
-four kinds through a delegate, delegates of delegates, targets that name a
-delegate, each session's path; the web app's delegate picker, a delegate
-task's view and a session's path), BOB v0.32.0 (`delegate`, op 18, serves
-the TCP channel's `bind-persistent`; `reverse_delegate`, op 19, its
-`reverse-persistent` and `reverse-call`) and the TCP channel v0.2.0 (its
-reverse kinds). Run end to end that day through BOB: `bind-persistent`,
-`reverse-persistent` and `reverse-call` (a shell's output and a 3 MB
-download, Disconnect and Connect again, the delegate's task stopped and
-started again, a session behind 3 delegates). What no module uses yet:
-[Not used yet](#not-used-yet).
+Built in the protocol (the item and its pieces, the two actions, `serves`,
+`delegated_only`) and core (all four kinds through a delegate, delegates of
+delegates, targets that name a delegate, each session's path; the web app's
+delegate picker, a delegate task's view and a session's path), and run end
+to end through a delegate on `bind-persistent`, `reverse-persistent` and
+`reverse-call` (a shell's output and a 3 MB download, Disconnect and Connect
+again, the delegate's task stopped and started again, a session behind 3
+delegates).
+What no module uses yet: [Not used yet](#not-used-yet).
 :::
 
 Core reaches a minion's connection through an **instance** of the
@@ -399,8 +396,8 @@ What the protocol and core carry, but no module exercises yet:
 
 - **`bind-call` through a delegate.** Core sends the `call` and takes the
   `answer` (tested in core), but no factory serves a `bind-call` kind, so
-  it has not run end to end. A `delegate` command that serves Dumbo's
-  `bind-call` (B making the HTTP request to a page) would.
+  it has not run end to end. A `delegate` command that serves a
+  `bind-call` kind (B making the HTTP request to a page, say) would.
 - **A `delegated_only` kind.** Core refuses a bind target of one that names
   no delegate, and the target dialog asks for a delegate, but no channel
   declares such a kind.

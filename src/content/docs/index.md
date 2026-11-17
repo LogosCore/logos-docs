@@ -25,7 +25,7 @@ and contributing to Logos.
   [Module Types](module-types/), [Core Responsibilities](core-responsibilities/),
   [Core Infrastructure](core-infrastructure/)).
 - **Guides**: building a module and its minions, step by step, with the
-  reference modules as examples.
+  Go SDKs.
 - **Contracts**: the reference. Each page states what the code does, checked
   against it, and ends with the design notes behind it. The
   [Contracts Overview](contracts/overview/) maps them.

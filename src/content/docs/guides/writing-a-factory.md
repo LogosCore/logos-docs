@@ -7,12 +7,12 @@ schema](../../contracts/minion-build/#the-build-schema) when it registers;
 core turns each build an operator makes into a `factory.build` request, and
 the factory builds an artifact with the minion's keys and settings in it,
 uploads it to core and reports how the build ended. This guide builds one with
-the Go SDK, `logos-golang-factory-core` (v0.4.1). [Implementing a
+the Go SDK, `logos-golang-factory-core`. [Implementing a
 Module](../../implementing-a-module/) has what every module does, [Minion
 Build](../../contracts/minion-build/) is the contract, and [Writing a
-Minion](../writing-a-minion/) is what the minion it builds has to speak. BOB
-(`logos-bob-factory`, v0.36.0), the reference factory, is the example
-throughout.
+Minion](../writing-a-minion/) is what the minion it builds has to speak. The
+examples are for the example build schema in [Minion
+Build](../../contracts/minion-build/#the-build-schema).
 
 ## How a build goes
 
@@ -41,8 +41,7 @@ exchange is in [Building](../../contracts/minion-build/#building).
 
 ## Wiring
 
-A factory is a `Builder` handed to `factory.Run`. Condensed from BOB's
-`cmd/bob-factory/main.go`:
+A factory is a `Builder` handed to `factory.Run`, in its `main`:
 
 ```go
 ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
@@ -66,7 +65,7 @@ err = factory.Run(ctx, factory.Config{
     Config: module.Config{
         AMQPURL: amqpURL(), // from RABBITMQ_HOST, _PORT, _USER, _PASSWORD, _VHOST
         Identity: lifecycle.Identity{
-            ModuleName: "bob",
+            ModuleName: "example",
             Instance:   instance, // FACTORY_ID: one per running process
             Version:    version,
         },
@@ -135,47 +134,50 @@ err := factory.Run(ctx, factory.Config{
 `codeclink.NotOpened`, `NotMessage` and `Refused` are the failures core
 tells apart; any other error goes as other. In tests, `codeclink.Answer`
 runs one call in process, and `factorytest.NewCore` is core's end of a real
-link. [Codecs](../../contracts/minion-messages/codecs/) is the contract;
-Raven (`logos-raven`) translates both layers for PowerShell scripts.
+link. [Codecs](../../contracts/minion-messages/codecs/) is the contract.
 
 ## The builder
 
-Condensed from BOB's `cmd/bob-factory/build.go`:
+A builder that compiles its minion, with the build's icon when it has one
+(a `file` field of the example's `windows-exe` target):
 
 ```go
 // Steps is the plan for one build, before it starts: core shows it as the
 // build's pipeline. Optional (Planner).
-func (b *bob) Steps(req protocol.BuildRequest) []protocol.BuildStep {
+func (b *builder) Steps(req protocol.BuildRequest) []protocol.BuildStep {
     var steps []protocol.BuildStep
-    if id, _ := req.Values["badge"].(string); id != "" {
-        steps = append(steps, stepBadge) // a step that will not run is left out
+    if id, _ := req.Values["icon"].(string); id != "" {
+        steps = append(steps, stepIcon) // a step that will not run is left out
     }
     return append(steps, stepCompile, stepUpload)
 }
 
-func (b *bob) Build(ctx context.Context, job *factory.Job) (factory.Result, error) {
-    if f, ok := job.File("badge"); ok {
-        job.Step(stepBadge.ID, "checking the badge")
-        if _, err := job.ReadFile(ctx, f); err != nil { // size and SHA-256 checked
-            return factory.Result{}, factory.Fail("badge_unreadable", err.Error())
+func (b *builder) Build(ctx context.Context, job *factory.Job) (factory.Result, error) {
+    var icon []byte
+    if f, ok := job.File("icon"); ok {
+        job.Step(stepIcon.ID, "fetching the icon")
+        data, err := job.ReadFile(ctx, f) // size and SHA-256 checked
+        if err != nil {
+            return factory.Result{}, factory.Fail("icon_unreadable", err.Error())
         }
+        icon = data
     }
     req := job.Request
-    job.Step(stepCompile.ID, "go build for "+req.Platform)
+    job.Step(stepCompile.ID, "compiling for "+req.Platform)
     // Core's minion config, baked in as it came: the minion reads it by number.
-    bin, err := compile(ctx, b.minionSrc, req.Target, req.Platform, req.MinionConfig, job.Log())
+    bin, err := b.compile(ctx, req.Target, req.Platform, req.MinionConfig, icon, job.Log())
     switch {
     case err != nil && ctx.Err() == nil:
-        return factory.Result{}, factory.Fail("compile_failed", "the dummy minion did not compile; see the build log")
+        return factory.Result{}, factory.Fail("compile_failed", "the minion did not compile; see the build log")
     case err != nil:
         return factory.Result{}, err // cancelled, out of time or stopping: the SDK says which
     }
     job.Step(stepUpload.ID, "")
-    a := artifactKinds[req.Target] // .bin or .exe, and its media type
-    if err := job.UploadArtifact(ctx, "bob-"+req.BuildID[:8]+a.ext, a.mediaType, bytes.NewReader(bin)); err != nil {
+    a := artifactKinds[req.Target] // the file's extension and media type
+    if err := job.UploadArtifact(ctx, "minion-"+req.BuildID[:8]+a.ext, a.mediaType, bytes.NewReader(bin)); err != nil {
         return factory.Result{}, err
     }
-    return factory.Result{Warnings: []string{"a dummy minion, made to try the build flow end to end"}}, nil
+    return factory.Result{}, nil
 }
 ```
 
@@ -323,12 +325,12 @@ session and the build's values; never a file, a link, the deadline or an
 endpoint's name. The SDK checks it with the rest of the request: present
 exactly when the schema declares it, readable, and this build's.
 
-What goes into the minion stays the factory's decision. BOB bakes the bytes
-in whole: it writes them to `minion.cfg` before it compiles, the minion
-embeds the file, and reads it with `protocol.ReadMinionConfig`, by numbers
-alone. Keep the numbers the minion reads in one file and test them against
-the schema, as BOB's `fields_test.go` does: a number, once given, stays its
-field's.
+What goes into the minion stays the factory's decision. A minion in Go can
+take the bytes whole: the factory writes them to a file before it compiles,
+and the minion embeds the file (`//go:embed`) and reads it with
+`protocol.ReadMinionConfig`, by numbers alone. Keep the numbers the minion
+reads in one file and test them against the schema: a number, once given,
+stays its field's.
 
 ## What the schema asks of the minions
 
@@ -354,16 +356,12 @@ has the items in full.
 | A command with the `delegate` or `reverse_delegate` action (`serves`) | Tasks, then `delegate` items | Serves the channel kinds its command names for other minions ([Delegation](../../contracts/minion-messages/delegation/)). |
 | A command's `result` | Nothing | Sends its task's data in the result's shape ([Task Results and Actions](../../contracts/task-results-and-actions/)). |
 
-`error_codes` came with protocol v0.51.0, and factory-core v0.4.1 still
-requires v0.50.0: a factory that declares them requires
-`github.com/logoscore/logos-golang-protocol` v0.51.0 in its own `go.mod`, as
-BOB does. Under v0.50.0, `protocol.BuildSchema` has no `ErrorCodes`.
-`error_codes_per_build` and `fixed` came with v0.52.0, likewise: the request's
-codes are `job.Request.ErrorCodes`, and `job.Request.ExitCode(code)` gives the
-build's for a declared one (the declared code itself when none was drawn).
-A field's `platforms` ([Fields for some platforms](../../contracts/minion-build/#fields-for-some-platforms))
-came with v0.53.0: a request carries such a field only for its platforms,
-and `schema.PlatformFields(target, platform)` gives the fields a build takes.
+A build's own exit codes are `job.Request.ErrorCodes`, and
+`job.Request.ExitCode(code)` gives the build's for a declared one (the
+declared code itself when none was drawn). A field with `platforms`
+([Fields for some platforms](../../contracts/minion-build/#fields-for-some-platforms))
+comes in a request only for its platforms, and
+`schema.PlatformFields(target, platform)` gives the fields a build takes.
 
 ## Testing a builder
 
@@ -372,13 +370,13 @@ the same checks, plan, `Job` and result as `factory.Run`:
 
 ```go
 st := factorytest.NewStore(t) // serves files and takes artifacts over HTTP
-badge := st.File("badge-1", "badge.png", "image/png", png)
+icon := st.File("icon-1", "app.ico", "image/x-icon", ico)
 req := coreRequest(t) // below
-req.Files = map[string]protocol.BuildFile{badge.ID: badge}
-req.Values["badge"] = badge.ID
+req.Files = map[string]protocol.BuildFile{icon.ID: icon}
+req.Values["icon"] = icon.ID
 req.Artifact = protocol.ArtifactUpload{} // the store's, filled in by Run
 
-out := factorytest.Run(t, buildSchema, &bob{minionSrc: testMinionSrc}, st, req)
+out := factorytest.Run(t, buildSchema, &builder{}, st, req)
 // out.Steps, out.Progress, out.Result: what core would have received.
 // out.Artifact: the bytes uploaded (nil when the build failed).
 ```
@@ -395,19 +393,20 @@ link that is a path on core's address does not work there.
 A builder is best tested with a request as core sends it: values with
 their defaults filled in, the target's default and required commands,
 connections as endpoint exports, keys, and, for a schema that declares it,
-the minion config. BOB's `build_test.go` builds one; condensed:
+the minion config. One for the example schema, declaring `minion_config`
+as well:
 
 ```go
 func coreRequest(t *testing.T) protocol.BuildRequest {
     t.Helper()
-    target, _ := buildSchema.Target("linux-elf")
-    http, _ := buildSchema.Channel("http")
+    target, _ := buildSchema.Target("windows-exe")
+    ch, _ := buildSchema.Channel("http")
     r := protocol.BuildRequest{
-        BuildID: "5b0c4f6e-8a1d-4c2b-9e7f-3d2a1b0c9e8f", Target: "linux-elf", Platform: "linux/amd64",
+        BuildID: "5b0c4f6e-8a1d-4c2b-9e7f-3d2a1b0c9e8f", Target: "windows-exe", Platform: "windows/amd64",
         SchemaVersion: buildSchema.Version,
         // The values over the fields' defaults, as core sends them.
         Values: protocol.ResolveFieldValues(buildSchema.TargetFields(target), map[string]any{
-            "kill_date": "2027-01-31T00:00:00Z", "punches": []any{"jab", "hook"},
+            "kill_date": "2027-01-31T00:00:00Z", "guardrails": []any{"no_debugger"},
         }),
         // What a build that names no commands gets.
         Commands: buildSchema.DefaultCommands(target),
@@ -417,7 +416,7 @@ func coreRequest(t *testing.T) protocol.BuildRequest {
                 Channel: protocol.ExportChannel{ModuleName: "http", SchemaVersion: 3},
                 Params:  map[string]any{"base_url": "https://edge-eu.example.com"},
             },
-            Values: protocol.ResolveFieldValues(http.KindFields(protocol.KindReverseCall),
+            Values: protocol.ResolveFieldValues(ch.KindFields(protocol.KindReverseCall),
                 map[string]any{"path_prefix": "/cdn/assets/"}),
         }},
         Crypto: &protocol.BuildCrypto{
@@ -426,7 +425,7 @@ func coreRequest(t *testing.T) protocol.BuildRequest {
         },
         Deadline: time.Now().Add(time.Minute),
     }
-    // The minion config core would make of it (BOB's schema declares minion_config).
+    // The minion config core would make of it (the schema declares minion_config).
     cfg, err := protocol.EncodeMinionConfig(buildSchema, r, testChannels)
     if err != nil {
         t.Fatal(err)
@@ -439,14 +438,12 @@ func coreRequest(t *testing.T) protocol.BuildRequest {
 `EncodeMinionConfig` numbers the endpoint's settings by the channel's own
 field numbers, which a factory does not have: it takes them from a function
 that gives each channel's connection schema at a version
-(`protocol.ConnectionSchemaAt`). BOB's `channels_test.go` gives the HTTP
-channel's version 3 and the TCP channel's version 1, each field's key, `num`,
-type and default as the channels declare them ([HTTP channel, version
-3](../../contracts/minion-connection/#http-channel-version-3), [The TCP
-channel](../../contracts/channel-core-connections/#the-tcp-channel)). With the
-config in the request, a test can read it back as the minion will
-(`protocol.ReadMinionConfig`) and check each number; BOB's
-`TestMinionConfigOfABuild` does.
+(`protocol.ConnectionSchemaAt`). In a test, `testChannels` gives the
+schemas of the channels the factory lists, at the versions it lists, each
+field's key, `num`, type and default as the channel declares it (the
+channel's page in the web app shows its schema, each field with its
+number). With the config in the request, a test can read it back as the
+minion will (`protocol.ReadMinionConfig`) and check each number.
 
 ### A request core sent
 
@@ -472,7 +469,8 @@ Core's dev stack ([`logos-core`](https://github.com/LogosCore/logos-core),
 front, `logos-nginx`, on the host's ports 8080 (HTTP) and 8443 (HTTPS, a
 self-signed certificate).
 
-1. **Run the factory** on that network, as BOB's `docker-compose.yml` does:
+1. **Run the factory** on that network (its `docker-compose.yml` joins
+   `logos-core_logos` as an external network):
    `LOGOS_CORE_BASE_URL=http://logos-core-dev:8002`,
    `RABBITMQ_HOST=logos-rabbitmq`, and RabbitMQ's user and password from
    core's `.env` (`RABBITMQ_DEFAULT_USER`, `RABBITMQ_DEFAULT_PASS`). On the
@@ -486,10 +484,10 @@ self-signed certificate).
    `op` `module.register` and the reason. In the web app, **Modules** lists
    the instance; the factory's page shows its targets, build parameters and
    commands, each with its number, and its minion error codes.
-4. **Build.** Start a channel too (the HTTP channel's dev stack listens on
-   the host's port 8090). **Builds → New build**: a target and platform,
-   commands, values, and a connection through the channel (for a minion run
-   on the host, `base_url` `http://localhost:8090`). The build's
+4. **Build.** Start a channel the factory lists too. **Builds → New
+   build**: a target and platform, commands, values, and a connection
+   through the channel (for a minion run on the host, the address the
+   channel listens on there). The build's
    **Pipeline** shows the factory's plan and the step it is on; a failure
    shows its code and the build log; **JSON → Sent to factory** shows the
    request.
@@ -528,38 +526,5 @@ self-signed certificate).
     table](#what-the-schema-asks-of-the-minions) is one.
 11. **Tests with a request as core sends it**: values with defaults, keys,
     connections, and the minion config.
-12. **protocol v0.51.0 in `go.mod`** for a schema with `error_codes`, v0.52.0
-    with `error_codes_per_build`, v0.53.0 with a field's `platforms`.
-13. **A `Codec`** when the schema names a suite or an envelope of the
+12. **A `Codec`** when the schema names a suite or an envelope of the
     factory's own.
-
-## BOB
-
-BOB (`logos-bob-factory`) builds dummy minions: a real Go program, compiled
-for each build with the build's minion config baked in, that speaks every
-connection kind but `bind-call`. Its builder copies the minion's sources
-(`minion/`, a Go module of its own), writes the config to `minion.cfg`, runs
-`go build` for the build's platform (static, stripped, `-trimpath`,
-`-mod=readonly`) and uploads the binary as `bob-<first 8 of the build
-id>.bin` or `.exe`. Run with `describe`, the minion prints its config;
-otherwise it is a minion ([Writing a Minion](../writing-a-minion/#bobs-minion)).
-
-| Kind | Declared |
-|---|---|
-| Build schema | Version 6. Targets `linux-elf` (`elf`, `linux/amd64`, `linux/386`, `linux/arm64` and `linux/arm`; its tunnels open no named pipes; its own field `goarm`, num 5, for `linux/arm` alone: the ARM version, 7, 6 or 5, BOB compiles for with `GOARM`) and `windows-exe` (`exe`, `windows/amd64`, `windows/386` and `windows/arm64`). Fields `greeting`, `kill_date` (`datetime`), `punches` (`enum_list`) and `badge` (`file`, an image up to 256 KiB, which BOB fetches and checks; it never goes into the minion). Channels `http` (num 1, version 3: `reverse-call` with BOB's `method` and `path_prefix`, `reverse-persistent` with `path_prefix`) and `tcp` (num 2, version 1: `bind-persistent`, `reverse-persistent`, `reverse-call`). Core's suite, `persisted_sessions`, `failover`, `max_tasks`, `compression` (`deflate`), `minion_config` and `error_codes` 1 to 5. |
-| Commands | `sleep` and `exit` (required); `hello`, `ls`, `switch` and `volumes` (picked by default); `download`, `stream_download`, `upload`, `stream_upload`, `rm`, `walk`, `shell`, `feedback`, `tunnel`, `reverse_tunnel`, `delegate` and `reverse_delegate`. Ops 1 to 19, 16 unused. |
-| Plan | `badge` (when the build has one), `compile`, `upload` |
-| Failure codes | `badge_unreadable`, `no_toolchain`, `compile_failed`, `knocked_out` |
-| Properties | `fail_builds` (every build fails with `knocked_out`, to see a failed build), `log_level` |
-| Actions | `say_hello` |
-| Builds section | added by factory-core, `max_concurrent_builds` starting at 4 |
-| Capabilities | `logs` |
-
-Its tests, in `cmd/bob-factory`, show each part of this guide:
-`build_test.go` (a request as core sends it, the schema valid, the config
-read back), `channels_test.go` (the channels' connection schemas for
-`EncodeMinionConfig`), `fields_test.go`, `ops_test.go` and `exits_test.go`
-(the minion's numbers and exit codes against the schema), `bob_test.go`
-(builds through `factorytest`, the artifact an ELF or a PE that prints the
-config it was given) and `stage_test.go` (the compiled minion against a fake
-channel and core: staging, hello, check-ins, a failure, `session_closed`).

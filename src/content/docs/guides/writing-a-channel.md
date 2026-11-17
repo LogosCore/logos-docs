@@ -26,11 +26,11 @@ core is the minion's peer, and the channel sees ciphertext only. An
 [agentless](../../contracts/agentless-channels/) channel, which acts as the
 minion itself, is the one exception.
 
-How the transport carries a frame and its id is the channel's own: the
-HTTP channel puts the id inside the ciphertext, at an offset a byte in
-front says; the TCP channel sends a length, the id, then the frame. That
-format is between the channel and the minions that speak it; core sees
-only what the channel hands it.
+How the transport carries a frame and its id is the channel's own: one
+channel may put the id inside the ciphertext, at an offset a byte in front
+says; another send a length, the id, then the frame. That format is
+between the channel and the minions that speak it; core sees only what the
+channel hands it.
 
 ### The three paths
 
@@ -87,8 +87,7 @@ sequenceDiagram
   it got (for 10 minutes, a reply of at most 64 KiB); past that it is a
   replay: a 409 on the sync call, nothing over a socket.
 - **A reply is relayed as it is**: a 200 body unchanged, a 204 as the
-  transport says "nothing" (the HTTP channel answers the packed id alone,
-  the TCP channel a frame of the id alone).
+  transport says "nothing" (the id alone, in the transport's form).
 - **Over a socket, every message the minion starts gets a reply**, an empty
   sealed message when core has nothing to say. A message that answers one
   of core's (`re`) gets none.
@@ -111,7 +110,7 @@ sequenceDiagram
   and when the link drops; an Opener's at the open's deadline. The link
   reopens only once every one has returned.
 - **Treat a 409 or a 422 like any failure**, as every status but 200 and
-  204: the minion gets what any failure gets (the HTTP channel's plain 404),
+  204: the minion gets what any failure gets (over HTTP, a plain 404, say),
   so neither it nor a stranger learns why. Log the status.
 - **Drain before deregistering**: refuse new work, let what is in flight
   finish or close it, then stop the control-plane session. Core refuses an
@@ -151,8 +150,7 @@ ends can do decides which kinds a channel carries:
 | The channel reaches a minion that listens, and stays: a TCP listener, an SSH server | `bind-persistent` | at any time while it is open, which core asks for | the link's `open`, then a connection socket |
 
 A channel declares each kind it carries in its connection schema, each
-with fields of its own; the built channels carry one to three. Then, per
-kind, what its transport needs said
+with fields of its own. Then, per kind, what its transport needs said
 ([The schema](../../contracts/minion-connection/#the-schema)):
 
 | Flag | When | Read |
@@ -167,8 +165,8 @@ kind, what its transport needs said
 
 A channel runs three things side by side: the control-plane session
 (`channel.Run`), its transport's listeners for the reverse kinds, and the
-control link (`linkclient.Run`) for the bind kinds. Condensed from the TCP
-channel's `cmd/tcp-channel/main.go`, which has all three:
+control link (`linkclient.Run`) for the bind kinds. A channel with all
+three:
 
 ```go
 package main
@@ -189,9 +187,9 @@ import (
 	"github.com/logoscore/logos-golang-module-core/pkg/logstream"
 	"github.com/logoscore/logos-golang-module-core/pkg/module"
 
-	"example.com/logos-foo-channel/internal/config"
-	"example.com/logos-foo-channel/internal/connection"
-	"example.com/logos-foo-channel/internal/relay"
+	"example.com/logos-example-channel/internal/config"
+	"example.com/logos-example-channel/internal/connection"
+	"example.com/logos-example-channel/internal/relay"
 )
 
 var version = "dev" // -ldflags "-X main.version=..."
@@ -222,7 +220,7 @@ func main() {
 		err := channel.Run(regCtx, channel.Config{
 			Config: module.Config{
 				AMQPURL: cfg.RabbitMQURL,
-				Identity: lifecycle.Identity{ModuleType: channel.ModuleType, ModuleName: "foo",
+				Identity: lifecycle.Identity{ModuleType: channel.ModuleType, ModuleName: "example",
 					Instance: cfg.ChannelID, Version: version},
 				// Management and Logs: see Implementing a Module.
 			},
@@ -282,11 +280,11 @@ func fatal(msg string, args ...any) {
   logs that at debug and tries again, from 1 second doubling to 30. It
   returns an error only for options it cannot use: no `Handler`, or a base
   URL that is not `http(s)://host[:port]`.
-- **A channel with no bind kind runs no link** (the HTTP channel); one with
-  no reverse kind listens for no minions (the Dumbo channel).
-- **`OnState`** says when the link opens and drops: the TCP, Dumbo and SSH
-  channels show it as a status value, `link_up`, beside the counters of
-  their management ([Wiring](../../implementing-a-module/#wiring)).
+- **A channel with no bind kind runs no link**; one with no reverse kind
+  listens for no minions.
+- **`OnState`** says when the link opens and drops: a channel may show it
+  as a status value (`link_up`) beside the counters of its management
+  ([Wiring](../../implementing-a-module/#wiring)).
 
 ### Shutdown order
 
@@ -295,41 +293,41 @@ func fatal(msg string, args ...any) {
 2. **What is open closes or finishes**: the persistent connections close,
    their sockets with them (core shows them not connected, and opens them
    again as their policy says once a channel is back); an HTTP server's
-   `Shutdown` lets requests waiting on core finish (the HTTP channel waits
-   `CORE_SYNC_TIMEOUT` and 5 seconds).
+   `Shutdown` lets requests waiting on core finish (give it
+   `CORE_SYNC_TIMEOUT` and a few seconds more).
 3. **The link stops**: the calls in flight end with their contexts, and
-   core counts them failed. The reference channels wait a while for
-   `linkclient.Run` to return: 5 seconds, the Dumbo channel its call
-   timeout and 5 more.
+   core counts them failed. Wait a while for `linkclient.Run` to return: a
+   few seconds (5 above), or a call's timeout and a few more for a channel
+   whose calls take long.
 4. **The control-plane session stops last**, and deregisters: core takes
    no traffic from an unregistered instance.
 
 ### Environment
 
-The reference channels read their settings from the environment, and a
-`.env` file (`--config`, `.env` by default) fills in what the environment
-does not set:
+Channels read their settings from the environment by these names, the
+convention; a `.env` file may fill in what the environment does not set
+(`config.LoadFromEnv` above):
 
-| Variable | Default in the reference channels | Meaning |
+| Variable | A usual default | Meaning |
 |---|---|---|
-| `CHANNEL_ID` | `tcp-main`, `dumbo-main`, `http-main` | The instance id: one per process, unique across every module's instances. |
-| `LOGOS_CORE_BASE_URL` | `http://localhost:8002` | Core's base URL, `http(s)://host[:port]`: the sync call, the link and the sockets go under it. This name is the convention; the HTTP channel's own is `LOGOS_SYNC_BASE_URL`. |
+| `CHANNEL_ID` | `example-main` | The instance id: one per process, unique across every module's instances. |
+| `LOGOS_CORE_BASE_URL` | `http://localhost:8002` | Core's base URL, `http(s)://host[:port]`: the sync call, the link and the sockets go under it. |
 | `LOGOS_CORE_CA_FILE`, `LOGOS_CORE_CERT_SHA256`, `LOGOS_CORE_TLS_INSECURE` | none: the system's trust | How channel-core's clients trust core's certificate over HTTPS: module-core's `coretls`, which `syncclient`, `connclient` and `linkclient` use when given no client of their own ([How modules reach core](../../core-infrastructure/#how-modules-reach-core)). |
 | `RABBITMQ_HOST`, `RABBITMQ_PORT`, `RABBITMQ_USER`, `RABBITMQ_VHOST` | `localhost`, `5672`, `logos`, `/` | Core's RabbitMQ, for the control plane: the defaults are core's dev stack's, seen from the host. |
 | `RABBITMQ_PASSWORD` | none: required | Its password (logos-core's `RABBITMQ_DEFAULT_PASS`). No default could fit, so a channel does not start without it. |
 | `LOG_FORMAT` | `json` | `json` or `text`, on stderr. |
-| `CORE_SYNC_TIMEOUT` | `30s` | `reverse-call`: how long a sync call waits for core. Keep it below the minions' `request_timeout` (40 s in the HTTP and TCP channels' schemas), or a minion gives up on a reply on its way. |
+| `CORE_SYNC_TIMEOUT` | `30s` | `reverse-call`: how long a sync call waits for core. Keep it below how long the minions wait for a reply (a `request_timeout` in the channel's schema, 40 s say), or a minion gives up on a reply on its way. |
 
 The environment holds what core must not change: how to reach core and the
 broker, the log format. What core may change while the channel runs is a
-management property, its starting value often from the environment (the
-Dumbo and SSH channels' `call_timeout`, from `CALL_TIMEOUT`).
+management property, its starting value often from the environment (a
+`call_timeout`, say, from `CALL_TIMEOUT`).
 
 ## The connection schema in Go
 
 The schema says, for each kind, what a minion is built with and what an
 operator fills in for each target. It is a `protocol.ConnectionSchema`.
-Condensed from the Dumbo channel's `internal/connection/connection.go`:
+For a channel that calls a page on a web server (`bind-call`):
 
 ```go
 // Package connection declares the channel's connection schema.
@@ -384,8 +382,8 @@ func Schema() protocol.ConnectionSchema {
   kind, across both: a call or an open brings them in one map.
 - **Every field has a `Num`**, 1 to 65535: one numbering per schema,
   across its kinds and targets. A number names one key, and a key has the
-  same number wherever it appears: the TCP channel's `host` is 1 as a
-  reverse kind's field and as its `bind-persistent` target's. A number is
+  same number wherever it appears: a `host` that is 1 as a reverse kind's
+  field is 1 as a `bind-persistent` target's too. A number is
   its field's for good: a new field takes one never used, and a removed
   field's is never given again. Minions read their settings by these
   numbers ([Field numbers](../../contracts/minion-connection/#field-numbers)).
@@ -437,10 +435,8 @@ endpoint and on a target.
 
 ## One kind at a time
 
-Condensed from the reference channels: the TCP channel's `internal/relay`
-for three kinds, the Dumbo channel's `internal/caller` for `bind-call`.
-They use channel-core's `syncclient`, `connclient` and `linkclient`, and the
-protocol:
+The examples use channel-core's `syncclient`, `connclient` and
+`linkclient`, and the protocol:
 
 ```go
 import (
@@ -454,7 +450,7 @@ import (
 `ReadFrame` and `WriteFrame` stand for the transport's framing,
 `readTarget` for reading the values core sends, `failure` for sorting an
 error into a failure kind, and `remoteIP` for the IP address at the other
-end of a connection: each is a few lines in those repos.
+end of a connection: each is a few lines of the channel's own.
 
 ### `reverse-call`: the sync call
 
@@ -491,14 +487,13 @@ func uuidString(b []byte) string {
   client. `Sync` returns an error for any status but 200 and 204, and
   checks that the reply names the id it was sent.
 - `PeerAddress` is where the minion came from, or, behind a proxy the
-  channel trusts, the client it forwarded for (the HTTP channel's
-  `TRUSTED_PROXIES`).
+  channel trusts (a setting of its own), the client it forwarded for.
 - An empty reply is core's 204: answer the minion with the id alone, in
   whatever form the transport has for "nothing".
-- Every error is one failure to the minion: the HTTP channel answers a
-  plain 404, the TCP channel closes the connection without a reply.
+- Every error is one failure to the minion: a plain 404 over HTTP, say, or
+  a connection closed without a reply.
 - A channel with its own HTTP client reads core's response with
-  `syncclient.ReadReply` instead (the HTTP channel).
+  `syncclient.ReadReply` instead.
 
 ### `reverse-persistent`: a socket per connection
 
@@ -563,8 +558,7 @@ func pipe(mc net.Conn, core *connclient.Conn) {
   closes at its next ping.
 - **When core's socket closes, close the minion's connection.** The minion
   connects again, and its first message ties a new socket to its session.
-- **Bound the connections** open at once, and refuse one past the bound
-  (the TCP channel's `MAX_CONNECTIONS`).
+- **Bound the connections** open at once, and refuse one past the bound.
 
 ### `bind-call`: a Handler
 
@@ -572,7 +566,7 @@ Core calls. The link brings a `linkclient.Call` (the values, the id, the
 sealed frame, the deadline) to the channel's `Handler`, which delivers it
 and returns what came back
 ([When core calls](../../contracts/channel-core-connections/#bind-call-minions-when-core-calls)).
-Condensed from the Dumbo channel's `internal/caller`:
+For a channel that calls pages:
 
 ```go
 // Call is the control link's Handler: it delivers the sealed message to the
@@ -635,7 +629,7 @@ Core opens. The link brings a `linkclient.Open` to the channel's `Opener`,
 which dials, opens the connection's socket naming the open
 (`OpenRequest`), starts the relay and answers
 ([Opening and closing](../../contracts/channel-core-connections/#bind-persistent-connections-opening-and-closing)).
-Condensed from the TCP channel's `internal/relay`:
+For a channel that dials a minion listening on a TCP port:
 
 ```go
 // Open is the control link's Opener: it dials the minion, opens the
@@ -692,8 +686,8 @@ What `linkclient` holds a channel to:
 
 - **A `Handler` is required**, even without a `bind-call` kind:
   `linkclient.Run` refuses options without one. A channel with no
-  `bind-call` kind passes one that fails every call (the TCP channel).
-  Without an `Opener`, every open is answered with a failure.
+  `bind-call` kind passes one that fails every call. Without an `Opener`,
+  every open is answered with a failure.
 - **A `Handler` returns when its context ends**: at core's deadline, and
   when the link drops. The link opens again only once every call and open
   in progress has returned, so one that ignores its context leaves the
@@ -716,7 +710,7 @@ What `linkclient` holds a channel to:
 A kind declared `agentless` comes with the keys of its id: the channel
 opens core's message and seals the minion's answer itself, as
 [Agentless Channels](../../contracts/agentless-channels/#acting-as-the-minion)
-describes, and `logos-ssh` does.
+describes.
 
 ## Making it usable
 
@@ -731,12 +725,10 @@ A registered channel carries nothing until minions are built to reach it:
    it.
 2. **That factory's minions speak its transport.** The format between a
    minion and the channel is the channel's: publish it in the channel's
-   README, as the HTTP channel ([Wire
-   format](https://github.com/LogosCore/logos-http-channel#wire-format))
-   and the TCP channel (its README's Wire format section) do, so a factory
-   can build minions that speak it ([Writing a
-   Minion](../writing-a-minion/#each-channels-framing) has the built
-   channels' framing from the minion's side). A delegate serving a kind
+   README, so a factory can build minions that speak it: how a message
+   travels, what "nothing" is, what a failure is ([A channel's
+   framing](../writing-a-minion/#a-channels-framing) has what a minion
+   needs of it). A delegate serving a kind
    speaks the same format from the channel's end ([Delegation](../../contracts/minion-messages/delegation/#who-declares-what)).
 3. **The versions match.** Core uses the channel's latest schema, the
    highest `version` any of its instances declared, and refuses a build
@@ -757,41 +749,34 @@ Then, in core:
 
 ## Testing
 
-There is no test kit for channels (no `channeltest` package): the
-reference channels test against short fakes of their own.
+There is no test kit for channels (no `channeltest` package): a channel
+tests against short fakes of its own.
 
 - **The schema**: `protocol.ValidateConnectionSchema` in a unit test, the
   check core makes at registration, with values an operator would give and
   the field numbers pinned ([above](#the-connection-schema-in-go)).
 - **A Handler or an Opener** is a function: call it with a
-  `linkclient.Call` or `linkclient.Open` and look at the `Answer`. The
-  Dumbo channel calls its `Caller.Call` against an `httptest` page
-  (`internal/caller/caller_test.go`), the TCP channel its `Relay.Open`
-  against a listener of its own (`internal/relay/relay_test.go`).
+  `linkclient.Call` or `linkclient.Open` and look at the `Answer`, with a
+  stand-in of the test's own at the minion's end: an `httptest` page for a
+  Handler, a listener for an Opener to dial.
 - **Core's sockets**: an `httptest.Server` that takes
   `protocol.ConnectionPath`, checks the handshake's headers, accepts the
-  WebSocket, and reads and writes `protocol.ConnFrame`s: the TCP channel's
-  `fakeCore` and `reverseCore` (`internal/relay/relay_test.go`,
-  `reverse_test.go`).
+  WebSocket, and reads and writes `protocol.ConnFrame`s.
 - **The sync call**: an `httptest.Server` on `protocol.SyncPath` that reads
   a request with `protocol.InboundFromHeaders` and answers with
-  `OutboundMinionMessage.SetHeaders` (the HTTP channel's
-  `internal/transport/http/httpserver/test_logos_core_test.go`), or the sync
-  call behind an interface the test fakes (the TCP channel's `Sync` and
-  `fakeSync`).
+  `OutboundMinionMessage.SetHeaders`, or the sync call behind an interface
+  the test fakes.
 - **The link** is channel-core's, tested there against a fake core
   (`pkg/linkclient/linkclient_test.go`): a model for a test of a channel's
   own.
-- **A channel acting as the minion** runs every item it sends through the
-  protocol's checks, the ones core runs (`logos-ssh`'s
-  `internal/agent/agent_test.go`, `checkItems`).
+- **A channel acting as the minion** runs every message it sends through
+  the protocol's checks, the ones core runs: `protocol.ValidateMessageHead`,
+  and each item's `Validate`.
 
-**End to end**, a channel needs a minion that speaks its transport. BOB's
-minion ([`logos-bob-factory`](https://github.com/LogosCore/logos-bob-factory))
-speaks the HTTP channel's `reverse-call` and `reverse-persistent` and the
-TCP channel's three kinds: it is how those channels are run end to end,
-and a model for the minion's side of a new transport, which needs a factory
-that lists the channel and builds minions that speak it.
+**End to end**, a channel needs a minion that speaks its transport, built
+by a factory that lists the channel ([Making it usable](#making-it-usable)):
+a factory that adds the channel, or one written with it ([Writing a
+Factory](../writing-a-factory/), [Writing a Minion](../writing-a-minion/)).
 
 ## Running against a dev core
 
@@ -805,10 +790,29 @@ Core's dev stack (`make services` in `logos-core`) runs core as
 | `RABBITMQ_HOST`, `RABBITMQ_PORT` | `logos-rabbitmq`, `5672` |
 | `RABBITMQ_USER`, `RABBITMQ_PASSWORD` | core's `.env`: `RABBITMQ_DEFAULT_USER` (`logos`) and `RABBITMQ_DEFAULT_PASS` |
 
-The TCP channel's `docker-compose.yml` is a model: it joins
-`logos-core_logos` as an external network, publishes the ports minions
-dial, and maps `host.docker.internal` to the host, so a minion running on
-the machine is reached by that name.
+A channel's `docker-compose.yml` joins `logos-core_logos` as an external
+network, publishes the ports minions dial, and maps `host.docker.internal`
+to the host, so a minion running on the machine is reached by that name:
+
+```yaml
+services:
+  example-channel:
+    image: logos-example-channel:dev
+    environment:
+      CHANNEL_ID: example-local
+      LOGOS_CORE_BASE_URL: http://logos-core-dev:8002
+      RABBITMQ_HOST: logos-rabbitmq
+      RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD:?set RABBITMQ_PASSWORD in .env}
+    ports:
+      - "7700:7700" # where minions dial the channel
+    extra_hosts:
+      - host.docker.internal:host-gateway
+    networks: [logos]
+networks:
+  logos:
+    external: true
+    name: logos-core_logos
+```
 
 1. **Start the channel** and open the **Modules** page: the instance shows
    registered, and the channel's page its connection schema, each field
@@ -835,15 +839,3 @@ the machine is reached by that name.
 | A build is refused: "target … cannot connect through channel … version …" | The factory's build schema does not list the channel's current schema version. |
 | After core restarts, a `bind` channel never links again, and logs nothing | A Handler or an Opener that does not return: the link waits for it. SIGQUIT makes a Go program print every goroutine's stack (`docker kill -s QUIT <container>`): one waits in the transport, and `linkclient`'s `runOnce` in `WaitGroup.Wait`. |
 | Two processes run with one `CHANNEL_ID` | Core knows one instance: the newer control link replaces the older, which core closes. Give each process its own id. |
-
-## The reference channels
-
-| Repo | Module | Kinds | The best example of |
-|---|---|---|---|
-| [logos-tcp-channel](https://github.com/LogosCore/logos-tcp-channel) | `tcp` | `bind-persistent`, `reverse-persistent`, `reverse-call` | The smallest whole channel: `internal/relay` holds an Opener, both reverse kinds and the fake cores that test them; `cmd/tcp-channel/main.go` runs all three parts. |
-| [logos-dumbo](https://github.com/LogosCore/logos-dumbo) | `dumbo`, with its factory | `bind-call` | A Handler (`internal/caller`): the failure kinds, the peer, something else answering; a schema of the right size (`internal/connection/connection.go`). |
-| [logos-http-channel](https://github.com/LogosCore/logos-http-channel) | `http` | `reverse-call`, `reverse-persistent` | A transport with an HTTP server of its own: the sync call through its own client and `syncclient.ReadReply`, a WebSocket per minion over `connclient`, trusted proxies for the peer, drain and connection limits in its management, its wire format in its README. |
-| [logos-ssh](https://github.com/LogosCore/logos-ssh) | `ssh`, with its factory | `bind-call`, `bind-persistent`, both agentless | A channel acting as the minion: the keys and the acting task a call or an open brings, credentials and logins, `OpenFrame` and `SealFrame` ([The SSH Module](../../modules/ssh/)). |
-
-BOB ([logos-bob-factory](https://github.com/LogosCore/logos-bob-factory))
-is the factory whose minion speaks the HTTP and TCP channels' kinds.

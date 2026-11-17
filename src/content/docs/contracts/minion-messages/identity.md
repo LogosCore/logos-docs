@@ -41,8 +41,8 @@ identity = {
   `unbecome`).
 - **Scope 2** is one task's, whatever the session's: it needs `task`, and
   goes before the task's end. Without `how`, the task runs as the process's
-  own: SSH's file commands, which go over the login's SFTP while its shells
-  became root.
+  own: say, the file commands of an agentless channel over SSH, which go
+  over the login's SFTP while its shells became root.
 - A `how` names its user; one without says no user, domain, integrity or
   credential. `user` and `domain` are UTF-8, 256 bytes at most. A `how` or
   a level core does not know is kept and shown as its number.
@@ -70,7 +70,7 @@ ack      [task 2]                  ; task 2: as root
   ack leaves it; after, it replaces what the ack recorded.
 - **A task acked before a change that runs after it says who it ran as.** A
   minion that runs its tasks at once may take a task before a change and
-  run it after: SSH's shell command queued right after a become, which
+  run it after: a shell command queued right after a become, say, which
   waits for the become and runs as its user. Its own identity (scope 2)
   says so.
 

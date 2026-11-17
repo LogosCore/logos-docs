@@ -57,7 +57,8 @@ Until the protocol is tagged, the repositories that need the change build
 against its checkout. The wiring is local and never committed
 ([below](#never-committed-never-tagged)), and its paths are relative,
 checkouts side by side ([Development
-Stack](../development-stack/#prerequisites)), but for BOB's minion.
+Stack](../development-stack/#prerequisites)), but for a minion a factory
+compiles ([below](#a-factory-that-compiles-its-minion)).
 
 ### A module repository
 
@@ -72,8 +73,8 @@ use (
 )
 ```
 
-Other checkouts a change needs join it (logos-ssh's names
-`../logos-golang-channel-core` as well). logos-vpn takes the same.
+Other checkouts a change needs join it (an SDK's, such as
+`../logos-golang-channel-core`). logos-vpn takes the same.
 
 ### Core
 
@@ -124,63 +125,41 @@ unreleased protocol. The dev container runs a binary built on the host
 instead:
 
 ```bash
-CGO_ENABLED=0 GOOS=linux go build -o .dev-bin/http-channel ./cmd/http-channel
+CGO_ENABLED=0 GOOS=linux go build -o .dev-bin/example ./cmd/example
 ```
 
 which a `docker-compose.override.yml` mounts over the image's:
 
 ```yaml
 services:
-  http-channel:
+  example:
     volumes:
-      - ./.dev-bin/http-channel:/app/http-channel:ro
+      - ./.dev-bin/example:/app/example:ro
 ```
 
 Then `docker compose up -d`, without `--build`. After each change, build the
-binary again and `docker compose restart`. Every image keeps its programs in
-`/app`: `/app/tcp-channel`, `/app/dumbo-channel` and `/app/dumbo-factory`,
-`/app/ssh-channel` and `/app/ssh-factory`, `/app/raven-factory`,
-`/app/bob-factory`.
+binary again and `docker compose restart`. Every module's image keeps its
+programs in `/app`, and its README names them.
 
-### BOB
+### A factory that compiles its minion
 
-BOB compiles its minion for each build from a copy of `minion/` in a
-scratch folder, where no workspace applies and no relative path resolves.
-While the minion needs the checkout:
+A factory that compiles its minion for each build does it from a copy of
+the minion's sources in a scratch folder, where no workspace applies and no
+relative path resolves. While the minion needs the checkout:
 
-- BOB's `go.work` uses `./minion` too: go commands run in `minion/` refuse a
-  workspace that leaves its module out.
-
-  ```
-  go 1.25.7
-
-  use (
-  	.
-  	./minion
-  	../logos-golang-protocol
-  )
-  ```
-
-- `minion/go.mod` replaces the protocol with the checkout, by its absolute
+- The repository's `go.work` uses the minion's folder too: go commands run
+  in a module the workspace leaves out refuse it.
+- The minion's `go.mod` replaces the protocol by the checkout's absolute
   path:
 
   ```
   replace github.com/logoscore/logos-golang-protocol => /path/to/logos-golang-protocol
   ```
 
-- The factory's binary is built on the host, as above
-  (`CGO_ENABLED=0 GOOS=linux go build -o .dev-bin/bob-factory ./cmd/bob-factory`),
-  and the override mounts it, the minion's sources, and the checkout at that
-  same absolute path:
+- The override mounts the factory's binary built on the host, the minion's
+  sources, and the checkout at that same absolute path.
 
-  ```yaml
-  services:
-    bob-factory:
-      volumes:
-        - ./.dev-bin/bob-factory:/app/bob-factory:ro
-        - ./minion:/app/minion:ro
-        - /path/to/logos-golang-protocol:/path/to/logos-golang-protocol:ro
-  ```
+The factory's README has its files.
 
 ### Never committed, never tagged
 
@@ -189,10 +168,9 @@ The wiring is a developer's own: `go.work`, `go.work.sum`,
 checkout. Every repository's `.gitignore` lists the files (the libraries'
 and logos-vpn's the workspace alone, logos-core's its override too): only a
 `replace` is left to drop by hand. A release drops the wiring before it checks a
-repository, `core/go.work` and BOB's `minion/go.mod` included. BOB v0.35.0
-was tagged with its minion's `replace` still in place: its image could not
-compile a minion ("replacement directory … does not exist"), and every
-build failed until v0.36.0.
+repository, `core/go.work` and a minion's `go.mod` included: a `replace`
+left in a minion's `go.mod` fails every build of the tagged image
+("replacement directory … does not exist").
 
 ## Releasing
 
@@ -204,7 +182,7 @@ layer:
 
 1. **Drop the dev wiring.**
 2. **Take the round's tags**:
-   `go get github.com/logoscore/logos-golang-protocol@v0.51.0` (and each
+   `go get github.com/logoscore/logos-golang-protocol@vX.Y.Z` (and each
    other Logos module the round tagged), then `go mod tidy`. A repository
    the round leaves out keeps the tags it has, and moves when a round
    includes it.
@@ -212,7 +190,7 @@ layer:
    checks](../testing-and-ci/#what-a-release-checks) passes, lint at
    exactly 0 issues. Nothing is tagged on a failure.
 4. **Commit, tag and push**: an annotated tag, its message
-   `v0.51.0: <the commit's subject>`, then `main` and the tag. Raven and
+   `vX.Y.Z: <the commit's subject>`, then `main` and the tag. logos-raven and
    logos-vpn push `main` first and are tagged once its CI has passed: their
    Windows PowerShell 5.1 jobs run only on GitHub, and logos-vpn's Release
    builds from the caches `main`'s CI leaves.
@@ -258,21 +236,17 @@ has uploaded the binaries and installers. core-dev is then rebuilt
   `docker compose build` and `docker compose up -d`. core-dev is restarted
   when core's `go.mod` moved (air does not watch it), and recreated when its
   override was dropped, so the checkout's mount goes too.
-- **The versions** in [Repositories](../repositories/#tags-and-main) and the
-  new protocol's line in [Protocol
-  Releases](../../contracts/protocol-releases/) follow the round.
 
 ## No backward compatibility, for now
 
 While Logos is before 1.0, a change does not keep the old way working: the
-maintainers' decision of 2026-11-07.
+maintainers' decision.
 
 - **Rename or remove freely**: no aliases, no compatibility fields, no
   migrations.
-- **A build made before such a change is built again.** When protocol
-  v0.38.0 replaced `socks_proxy`, `port_forward` and `reverse_port_forward`
-  with `tunnel` and `reverse_tunnel`, earlier builds were left without a
-  tunnel command
+- **A build made before such a change is built again.** When `tunnel` and
+  `reverse_tunnel` replaced `socks_proxy`, `port_forward` and
+  `reverse_port_forward`, earlier builds were left without a tunnel command
   ([Tunnels](../../contracts/minion-messages/tunnels/#1-the-front-a-core-param)).
 - **Every repository moves in the same round**: core, the SDKs, the modules
   and their minions take the new protocol together.

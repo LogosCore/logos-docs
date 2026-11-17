@@ -104,8 +104,8 @@ Request:
   shared by every running instance of that module. It is not operator-selectable.
 - `instance` is the **unique id of one deployed instance**, self-assigned by the
   module (e.g. from its env/config). Core does not mint it. An operator may run
-  several instances of the same `module_name` (e.g. `http-channel-1`,
-  `http-channel-2`); each must carry a distinct `instance`, since heartbeat,
+  several instances of the same `module_name` (e.g. `http-1`,
+  `http-2`); each must carry a distinct `instance`, since heartbeat,
   deregister, and management RPC all address a module by `instance` alone.
   Core does not detect a clash: a module that registers under an instance id
   already in use, even of another type or name, takes that instance over,

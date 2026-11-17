@@ -7,9 +7,8 @@ through a channel, and runs the tasks operators give it. It talks to core
 in [minion messages](../../contracts/minion-messages/): CBOR maps of
 numbered items, sealed with its keys, which the channel carries without
 reading. This guide says what a minion has to implement, walks through the
-smallest one that works, and points at the Go helpers and at three minions
-to read: BOB's, Raven's and Dumbo's. [Writing a Factory](../writing-a-factory/)
-covers the factory that builds it.
+smallest one that works, and points at the Go helpers. [Writing a
+Factory](../writing-a-factory/) covers the factory that builds it.
 
 Everything a minion knows of its build comes from its factory, built in:
 its build id, its keys, its connections in the order it tries them (each
@@ -29,7 +28,7 @@ minion does, what its build asks of it, and what it may leave out.
 
 | Implement | The rule | Where |
 |---|---|---|
-| Its channel's framing | Each message travels as its channel's transport carries one, with the id it is sent under (the build id, a temporary id or the session id) beside the sealed frame, never inside it ([below](#each-channels-framing)). | the channel |
+| Its channel's framing | Each message travels as its channel's transport carries one, with the id it is sent under (the build id, a temporary id or the session id) beside the sealed frame, never inside it ([below](#a-channels-framing)). | the channel's README |
 | The suite and the envelope | Its build's: core's CBOR envelope and the `aes-256-cbc-hmac-sha256` frame unless the build names `json` or a codec of its factory's. The tag covers the id the message goes under; a reply that does not open counts as no reply. | [Wire format](../../contracts/minion-messages/wire-format/#sealed-frame), [Codecs](../../contracts/minion-messages/codecs/) |
 | Its first message: `stage` or `hello` | Under the build id, sealed with the build's keys, one item: a `stage` (an RSA-2048 public key and a correlation id; core answers with a temporary id and new keys, encrypted to that key), or a `hello`, which keeps the build's keys for the session. A suite of the factory's own may refuse staging. | [Staging](../../contracts/minion-messages/sessions/#staging) |
 | The `hello`, alone | Under a temporary id or the build id core takes one item, the `hello`; anything with it gets `bad_message`. It says `os` and `arch` in Go's names (required), and the machine id and `pid` where the minion has them. `hello_response` gives the session id: every message after goes under it, sealed with the session's keys (the new ones, or the build's when it skipped staging). | [Hello](../../contracts/minion-messages/sessions/#hello) |
@@ -74,18 +73,18 @@ minion does, what its build asks of it, and what it may leave out.
 | The `hello`'s other fields: host, user, domain, process, integrity, addresses, version, `x` | Core shows what it was told. |
 | A `hello` again under its session, when its host or process changes | Core keeps what the last one said. Core itself sends `rehello` today only as a `bind-call` page's first call. |
 | Packing its own items | Its messages go unpacked. |
-| Guarding against replays of core's messages: remembering their ids (BOB's minion keeps task ids for a day), or, keeping nothing (a page), refusing a message whose `at` is more than 10 minutes from its clock with `err` `stale` | Core does not rely on it: a captured core message sent to the minion again runs again ([Freshness and replay](../../contracts/minion-messages/wire-format/#freshness-and-replay)). |
+| Guarding against replays of core's messages: remembering their ids (a day's task ids, say), or, keeping nothing (a page), refusing a message whose `at` is more than 10 minutes from its clock with `err` `stale` | Core does not rely on it: a captured core message sent to the minion again runs again ([Freshness and replay](../../contracts/minion-messages/wire-format/#freshness-and-replay)). |
 
 ## A reverse-call minion, step by step
 
-The smallest minion that works: through the HTTP channel's `reverse-call`
-kind, core's codec, staging. CBOR is shown in diagnostic notation, item
+The smallest minion that works: through a channel's `reverse-call` kind,
+core's codec, staging. CBOR is shown in diagnostic notation, item
 keys by number ([Registry](../../contracts/minion-messages/wire-format/#registry)).
 
 1. **Read the build.** Its build id (16 bytes), its keys (`enc_key` and
-   `mac_key`, 32 bytes each), its connection (for the HTTP channel:
-   `base_url`, `request_timeout`, `checkin_interval`, `checkin_jitter`), and
-   the `op`s of its commands.
+   `mac_key`, 32 bytes each), its connection (its channel's settings and the
+   factory's own: where to reach the channel, how long to wait for a reply,
+   how often to check in), and the `op`s of its commands.
 2. **Stage.** Generate an RSA-2048 key pair and 16 random bytes, the
    correlation id. The message, with a fresh 16-byte `id`:
 
@@ -95,12 +94,13 @@ keys by number ([Registry](../../contracts/minion-messages/wire-format/#registry
 
    Encode it as CBOR, seal it with the build's keys under the build id,
    direction `0x01` minion → core ([Sealed
-   frame](../../contracts/minion-messages/wire-format/#sealed-frame)), pack it
-   for the channel (an offset byte, the ciphertext split around the build
-   id) and send it in a request: any method, any path under `base_url`.
-3. **Read the stage's reply.** A `200`: unpack it, check that the id is the
-   build id, open the frame with the build's keys and direction `0x02`,
-   decode it, and check `v` 3 and `re` = the message's `id`. Its
+   frame](../../contracts/minion-messages/wire-format/#sealed-frame)), frame
+   it with the build id as the channel's transport carries a message
+   ([below](#a-channels-framing)), and send it.
+3. **Read the stage's reply.** Take the id and the frame out of the
+   transport, check that the id is the build id, open the frame with the
+   build's keys and direction `0x02`, decode it, and check `v` 3 and `re` =
+   the message's `id`. Its
    `stage_response`, `{0: 2, 1: h'<temporary id>', 2: h'<keys>', 3:
    h'<corr>'}`: check `corr`, decrypt `keys` with the private key
    (RSA-OAEP, SHA-256), and read the new keys, CBOR `{1: enc_key, 2:
@@ -121,9 +121,9 @@ keys by number ([Registry](../../contracts/minion-messages/wire-format/#registry
    {0: 3, 1: h'<id>', 3: [{0: 7, 1: 1}]}
    ```
 
-   With nothing for the minion, core answers 204 and the HTTP channel `200`
-   with 17 bytes: the offset byte `00` and the id. Otherwise the reply holds
-   a task: `{0: 8, 1: h'<task id>', 2: 3}` (op 3, no args).
+   With nothing for the minion, core answers 204, and the channel answers
+   with the id alone, as its transport says "nothing". Otherwise the reply
+   holds a task: `{0: 8, 1: h'<task id>', 2: 3}` (op 3, no args).
 6. **Ack, run, answer.** The next message acks the task, carries its
    result, and asks for the next:
 
@@ -137,10 +137,10 @@ keys by number ([Registry](../../contracts/minion-messages/wire-format/#registry
 
 7. **Go on.** Wait the check-in interval, spread by its jitter, or less
    while there is something to send; check in again. A failed exchange (no
-   answer, a timeout, the channel's 404, a reply that does not open) keeps
-   the session: the items go again at the next check-in. `session_closed`
-   or `session_replaced` starts over at step 2; so do 24 hours of nothing
-   but failures. An item the minion does not know gets `unknown_item`.
+   answer, a timeout, the channel's failure answer, a reply that does not
+   open) keeps the session: the items go again at the next check-in.
+   `session_closed` or `session_replaced` starts over at step 2; so do 24
+   hours of nothing but failures. An item the minion does not know gets `unknown_item`.
 
 A minion that skips staging sends step 4 under the build id, sealed with
 the build's keys, and keeps them for the session.
@@ -148,7 +148,7 @@ the build's keys, and keeps them for the session.
 ## The Go helpers
 
 `logos-golang-protocol` (package `protocol`) has a minion's side as well as
-core's; BOB's minion uses nothing else for its messages.
+core's: a minion in Go needs nothing else for its messages.
 
 | Helper | Gives |
 |---|---|
@@ -164,34 +164,41 @@ core's; BOB's minion uses nothing else for its messages.
 | `ReadTunnel`, `TunnelItem` and the other tunnel items | A tunnel open read strictly, and the stream items. |
 | `StaleWindow`, `MaxMinionMessageSize`, `MaxTasksLimit`, `DefaultMaxTasks` | The limits a minion applies. |
 
-## Each channel's framing
+## A channel's framing
 
-What a minion sends its channel, and what comes back. The channel never
-opens the sealed frame.
+How a message travels between a minion and its channel is the channel's
+own, and the channel's README says it ([Making it
+usable](../writing-a-channel/#making-it-usable)). The channel never opens
+the sealed frame. A minion needs three things of it:
 
-| Channel | Kinds | A message | Nothing for the minion | A failure |
-|---|---|---|---|---|
-| HTTP (`http`, version 3) | `reverse-call`: a request per message, any method, any path; `reverse-persistent`: a WebSocket, a binary frame per message | `offset (1) ‖ part 1 ‖ id (16) ‖ part 2`, the ciphertext being part 1 and part 2, the offset random, 0 to 255 ([its README](https://github.com/LogosCore/logos-http-channel#wire-format)) | A `200` of 17 bytes: the offset `00` and the id. Over a WebSocket core always answers, with a sealed message, empty or not. | A plain `404`, whatever went wrong; a WebSocket closed with no reason |
-| TCP (`tcp`, version 1) | `bind-persistent` (the minion listens), `reverse-persistent` and `reverse-call` (it dials) | `[length: 4 bytes, big-endian][id: 16 bytes][sealed frame]`, the length counting the id and the frame ([The TCP channel](../../contracts/channel-core-connections/#the-tcp-channel)) | `reverse-call`: the id alone (length 16), then the channel closes. Over a kept connection core always answers. | `reverse-call`: the connection closed with no reply |
-| Dumbo (`dumbo`, version 1) | `bind-call`: the channel calls the page | The channel's request and the page's `200` answer, `application/octet-stream`, both `[id: 16 bytes][sealed frame]` | The page always answers. | The page answers anything it does not take with a plain `404`. |
+- **A message**: how the transport carries the id the message goes under
+  (16 bytes) beside the sealed frame: in a request's body, a WebSocket's
+  binary frame, a length-prefixed frame on a connection.
+- **Nothing for the minion**: through a `reverse-call` exchange, core's 204
+  comes back as the id alone, in the transport's form for "nothing". Over a
+  kept connection, core answers every message the minion starts, with an
+  empty sealed message when it has nothing to say.
+- **A failure**: one answer for every failure, whatever went wrong (a plain
+  error status, a connection closed with no reply), so that neither the
+  minion nor a stranger learns why ([below](#when-it-does-not-work)).
 
 ## When it does not work
 
 The channel says nothing to a minion about why: every failure looks the
 same, so whoever probes it learns nothing. The reason is in the channel's
 log, in core's log (its `minionsync` logger), or in a sealed `err` only the
-minion can open. In the dev stack, `docker logs logos-http-channel` and
-`docker logs logos-core-dev`.
+minion can open. In the dev stack, the channel's container's log
+(`docker logs <container>`) and core's (`docker logs logos-core-dev`).
 
 | What happens | Where it shows | Why |
 |---|---|---|
-| Every request gets the HTTP channel's `404` | Channel: `outcome` `rejected_by_core`, `core_status` 403 | The channel instance is not registered with core, or is blocked. |
-| Every request gets `404` | Channel: `outcome` `refused`, `core_status` 422. Core: "minion message under an unknown id" | Core knows no build, temporary id or session by that id: a build id core never made (a minion built from a test request), a deleted build, a temporary id past the 10 minutes after its hello, a session core forgot. |
-| Every request gets `404` | Channel: `refused`, 422. Core: "minion message does not open" | The frame does not open: the keys of another id (the build's after staging, say), the wrong direction byte, a tag not computed over the id, bad padding. |
-| Every request gets `404` | Channel: `refused`, 422. Core: "minion message is not CBOR" or "minion message head" | Not CBOR in the protocol's subset (an indefinite length, a tag, a key twice, invalid UTF-8), over 768 KiB, `v` not 3, both or neither of `id` and `re`, an id not 16 bytes, more than 256 items. |
-| A message sent again gets `404` | Channel: `refused`, `core_status` 409. Core: "minion message replayed, refused" | Its `id` was seen and its reply is no longer kept (10 minutes, 64 KiB at most): send the items in a new message. |
-| `404` | Channel: `bad_request` (stage `read body` or `unpack`), `too_large` | The framing: a body under 17 bytes, an offset past the ciphertext, a body over `max_body_bytes` (1 MiB by default). |
-| `404` | Channel: `core_error` | Core cannot be reached. The minion keeps its session and tries again. |
+| Every message gets the channel's failure answer | Channel: core answered 403 | The channel instance is not registered with core, or is blocked. |
+| Every message gets the channel's failure answer | Channel: core answered 422. Core: "minion message under an unknown id" | Core knows no build, temporary id or session by that id: a build id core never made (a minion built from a test request), a deleted build, a temporary id past the 10 minutes after its hello, a session core forgot. |
+| Every message gets the channel's failure answer | Channel: 422. Core: "minion message does not open" | The frame does not open: the keys of another id (the build's after staging, say), the wrong direction byte, a tag not computed over the id, bad padding. |
+| Every message gets the channel's failure answer | Channel: 422. Core: "minion message is not CBOR" or "minion message head" | Not CBOR in the protocol's subset (an indefinite length, a tag, a key twice, invalid UTF-8), over 768 KiB, `v` not 3, both or neither of `id` and `re`, an id not 16 bytes, more than 256 items. |
+| A message sent again gets the channel's failure answer | Channel: core answered 409. Core: "minion message replayed, refused" | Its `id` was seen and its reply is no longer kept (10 minutes, 64 KiB at most): send the items in a new message. |
+| A failure, and core never saw the message | Channel: it could not read the message | The framing: the channel could not take the id and the frame out of its transport (too short, too large for it, not in its format). |
+| A failure | Channel: core unreachable | Core cannot be reached. The minion keeps its session and tries again. |
 | A sealed `err` `bad_message`, "under a build id the only item taken is one stage or one hello" | The minion's own log | Its first message carried more than one item. Under a temporary id: "the only item taken is one hello". |
 | A sealed `err` `bad_message`, "hello: os is required" | The minion's own log | A `hello` without `os` or `arch`, or with a machine id's source and no value. |
 | A sealed `err` `unknown_item`, "not taken under a session yet" | The minion's own log | An item core does not take from a minion: one of core's own direction (a `task`), or a `stage` under the session. |
@@ -201,54 +208,8 @@ minion can open. In the dev stack, `docker logs logos-http-channel` and
 | Its session shows late or lost while it checks in | Sessions | The schedule its `hello` or `sleep_update` said is shorter than the one it keeps. |
 | A `bind-call` target is refused or stale | The build's **Targets** tab | The page's word on core's call: no `hello` in its answer to `rehello`, an `err`, or `stale` (the page's clock and core's disagree). |
 
-Testing against a stand-in saves a dev stack for the end: BOB's
-`cmd/bob-factory/stage_test.go` runs the compiled minion against a fake HTTP
-channel and core in one, which stages it, opens its session, fails a
-check-in and closes the session.
-
-## Examples
-
-### BOB's minion
-
-BOB's minion (`logos-bob-factory`, `minion/`) is a full minion in Go: every
-connection kind but `bind-call`, staging, persisted sessions, max tasks,
-compression, failover, file transfers and streams, listings and walks,
-tunnels and terminals, delegation and feedback. It reads its config by
-number and runs each task in a goroutine of its own.
-
-| Files | What |
-|---|---|
-| `main.go` | The config read (`//go:embed minion.cfg`, `protocol.ReadMinionConfig`), staging, the `hello`, the check-in loop, starting over, the backstop. |
-| `fields.go`, `ops.go`, `exits.go` | The numbers it reads its config, its tasks and its exit codes by, checked against BOB's schema by its tests. |
-| `conns.go`, `ws.go`, `tcp.go`, `tcp_reverse.go`, `failover.go`, `pushqueue.go` | Its connections: HTTP requests and a WebSocket, the TCP channel's three kinds, switching and failover, what core pushes. |
-| `tasks.go` | The runner: core's items dispatched, `get_tasks` within its limit, acks, result parts, cancels, `reack`, `max_tasks`. |
-| `packing.go`, `feedback.go` | Compression; feedback. |
-| `machine.go`, `machine_*.go`, `host_*.go`, `integrity.go`, `smbios.go` | The `hello`: the machine id, the host, the integrity level. |
-| `download.go`, `upload.go` | File transfers both ways. |
-| `walk.go`, `volumes.go`, `rm.go`, `shell*.go`, `paths*.go` | Its commands' work on the host. |
-| `screenshot*.go`, `x11.go` | Screenshots: GDI on Windows, the X protocol elsewhere. |
-| `tunnel*.go`, `proc*.go`, `pipe_*.go`, `icmp_*.go`, `rtt.go` | Tunnels, terminals, named pipes, pings, and resend timing that follows the link. |
-| `delegate.go`, `delegate_reverse.go` | Delegation. |
-
-### Raven
-
-Raven's minion (`logos-raven`, `cmd/raven-factory/raven.ps1`) is a
-PowerShell script, a template its factory fills in: through the HTTP
-channel's `reverse-call`, its `hello` under the build id (no staging), then
-a `get_tasks` (4) with every check-in, each task acked and answered in the
-next message, starting over on `session_closed` or `session_replaced`. It
-speaks no CBOR and seals nothing: its envelope and suite are Raven's own,
-which the factory translates for core ([Raven: the test
-factory](../../contracts/minion-messages/codecs/#raven-the-test-factory)).
-It exists to test codecs, and protects nothing.
-
-### Dumbo
-
-Dumbo's page (`logos-dumbo`, `cmd/dumbo-factory/page.php`) is a `bind-call`
-minion: a PHP file on a web server, with its CBOR, AES and HMAC written in
-PHP. It keeps nothing between requests: it answers core's first call
-(`rehello`) with its `hello` under the build id, runs each task within the
-call that brings it (acked and answered at once), asks for 4 tasks in every
-answer, refuses a call whose `at` is more than 10 minutes off, answers
-items it does not take with `unknown_item`, and carries walks and files
-across calls in a `ctx` that core gives back.
+Testing against a stand-in saves a dev stack for the end: a fake of the
+channel and core in one, in the test's own process, speaking the channel's
+framing and core's side with the protocol's helpers, can take the built
+minion through staging, its `hello`, check-ins, a failed exchange and
+`session_closed`.

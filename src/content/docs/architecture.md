@@ -24,11 +24,11 @@ follows one minion from its build to its tasks.
   (`/api/v1/mcp`).
 - **Modules**: separate processes, each a registered instance of a module type,
   built on the Go SDKs. See [Module Types](../module-types/).
-  - **Channel modules** carry minion traffic between minions and core. The
-    reference channel is `logos-http-channel`: HTTP and WebSocket, on any path.
-    [Writing a Channel](../guides/writing-a-channel/) lists the others.
-  - **Factory modules** build minions. The reference factory is BOB
-    (`logos-bob-factory`), which builds a Go minion for Linux and Windows.
+  - **Channel modules** carry minion traffic between minions and core, each
+    over a transport of its own.
+    [Writing a Channel](../guides/writing-a-channel/) says how to build one.
+  - **Factory modules** build minions.
+    [Writing a Factory](../guides/writing-a-factory/) says how to build one.
 - **Message bus (RabbitMQ)**: the control plane between core and the modules.
 - **MongoDB**: core's persistence.
 - **Redis**: login sessions, caches, and the ids and replies of recent minion
@@ -46,7 +46,7 @@ follows one minion from its build to its tasks.
   id it was sent under, and gives the minion core's. It never opens a frame
   and takes no part in what the minion and core say.
 - The exception is an [agentless channel](../contracts/agentless-channels/)
-  (the SSH channel): there is no program on the far side, so the channel acts
+  (over SSH, say): there is no program on the far side, so the channel acts
   as the minion, with the keys core gives it for that.
 - How a channel takes a frame from its transport is its own; core defines what
   it hands over ([HTTP Sync](../contracts/channel-core-sync/),
@@ -94,8 +94,8 @@ follows one minion from its build to its tasks.
 | Payload crypto | Built: `aes-256-cbc-hmac-sha256`. Core generates each build's keys, gives each minion process keys of its own when it stages, and seals and opens every frame ([Wire Format](../contracts/minion-messages/wire-format/)). |
 | Tasking | Built: sessions, tasks and results, listings into the file browser, and file transfers both ways ([Minion Messages](../contracts/minion-messages/), [Task Results and Actions](../contracts/task-results-and-actions/)). |
 | Observability | Planned: central audit logging and tracing. Core publishes lifecycle events that nothing consumes yet. |
-| [Connection kinds](../module-types/#connection-kinds) | Built: `reverse-call`, and `reverse-persistent` over a connection socket per minion connection, core pushing tasks as they are queued ([Connections](../contracts/channel-core-connections/)). `bind-call` over the control link, with targets (the Dumbo channel and factory), and `bind-persistent`: opened over the control link, then a connection socket, by the target's policy (the TCP channel, BOB's listening minion). Failover between a build's connections. |
-| [Agentless channels](../contracts/agentless-channels/) | Built: the SSH channel acts as the minion over an SSH login, with nothing installed on the far side. |
+| [Connection kinds](../module-types/#connection-kinds) | Built: `reverse-call`, and `reverse-persistent` over a connection socket per minion connection, core pushing tasks as they are queued ([Connections](../contracts/channel-core-connections/)). `bind-call` over the control link, with targets, and `bind-persistent`: opened over the control link, then a connection socket, by the target's policy. Failover between a build's connections. |
+| [Agentless channels](../contracts/agentless-channels/) | Built: a channel acts as the minion of a host it logs in to, with nothing installed on the far side. |
 | [Credentials](../contracts/credentials/) | Built: credential fields in connection and build schemas; core hands modules the credentials an id names. |
 | [Tunnels](../contracts/minion-messages/tunnels/) and the [VPN front](../contracts/vpn-front/) | Built: streams a minion opens from its host, behind core's fronts (SOCKS, HTTP proxy, forwards, a terminal) on its operational ports, reverse forwards, and an operator's VPN client. |
 | [Delegation](../contracts/minion-messages/delegation/) | Built: a minion serving a channel's transport for other minions. |

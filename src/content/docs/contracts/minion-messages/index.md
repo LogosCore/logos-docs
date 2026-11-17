@@ -26,7 +26,7 @@ answer back), or a connection socket (one message per frame, both ways).
 
 | Layer | Defined by | Seen by |
 |---|---|---|
-| Transport (e.g. the HTTP channel's [packed format](https://github.com/LogosCore/logos-http-channel#wire-format), the TCP channel's length-prefixed frames) | each channel | the channel |
+| Transport: each channel's own framing (a request per message, say, or length-prefixed frames on a TCP connection) | each channel | the channel |
 | Channel ↔ core: the sync call, the control link or a connection socket, each carrying the ciphertext and the id it is sent under | [HTTP Sync](../channel-core-sync/), [Connections](../channel-core-connections/#the-control-link-and-connection-sockets-formats) | channel and core |
 | **Sealed frame**: version, direction, IV, ciphertext, tag | [Wire format](wire-format/#sealed-frame) | core and the minion |
 | **Message**: one CBOR map of items | [Wire format](wire-format/#message) | core and the minion |

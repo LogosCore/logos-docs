@@ -154,13 +154,13 @@ Declared in `module.register` under `build`:
 | `fields[]` | Build parameters shared by every target. Field specs as in a [management manifest](../module-management/#fields), plus the [types below](#field-types-for-builds); one may be for some platforms alone ([Fields for some platforms](#fields-for-some-platforms)). |
 | `targets[]` | What the factory can produce, at least one. |
 | `commands[]` | Optional. What the minions can do. Operators pick each build's [commands](#commands) from its target's. |
-| `error_codes[]` | Optional. What the minions' exit codes mean: the factory's own [minion error codes](#minion-error-codes), for operators to look up. Protocol v0.51.0; factory-core v0.4.1 requires v0.50.0, so a factory that declares them requires v0.51.0 itself. |
-| `error_codes_per_build` | Optional, `false` by default. Each build's minion exits with codes of its own, which core draws as it queues the build ([Codes per build](#codes-per-build)) and the request carries (`error_codes`), unless the operator turns that off. Needs an error code that is not `fixed`. Protocol v0.52.0; BOB declares it. |
+| `error_codes[]` | Optional. What the minions' exit codes mean: the factory's own [minion error codes](#minion-error-codes), for operators to look up. |
+| `error_codes_per_build` | Optional, `false` by default. Each build's minion exits with codes of its own, which core draws as it queues the build ([Codes per build](#codes-per-build)) and the request carries (`error_codes`), unless the operator turns that off. Needs an error code that is not `fixed`. |
 | `failover` | Optional, `false` by default. The minions honor a build's [failover settings](../channel-core-connections/#failover): they move between their connections on their own as those say. Without it the settings still reach the factory, which may ignore them; the build form says so. |
 | `max_tasks` | Optional, `false` by default. The minions' limit of tasks at once is the operators' to set: a build says how many (`max_tasks` in the request, under Commands in the build form), their `hello` says it, and core changes it live ([Max tasks](../minion-messages/tasks-and-results/#max-tasks)). Without it a build has no limit to set, and a minion runs as many as its factory made it (one at a time, say), which its `hello` may report but nothing changes. |
-| `compression` | Optional. The algorithms the minions inflate: `["deflate"]`, the one the protocol has. A build packs its messages with it unless the operator turns that off (`compression` in the request, Compress messages in the build form): core packs the items it sends the minion where that pays, and the minion may pack its own ([Compression](../minion-messages/wire-format/#compression)). Without it core packs nothing for its minions. Protocol v0.47.0; BOB declares it. |
+| `compression` | Optional. The algorithms the minions inflate: `["deflate"]`, the one the protocol has. A build packs its messages with it unless the operator turns that off (`compression` in the request, Compress messages in the build form): core packs the items it sends the minion where that pays, and the minion may pack its own ([Compression](../minion-messages/wire-format/#compression)). Without it core packs nothing for its minions. |
 | `persisted_sessions` | Optional, `false` by default. The minions can claim a persisted session: built with a `session_id`, they claim it in their `hello` (see [Persisted sessions](../minion-messages/sessions/#persisted-sessions)). Operators can build such a minion from a session only for a factory that says so. |
-| `minion_config` | Optional, `false` by default. The factory wants each build's settings numbered, as a minion reads them: core sends a [minion config](#the-minion-config) with each build request (`minion_config`), numbered CBOR for the factory to use as it decides. Every schema numbers its channels, fields and connection parameters, so core can make one for any build. BOB declares it, and bakes the config in whole. |
+| `minion_config` | Optional, `false` by default. The factory wants each build's settings numbered, as a minion reads them: core sends a [minion config](#the-minion-config) with each build request (`minion_config`), numbered CBOR for the factory to use as it decides. Every schema numbers its channels, fields and connection parameters, so core can make one for any build. |
 
 A target:
 
@@ -217,14 +217,14 @@ params per command.
 ### Connection parameters
 
 A channel's [connection schema](../minion-connection/) says how to **reach**
-the channel. It says nothing about how a minion family **uses** it: the HTTP
-channel accepts any method and any path, so which method a minion sends, and
-under which path, is the minion's choice. An operator may need to set that per
+the channel. It says nothing about how a minion family **uses** it: a
+channel over HTTP may accept any method on any path, so which method a minion
+sends, and under which path, is the minion's choice. An operator may need to set that per
 connection, for example when a CDN forwards only `/cdn/assets/*` to the channel.
 
 A factory declares such parameters as the `fields` of a connection kind of a
 `channels` entry: each kind its own, in full (a WebSocket has one handshake,
-so BOB's `reverse-persistent` has no `method`). They are field specs like any
+so a `reverse-persistent` kind over one needs no `method`). They are field specs like any
 other, set **per connection**: the build holds one set of values for each
 [connection](#connections) the minion is given, by its kind.
 In the build request, each connection's settings come as an endpoint export,
@@ -321,7 +321,7 @@ does when they build it: a minion built for one job carries nothing more.
 | `targets[]` | Optional. Narrows the command to these targets; empty means every target. |
 | `default` | Picked in a new build until the operator unpicks it, and what a build that names no commands gets. |
 | `required` | In every build of its targets: the minion cannot run without it (`sleep`, `exit`), so the operator cannot leave it out. |
-| `params[]` | What a task of the command takes: field specs as in a management action, and `file` (a [task file](../task-results-and-actions/#task-files), sent to the minion with the task): one at most, with no default. Each has a `num`, unique in the command, 1 to 65 535: what a task names the arg by on the wire; only a command's params have one. A param core adds to every command of its [action](../task-results-and-actions/) (a tunnel's `front`, `port`, `host`, `to`, `stop_idle`, `cap`) a factory does not declare: it has no `num`, and never goes to the minion. A param may apply only by another's value ([`when`](../module-management/#fields), one of core's included: BOB's tunnel `timeout` with any front but `terminal`) and be `advanced` (under the form's More options). |
+| `params[]` | What a task of the command takes: field specs as in a management action, and `file` (a [task file](../task-results-and-actions/#task-files), sent to the minion with the task): one at most, with no default. Each has a `num`, unique in the command, 1 to 65 535: what a task names the arg by on the wire; only a command's params have one. A param core adds to every command of its [action](../task-results-and-actions/) (a tunnel's `front`, `port`, `host`, `to`, `stop_idle`, `cap`) a factory does not declare: it has no `num`, and never goes to the minion. A param may apply only by another's value ([`when`](../module-management/#fields), one of core's included: a tunnel command's `timeout`, say, with any front but `terminal`) and be `advanced` (under the form's More options). |
 | `result` | Optional. What its task's `data` is: one of core's [results](../task-results-and-actions/) (`dir_listing`), its shape and view. Without one, the `data` shows as raw JSON. A name core does not know refuses the schema. |
 | `action` | Optional. What core can ask the command to do itself: one of core's [actions](../task-results-and-actions/) (`list_dir`). The command takes the action's params, gives every other param a default, and has the result the action needs. A name core does not know refuses the schema. |
 | `opens[]` | Optional, a [tunnel](../minion-messages/tunnels/#the-tunnel-commands) command's alone: what its minion opens, and how, each once: `tcp`, `udp` (UDP associations, a UDP listener); a `tunnel`'s `unix`, `pipe` (a forward to a path), `source` (from an address of its host), `tls` (TLS to the destination), `process` (a terminal's process) and `accept` (SOCKS5 `BIND`); none said, `tcp` alone. A target narrows it (its `opens[]`). Core opens nothing else through it, and offers only the params it opens. |
@@ -420,9 +420,8 @@ page under Modules shows the declared codes, the fixed ones marked. Core does
 nothing else with them for now. They are not the [error codes](#error-codes)
 a failed build carries, which say why the build failed.
 
-BOB declares five (`minion/exits.go` in its minion), each build drawing its
-own but for 1 and 2. Before it compiles a build, it writes the build's codes
-into its copy of `exits.go`.
+A factory of Go minions might declare these five, each build drawing its
+own but for the fixed 1 and 2:
 
 | Code | Label |
 |---|---|
@@ -508,9 +507,7 @@ may bake the bytes in whole, take parts of them, or build its own from the
 JSON; core never looks at what it builds. A minion handed the bytes reads them
 with the decoder it reads core's messages with (`protocol.ReadMinionConfig`),
 by numbers alone, so it carries no names of its settings, as it carries none
-of its messages' ([Wire format](../minion-messages/wire-format/)). BOB
-declares it from version 4 of its schema and bakes the bytes in whole; its
-minion's numbers are in `minion/fields.go`.
+of its messages' ([Wire format](../minion-messages/wire-format/)).
 
 **Why core makes it.** The numbers come from schemas: the factory's for its
 channels, fields and connection parameters, and each channel's for that
@@ -722,8 +719,8 @@ Request `payload`:
 | `crypto` | Present when the target's builds have a suite: its `suite` and the minion's key `material`, fresh for every build. For `aes-256-cbc-hmac-sha256`: `enc_key`, the AES-256 key, and `mac_key`, the HMAC-SHA256 key, 32 random bytes each in base64. For a suite of the factory's own: the material the factory made for the build over its [factory link](../minion-messages/codecs/#the-factory-link), base64 (the build waits in the queue until it has it). The factory puts them in the artifact and keeps them nowhere else. |
 | `envelope` | Present when the target's envelope is not `cbor`: `json`, or the factory's own. |
 | `max_tasks` | Present for a factory that declares `max_tasks`: how many tasks the minion runs at once as it starts, 0 (none until a session sets more) to 64; 5 unless the operator set another. The factory builds it in. |
-| `compression` | Present for a factory that declares `compression`, unless the operator turned it off: the algorithm the minion packs and inflates (`"deflate"`). The factory builds it in. Protocol v0.47.0. |
-| `error_codes` | Present for a factory that declares `error_codes_per_build`, unless the operator turned that off: the build's exit codes, one `{ "code", "exit_code" }` for every declared code that is not fixed ([Codes per build](#codes-per-build)). The factory builds them into the minion; protocol's `BuildRequest.ExitCode` reads one. Protocol v0.52.0. |
+| `compression` | Present for a factory that declares `compression`, unless the operator turned it off: the algorithm the minion packs and inflates (`"deflate"`). The factory builds it in. |
+| `error_codes` | Present for a factory that declares `error_codes_per_build`, unless the operator turned that off: the build's exit codes, one `{ "code", "exit_code" }` for every declared code that is not fixed ([Codes per build](#codes-per-build)). The factory builds them into the minion; protocol's `BuildRequest.ExitCode` reads one. |
 | `minion_config` | Present for a factory that declares `minion_config`, and only then: the [minion config](#the-minion-config), this request's settings numbered, base64. What of it goes into the minion is the factory's to decide. |
 | `session_id` | Present for a build with a persisted session (only to a factory that declares `persisted_sessions`): the session the minion claims in its `hello`, a lowercase UUID; an existing session, or one core reserved with the build. The factory builds it in. |
 | `artifact` | Where to upload the artifact: `upload_url`, a link (as a file's [`url`](#build-files)) to `PUT` it to, with its length (`Content-Length`; none: 411), valid until a minute past the deadline, and `max_size`, the largest artifact the factory may upload (a core setting, default 256 MiB). factory-core refuses to upload a larger one (`artifact_too_large`); core refuses one over the build's limit before reading a byte (413), and holds the factory to it by its result too: see [`factory.build.result`](#factorybuildresult). A second upload replaces the first. |
@@ -1112,7 +1109,7 @@ downloads an artifact.
   instead of producing a minion that cannot read its own settings.
 - **Connection parameters belong to the factory.** How a minion uses a channel
   (which method, which path) is the minion family's behaviour, not the
-  channel's: the HTTP channel accepts whatever arrives. Keeping them out of the
+  channel's: a channel may accept whatever arrives. Keeping them out of the
   channel schema also keeps endpoints shareable by every factory. They travel
   next to the endpoint export rather than inside it, so a channel that later
   adds a field with the same key changes nothing for minions already built.
@@ -1149,11 +1146,11 @@ downloads an artifact.
 - **Files and artifacts through core.** A build's links are core's own, paths
   on the address the factory already reaches core at, signed for that build:
   a factory needs no storage credentials and reaches only the objects of the
-  build at hand, and works wherever it reaches core. Until 2026-11-10 they
-  were presigned URLs of the store itself, which a factory on another host
-  could not resolve (`seaweedfs-s3` is a name on core's network) and which
-  would have sent a minion, its keys inside, to the store unencrypted; core
-  now streams the bytes and caps an upload by its length. SHA-256 checks on
+  build at hand, and works wherever it reaches core. Presigned URLs of the
+  store itself would not: a factory on another host cannot resolve it
+  (`seaweedfs-s3` is a name on core's network), and they would send a
+  minion, its keys inside, to the store unencrypted. Core streams the bytes
+  and caps an upload by its length. SHA-256 checks on
   both sides catch a damaged transfer, and core still holds a factory to
   `max_size` by the size its result reports, never reading more of an
   artifact than that.

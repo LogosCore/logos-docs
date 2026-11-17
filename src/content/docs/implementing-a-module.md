@@ -9,8 +9,7 @@ for every module type, with
 [`logos-golang-channel-core`](https://github.com/logoscore/logos-golang-channel-core)
 on top of it for channels and
 [`logos-golang-factory-core`](https://github.com/logoscore/logos-golang-factory-core)
-for factories. The [HTTP channel](https://github.com/logoscore/logos-http-channel)
-is the worked example. What each type does beyond that has a guide of its own:
+for factories. What each type does beyond that has a guide of its own:
 [Writing a Channel](../guides/writing-a-channel/), and
 [Writing a Factory](../guides/writing-a-factory/) with
 [Writing a Minion](../guides/writing-a-minion/).
@@ -46,7 +45,7 @@ sequenceDiagram
 2. **Register** with your identity, the inbox name as `rpc_queue`, and your
    [manifest](../contracts/module-management/#the-manifest) if you are
    manageable. `instance` must be unique per running process; `module_name` is
-   your fixed kind (`http`, `dns`, …). A channel also declares its
+   your fixed kind (`dns`, `smtp`, …). A channel also declares its
    [connection schema](../contracts/minion-connection/) under `connection`, a
    factory its [build schema](../contracts/minion-build/#the-build-schema)
    under `build`.
@@ -116,7 +115,7 @@ builds section, so `Logs` works either way.
 
 ### Wiring
 
-Condensed from the HTTP channel's `main.go`:
+A channel's `main.go`, condensed:
 
 ```go
 // Logging: stderr at the managed level, teed into the live tail.
@@ -157,7 +156,7 @@ go func() {
             AMQPURL: cfg.RabbitMQURL,
             Identity: lifecycle.Identity{
                 ModuleType: channel.ModuleType,
-                ModuleName: "http",
+                ModuleName: "example",
                 Instance:   cfg.ChannelID,
                 Version:    version,
             },
@@ -191,35 +190,10 @@ builds, so it also serves their management (the builds section). Anything that
 depends on what a module *is* belongs in the module:
 
 - the manifest — which properties, actions and status values exist;
-- what applying a value means, and what an action does (`drain` returns 404
-  to every HTTP client; another channel might stop polling instead);
+- what applying a value means, and what an action does (a `drain` might
+  answer every client of a channel over HTTP with a 404; another channel
+  might stop polling instead);
 - the structure of its log records.
-
-## The HTTP channel as an example
-
-| Kind | Declared |
-|---|---|
-| Properties | `max_body_bytes` (bytes, live), `log_level` (enum `debug` / `info` / `warn` / `error`, live) |
-| Actions | `drain` (high risk), `resume`, `check_core` (probes core's sync endpoint) |
-| Status values | request / success / failure / core-error / rejected / too-large counters, last core error and its time, `draining` |
-| Capabilities | `logs` |
-| Connection schema | `base_url`, TLS, headers and timing parameters for minions (see [Minion Connection Schema](../contracts/minion-connection/#http-channel-version-3)), declared through `channel.Config.Connection` |
-
-Minions speak to it in a packed binary format, described in its README's
-[Wire format](https://github.com/LogosCore/logos-http-channel#wire-format)
-section. Besides plain requests (`reverse-call`, each one a sync call to
-core), it accepts **WebSockets** on any path (`reverse-persistent`): each
-binary frame is one message in the same packed format, and each WebSocket is
-relayed over a connection socket of its own to core, which pushes the
-minion's tasks over it. Its manifest adds connection limits, ping and idle
-settings, connection counters and a `close_connections` action; drain also
-closes open connections.
-
-Its environment holds what core must not change: how to reach core
-(`LOGOS_SYNC_BASE_URL`, its own name for what other modules call
-`LOGOS_CORE_BASE_URL`, and `CORE_SYNC_TIMEOUT`), the broker credentials, the
-log format, and which proxies to trust for client addresses. Each request is
-logged once, as one structured line.
 
 ## Next
 
@@ -228,7 +202,7 @@ logged once, as one structured line.
   path to core, testing it, and running it against a dev core.
 - **A factory**: [Writing a Factory](../guides/writing-a-factory/): the
   builder, what core sends with a build, the artifact, testing a builder, and
-  BOB as the worked example. [Writing a Minion](../guides/writing-a-minion/)
+  running it against a dev core. [Writing a Minion](../guides/writing-a-minion/)
   says what its minions implement.
 
 ## Design notes

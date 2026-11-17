@@ -3,8 +3,8 @@ title: "VPN Front"
 ---
 
 :::note[Status]
-Built: protocol v0.44.0, BOB v0.31.0, core, and `logos-vpn` (v0.2.2 today,
-with its one-line [install](#installing)). Not yet run on a real network.
+Built: core and `logos-vpn` (with its one-line [install](#installing)).
+Not yet run on a real network.
 :::
 
 A `tunnel` whose front is **`vpn`** routes an operator's machine into the
@@ -133,7 +133,7 @@ notes](../minion-messages/tunnels/#design-notes)). Core's params with it:
 
 | The command's | |
 |---|---|
-| `timeout`, `max_streams` | as a SOCKS proxy's: how long the minion waits for a connect, and how many streams at once, over all of the tunnel's clients. BOB's `timeout` applies with `vpn` too. |
+| `timeout`, `max_streams` | as a SOCKS proxy's: how long the minion waits for a connect, and how many streams at once, over all of the tunnel's clients. The `timeout` applies with `vpn` too. |
 | `opens` | `tcp`; `udp` for UDP flows; `icmp` for pings ([ICMP](#icmp), new). What the command does not open, the client answers prohibited ([On the machine](#on-the-machine)). |
 
 On the console: `tunnel vpn 10.0.0.0/24,10.0.5.0/24`, the routes one word,
@@ -285,9 +285,7 @@ says where core's client is).
 ## The minion's side
 
 Nothing new for TCP and UDP: the streams of a SOCKS proxy, to an address and
-a port, or a UDP association. Pings take ICMP, below. BOB's half of the
-timing ([change 9](../minion-messages/tunnels/#9-timing-that-follows-the-link))
-goes in the same wave, no item changed.
+a port, or a UDP association. Pings take ICMP, below.
 
 ### ICMP
 
@@ -320,9 +318,9 @@ tunnel_datagram = {     ; of an icmp stream
 - **From an unprivileged socket** where the host allows one (Linux's ping
   sockets, as `net.ipv4.ping_group_range` lets the minion's group; macOS's;
   Windows' `IcmpSendEcho`), else a raw one when the minion runs as root.
-  With neither, the open is answered denied (9). BOB's: errors come back
-  where its socket delivers them (a raw socket's, Windows'; Linux's ping
-  sockets deliver none), and Windows pings IPv4 alone.
+  With neither, the open is answered denied (9). Errors come back only
+  where the socket delivers them: a raw socket and Windows' do, Linux's
+  ping sockets do not.
 - **As UDP is**: no acks, no resending; a datagram that does not fit is
   dropped. The client's stream, and so core's, ends after 2 minutes with no
   datagram either way, as an association does.
@@ -422,8 +420,8 @@ tunnel_datagram = {     ; of an icmp stream
 
 ## Design notes
 
-**A client of core's, not WireGuard or Tailscale.** Three ways were weighed
-(2026-11-08). A WireGuard peer in core: a config to import for each tunnel,
+**A client of core's, not WireGuard or Tailscale.** Three ways were
+weighed. A WireGuard peer in core: a config to import for each tunnel,
 again each time its routes change, and a UDP port open to core. Headscale
 (Tailscale's control server, self-hosted) with nodes of core's: a machine
 joins once and routes come and go, but it stays joined, so every

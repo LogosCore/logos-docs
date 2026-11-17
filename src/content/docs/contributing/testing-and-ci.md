@@ -22,12 +22,8 @@ What each adds:
 | Repository | Adds |
 |---|---|
 | `logos-golang-protocol` | The 32-bit builds ([below](#extra-checks)). |
-| `logos-http-channel` | Its tests run against a stand-in for core's sync endpoint, built into them. |
-| `logos-tcp-channel`, `logos-ssh` | `go test -race ./...`. logos-ssh's tests log in to an SSH server run in the test's own process, on Unix. |
-| `logos-dumbo` | PHP for the page tests. |
-| `logos-raven` | PowerShell for the script tests. |
-| `logos-bob-factory` | The same checks again in `minion/`, a module of its own. |
 | `logos-golang-factory-core` | An opt-in integration test on a real RabbitMQ. |
+| The modules | What each one's README lists: the race detector, a runtime some of its tests need (PHP, PowerShell), a second Go module ([below](#extra-checks)). |
 | `logos-vpn` | `make test` (`go test -race ./...`), `make lint` (golangci-lint for Linux, macOS and Windows), `make dist` (the six binaries). |
 | `logos-core` | `make -s test`, `cd core && golangci-lint run`, `cd core && go mod tidy -diff`; the web app's and hocuspocus's checks; the integration tests ([below](#core)). |
 | `logos-docs` | `npm run check:diagrams`, `npm run build`, `npm run check:links` ([Writing the Docs](../writing-the-docs/#building-and-checking)). |
@@ -41,8 +37,8 @@ code fixed, or stays out with a note in the file saying why. By default
 golangci-lint lists at most 50 issues per linter and 3 of the same kind;
 `--max-issues-per-linter 0 --max-same-issues 0` lists every one.
 
-**What a module sends.** logos-ssh's tests check every item its minion sends
-with the protocol's validators, the ones core checks with (`checkItems`): core
+**What a module sends.** A module that writes minion items itself (an
+agentless channel) tests every item it sends with the protocol's validators, the ones core checks with (`checkItems`): core
 refuses what they refuse.
 
 ## Extra checks
@@ -57,20 +53,14 @@ refuses what they refuse.
   GOARCH=arm go build ./...
   ```
 
-- **BOB's minion is a Go module of its own** (`minion/`): `go test ./...`
-  at the root does not reach it. Build, vet and test it in `minion/`, and
-  check it for the platforms it is built for, since nothing in the tests runs
-  on them: vet and lint it with `GOOS=windows` for `amd64` and `386`, and
-  vet it with `GOARCH=386`. Its compile tests need `go` on `PATH`.
-- **Dumbo's page under PHP.** The page tests run the generated page under
-  PHP's built-in server and speak to it as core does; `TestChannelCallsThePage`
-  has the channel call a built page. Without `php` on `PATH` they skip;
-  `DUMBO_REQUIRE_PHP=1` makes them fail instead.
-- **Raven's script under PowerShell.** `script_test.go` runs a rendered
-  script against a stand-in for the HTTP channel and core: `pwsh` on `PATH`,
-  or `RAVEN_PWSH` naming the command. Without either they skip;
-  `RAVEN_REQUIRE_PWSH=1` makes them fail instead. CI runs them under
-  PowerShell 7 on Linux and under Windows PowerShell 5.1 on Windows.
+- **A second Go module** in a repository, a minion's, is checked on its
+  own: `go test ./...` at the root does not reach it. Build, vet and test it
+  in its folder, and check it for the platforms it is built for, since
+  nothing in the tests runs on them: vet and lint it with `GOOS=windows`,
+  and vet it with `GOARCH=386`.
+- **Tests under another runtime.** A module's tests that need PHP or
+  PowerShell skip without it; a switch its README names makes them fail
+  instead, and its CI sets it.
 - **logos-vpn's installers.** `install.sh` runs under the runner's `sh` and
   `install.ps1` under PowerShell 7 (`LOGOS_VPN_PWSH`,
   `LOGOS_VPN_REQUIRE_PWSH`), and under Windows PowerShell 5.1 in CI. The
@@ -109,7 +99,7 @@ tests it times out.
 | Repository | Workflow | On | Runs |
 |---|---|---|---|
 | `logos-golang-protocol`, `logos-golang-module-core`, `logos-golang-channel-core`, `logos-golang-factory-core`, `logos-http-channel`, `logos-tcp-channel`, `logos-ssh` | CI (`ci.yml`) | pushes to `main`, `v*` tags, pull requests | `go test ./...`; golangci-lint v2.13.2. The protocol's also its 32-bit builds. |
-| `logos-dumbo` | CI (`ci.yml`) | the same | The same, with PHP required (`DUMBO_REQUIRE_PHP=1`). |
+| `logos-dumbo` | CI (`ci.yml`) | the same | The same, with PHP required. |
 | `logos-raven` | CI (`ci.yml`) | the same | The same, with PowerShell required, and a Windows job under Windows PowerShell 5.1. |
 | `logos-vpn` | CI (`ci.yml`) | the same | `go test -race ./...`, the installers' tests under Windows PowerShell 5.1, lint for Linux, macOS and Windows, and `make dist` (not on tags). |
 | `logos-http-channel`, `logos-tcp-channel`, `logos-dumbo`, `logos-ssh`, `logos-raven` | Docker Image (`docker-image.yml`) | `v*` tags | Builds and pushes the image, `linux/amd64` and `linux/arm64`. |
@@ -137,16 +127,17 @@ build stages install `git` for it. Set the same locally
 Before a repository is tagged, with its dev wiring dropped and the round's
 tags in its `go.mod` ([Releasing](../changing-the-protocol/#releasing)):
 
-- in every Go module it holds, BOB's minion included: `go build ./...`,
+- in every Go module it holds, a minion's included: `go build ./...`,
   `go vet ./...`, `go test -race -count=1 ./...` (the race detector, never a
   cached result), and
   `golangci-lint run --max-issues-per-linter 0 --max-same-issues 0 ./...`,
   which must end at exactly `0 issues.`;
-- the protocol's 32-bit builds, and BOB's minion's `GOARCH=386 go vet ./...`;
+- the protocol's 32-bit builds, and `GOARCH=386 go vet ./...` of a minion
+  built for 32-bit platforms;
 - core: `make -s test` and core's lint, and when the web app changed, its
   build and budget, ESLint, and vitest after the Go tests;
-- for Raven and logos-vpn, whose Windows PowerShell 5.1 jobs run only on
+- for logos-raven and logos-vpn, whose Windows PowerShell 5.1 jobs run only on
   GitHub: `main` pushed and its CI passed, before the tag.
 
-CI runs most Go suites without the race detector, and BOB has no CI: the
-release is where those run.
+CI runs most Go suites without the race detector, and logos-bob-factory has
+no CI: the release is where those run.

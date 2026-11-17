@@ -17,7 +17,7 @@ mean more than one thing in Logos; their entries say which is which.
 - **Channel**: A module that carries minions' traffic between minions and core over a
   transport (HTTP, TCP, SSH), without reading it.
   [Module Types](../module-types/#1-channel-modules).
-- **Channel kind**: A channel module by name (`module_name`, such as `http`): all its
+- **Channel kind**: A channel module by name (its `module_name`): all its
   instances. A build names the channel kinds its minion speaks. Not to be
   confused with a connection kind.
 - **Factory**: A module that builds minions for the targets it declares.
@@ -37,7 +37,7 @@ mean more than one thing in Logos; their entries say which is which.
 
 - **Build schema**: What a factory declares it can build: targets, build parameters,
   channels, commands. [Minion Build](../contracts/minion-build/).
-- **Target**: (1) What a factory builds, by id (BOB's `linux-elf`, `windows-exe`): the
+- **Target**: (1) What a factory builds, by id (such as `linux-elf`): the
   build schema's targets. (2) For a `bind` connection, where core reaches a
   minion: an address an operator gives, by the channel's target fields.
   [Connections](../contracts/channel-core-connections/).
@@ -74,8 +74,8 @@ mean more than one thing in Logos; their entries say which is which.
   persistent kind. [Connections](../contracts/channel-core-connections/).
 - **Factory link**: A factory instance's WebSocket to core, over which core asks it to
   translate its minions' codec. [Codecs](../contracts/minion-messages/codecs/).
-- **Agentless channel**: A channel that acts as the minion itself (the SSH channel over an SSH
-  login), so nothing is installed on the far side.
+- **Agentless channel**: A channel that acts as the minion itself (over an SSH
+  login, say), so nothing is installed on the far side.
   [Agentless Channels](../contracts/agentless-channels/).
 - **Delegate**: A minion serving a channel's transport for other minions while one of its
   tasks runs. [Delegation](../contracts/minion-messages/delegation/).

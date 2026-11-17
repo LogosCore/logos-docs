@@ -103,7 +103,7 @@ Every contract in this section follows the same baseline:
 | [HTTP Sync](../channel-core-sync/) | The sync call | Channel ↔ Core | Built; channels are not authenticated yet |
 | [Minion Connection Schema](../minion-connection/) | What a minion is given to reach a channel, per connection kind | Channel → Core | Built |
 | [Connections](../channel-core-connections/) | The connection kinds, the control link, connection sockets, targets, failover | Channel ↔ Core | Built; `add_connection` a draft |
-| [Agentless Channels](../agentless-channels/) | `bind` kinds whose channel acts as the minion | Channel ↔ Core | Built: the SSH module |
+| [Agentless Channels](../agentless-channels/) | `bind` kinds whose channel acts as the minion | Channel ↔ Core | Built |
 | [Minion Build](../minion-build/) | Build schemas, builds, the minion config, minion error codes | Core ↔ Factory | Built |
 | [Credentials](../credentials/) | Credential fields, what a module gets, the logins a channel reports | Core → Channel, Factory, Minion | Built |
 | [Minion Messages](../minion-messages/) | The minion's protocol: the wire format, sessions, tasks, files, identity | Minion ↔ Core | Built (`v` 3) |

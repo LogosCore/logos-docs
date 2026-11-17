@@ -47,18 +47,17 @@ decide who can start an exchange, and when core can reach the minion:
 | `bind-call` | the channel, when core asks | core; the minion only answers | whenever core calls |
 | `bind-persistent` | the channel, when core asks | both | while the connection is open, which core can ask for |
 
-Built: `reverse-call`, `reverse-persistent` (the HTTP channel's
-WebSocket, over a connection socket to core), `bind-call` (the Dumbo
-channel calling PHP pages the Dumbo factory builds, over the control link),
-and `bind-persistent` (the TCP channel dialing a BOB minion that listens,
-opened over the control link, then a connection socket).
+Built, all four: `reverse-call` over the sync call, `reverse-persistent`
+over a connection socket to core, `bind-call` over the control link, and
+`bind-persistent` opened over the control link, then a connection socket.
 
 The [minion messages](../contracts/minion-messages/) are the same on every
 kind; how each of their mechanics (staging, tasks, cancels, files, streams,
 presence, replays) goes on each kind, and what a new mechanic needs to fit
 all four, is [Mechanics by connection kind](../contracts/minion-messages/#mechanics-by-connection-kind).
 A kind may also say how large a message it carries (`max_message`): core
-and the minion keep within it.
+and the minion keep within it. A channel over DNS, say, would declare a
+small one.
 
 ### Channel ↔ core
 
@@ -84,24 +83,6 @@ channel receives traffic, what transport it uses, and how it takes a frame
 from it is the channel's own. Core defines the
 contracts in [Channel ↔ Core: HTTP Sync](../contracts/channel-core-sync/)
 and [Channel ↔ Core: Connections](../contracts/channel-core-connections/).
-
-### Examples
-
-- HTTP(S) and WebSocket: `logos-http-channel`, the reference channel. It
-  accepts any method on any path (`reverse-call`), and WebSocket connections
-  whose binary frames are messages (`reverse-persistent`, over a connection
-  socket to core). Its connection schema gives each kind its own fields.
-- PHP pages: the Dumbo channel (`logos-dumbo`, with the Dumbo factory in one
-  repo and image) calls the pages the factory builds (`bind-call`), over its
-  control link to core.
-- Listening minions: `logos-tcp-channel` dials a minion that listens on a
-  TCP port, directly or through a proxy (`bind-persistent`), and relays its
-  length-prefixed frames over a connection socket.
-- SSH: `logos-ssh`, an [agentless](../contracts/agentless-channels/)
-  channel that acts as the minion, with nothing installed on the server,
-  and its factory.
-- DNS or GitHub channels: possible, none built yet. A DNS channel would say
-  a small `max_message` for its kinds.
 
 ### Notes
 
@@ -130,22 +111,6 @@ and the commands they can be built with.
 - Build in the commands the operator picked, and no others.
 - Translate its minions' codec, their envelope or their suite, when they
   cannot speak core's ([Codecs](#codecs)).
-
-### Examples
-
-- BOB (`logos-bob-factory`), the reference factory: it compiles a Go minion
-  for Linux and Windows (targets `linux-elf` and `windows-exe`) that speaks
-  the HTTP and TCP channels' kinds, with shell, file, tunnel and delegation
-  commands among others.
-- Dumbo (`logos-dumbo`, the factory and its channel in one repo and image):
-  PHP pages, `bind-call` minions core reaches through the Dumbo channel; a
-  proof of concept with eight commands (hello, files, listings, walks).
-- Raven (`logos-raven`): PowerShell scripts that check in through the HTTP
-  channel (`reverse-call`) and do hello and echo; a test of
-  [codecs](../contracts/minion-messages/codecs/#raven-the-test-factory): its
-  minions speak PowerShell's CLIXML, which Raven translates for core, and its
-  suite seals nothing.
-- Go, .NET or Python factories: possible, none built yet.
 
 ### Codecs
 
@@ -190,8 +155,8 @@ Crypto boundary rules:
 ## Contracts
 
 The contracts these modules implement are in the
-[Contracts](../contracts/overview/) section, whose overview says which
-modules implement each.
+[Contracts](../contracts/overview/) section, whose overview says how far
+each is built.
 
 To build one, start with [Implementing a Module](../implementing-a-module/):
 `logos-golang-module-core` for every module, with `logos-golang-channel-core`

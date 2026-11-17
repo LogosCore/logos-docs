@@ -28,9 +28,8 @@ id. The session then keeps the build's own keys:
 | 2. Everything after | session id | the build's own keys | anything | as each item says |
 
 - **All three ids are UUIDv4s** and travel the same way: the transport
-  carries the id where it carries a build id (for the HTTP channel, 16 bytes
-  in its [packed format](https://github.com/LogosCore/logos-http-channel#wire-format)),
-  and the channel passes it to core in `Logos-Build-Id`. Channels never know
+  carries the id where it carries a build id (16 bytes, in the channel's
+  own framing), and the channel passes it to core in `Logos-Build-Id`. Channels never know
   staging exists. Core finds the keys by the id: a session's, a temporary
   id's or a build's.
 - **Under a build id** core takes one item, alone: a `stage` or a `hello`;
@@ -174,7 +173,7 @@ text.
 
 **A `hello` under the session id** (a *rehello*) replaces what core recorded
 of the host and process, and gets `hello_response` with the same session id.
-A minion may send one whenever they change (BOB's does not on its own).
+A minion may send one whenever they change.
 
 ```cddl
 rehello = { 0: 6 }      ; t: rehello (core → minion)
@@ -186,9 +185,8 @@ The **`rehello` item** asks a minion for a `hello`. Core sends it as a
 targets](../../channel-core-connections/#bind-call-minions-targets-and-sessions));
 that answer is the one message under a build id that may carry more than
 its `hello`. Under a session the item asks for the host and process again:
-a minion that starts its exchanges says its `hello` in its next message
-(BOB's does, through the connection in use). Core sends `rehello` today only
-as a `bind-call` minion's first call.
+a minion that starts its exchanges says its `hello` in its next message.
+Core sends `rehello` today only as a `bind-call` minion's first call.
 
 ## Machine identity
 
@@ -244,16 +242,10 @@ A minion takes the **first** of these it can read, skipping placeholders:
 - **A server an agentless channel reaches** over SSH, when the server's
   own machine id cannot be read: `ssh-host-key` (number 11), the SHA-256 of
   its host key in hex. It names the server before any login, and reading it
-  runs nothing ([The SSH Module](../../../modules/ssh/#the-channel)).
+  runs nothing.
 - **Not identities**, whatever they look like: `/proc/sys/kernel/random/boot_id`
   (new each boot), a network card's MAC address (randomized, or changed with
   the card), a volume's serial (copied with the disk image).
-
-BOB's minion, on Linux: the container's id when in one, else the machine
-id, else the host name, else a random id for the process; on Windows: the
-SMBIOS UUID, else the `MachineGuid`, else the host name, else a random id.
-The same as any user either way. It keeps none of its own: it leaves nothing
-on the host.
 
 ## Session lifetime
 
@@ -422,8 +414,8 @@ feedback = {
 ```
 
 - **Any minion may send it, in any message**, under its session, on every
-  connection kind: with a check-in, over its WebSocket or TCP connection,
-  in a page's answer to core's call. Core answers nothing: the message that
+  connection kind: with a check-in, over a persistent connection, in a
+  page's answer to core's call. Core answers nothing: the message that
   carried it went, and one sent again adds nothing.
 - **Core keeps it with the session**: the newest 1,000 entries, gone with
   the operation. The session counts the errors and warnings that came
@@ -437,15 +429,11 @@ feedback = {
 - **A polling minion sends it with its next check-in**, at once rather
   than on its schedule.
 
-BOB sends what it would only log: check-ins that failed two or more times in
-a row (said once one works again, with the first error: `checkin_failed`),
-its WebSocket closing (`ws_closed`, not when the minion closes it), a
-connection to its TCP listener past `max_connections` (`tcp_refused`), core
-not giving the persisted session it claimed (`session_not_claimed`), and a
-command that crashed (`task_panic`, an error: the task fails, the minion goes
-on). It keeps at most 100 unsent, folds the same one into a count, and says
-how many it dropped. Its `feedback` command (op 14) sends a warning or an
-error of the operator's words, to try it.
+What a minion sends is its own: what it would only log, such as check-ins
+that failed several times in a row, a connection it refused, or a command
+that crashed (an error: the task fails, the minion goes on). A minion that
+keeps a bounded number unsent, and folds the same one into a count
+(`count`), sends no flood when a long outage ends.
 
 ## Identity
 
@@ -469,7 +457,7 @@ minion connects again (`reverse-persistent`) or waits for core's next dial
 | The minion gets | It means | The minion |
 |---|---|---|
 | no reply, a timeout, a refused connection | the channel cannot be reached | keeps the session, and checks in on its schedule |
-| any failure from the channel (the HTTP channel's 404) | something failed on the way: core down, the channel not registered, a message core did not accept | keeps the session |
+| any failure from the channel (over HTTP, a plain 404, say) | something failed on the way: core down, the channel not registered, a message core did not accept | keeps the session |
 | a sealed reply with `err` `session_closed` | core closed the session | starts over |
 | a sealed reply with `err` `session_replaced` | another process claimed the persisted session | starts over, without claiming |
 | a sealed reply with another `err` | core refuses something in the message | keeps the session, and logs it |
@@ -477,8 +465,9 @@ minion connects again (`reverse-persistent`) or waits for core's next dial
 
 - **The channel never says why.** A message core does not open (an unknown
   id, a frame that fails its checks), a replayed one, and every trouble
-  between the channel and core look the same to the client: for the HTTP
-  channel, a 404, as for any request that is not a minion message at all.
+  between the channel and core look the same to the client: one failure (a
+  plain 404 over HTTP, say), as for any request that is not a minion
+  message at all.
   Whoever probes a channel learns nothing from the answers. What core has to
   tell a minion, it tells inside a sealed reply, which only the minion can
   open and nobody can forge.
@@ -492,7 +481,7 @@ minion connects again (`reverse-persistent`) or waits for core's next dial
   temporary id gets the session the first opened (both within 10 minutes).
   One refused, or still unanswered, is tried again on the minion's
   schedule, with a new key pair each time; a minion that starts over at
-  once (BOB's does) leaves the session its lost `hello` opened behind, which
+  once leaves the session its lost `hello` opened behind, which
   closes after a day without a check-in.
 
 ## Timings

@@ -113,13 +113,13 @@ code. A channel checks that `Logos-Build-Id` is the one it sent, and relays a
 
 Core answers **200** when it has something for the minion (a stage's or a
 hello's reply, tasks, acks, cancels) and **204** when it has nothing.
-Channels relay a 204 as their transport says "nothing": the HTTP channel
-answers the minion with the packed id alone, the TCP channel with a frame of
-the id alone.
+Channels relay a 204 as their transport says "nothing": a channel over HTTP
+might answer the minion with the id alone, one over TCP with a frame of the
+id alone.
 
 **Every other answer is a failure** to the minion: the channel answers its
-client as it answers any failure (the HTTP channel a plain 404, the TCP
-channel by closing the connection without a reply), so neither the minion
+client as it answers any failure (a plain 404 over HTTP, say, or a TCP
+connection closed without a reply), so neither the minion
 nor a stranger learns anything from a 403, a 409 or a 422. The channel logs
 the status.
 

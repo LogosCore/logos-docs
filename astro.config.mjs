@@ -13,6 +13,10 @@ export default defineConfig({
   redirects: {
     "/message-flow/": "/logos-docs/guides/writing-a-channel/",
     "/message-flow-full/": "/logos-docs/contracts/minion-messages/",
+    // A module's docs are its README (Contributing → Writing the Docs).
+    "/modules/ssh/": "https://github.com/LogosCore/logos-ssh#readme",
+    // The docs keep no versions: the protocol's tags say what each brought.
+    "/contracts/protocol-releases/": "https://github.com/LogosCore/logos-golang-protocol/tags",
   },
   vite: {
     plugins: [tailwindcss()],
@@ -90,7 +94,6 @@ export default defineConfig({
           label: "Contracts",
           items: [
             { slug: "contracts/overview" },
-            { slug: "contracts/protocol-releases" },
             {
               label: "Modules and core",
               items: [
@@ -108,7 +111,6 @@ export default defineConfig({
                 { slug: "contracts/channel-core-sync" },
                 { slug: "contracts/channel-core-connections" },
                 { slug: "contracts/agentless-channels" },
-                { slug: "modules/ssh" },
               ],
             },
             {
