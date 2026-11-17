@@ -202,6 +202,16 @@ its front over HTTPS. Nothing else
 of core's stack is reached: a module on another host needs core's URL and
 its RabbitMQ, no store.
 
+When core or its RabbitMQ restarts, a module registers again on its own
+(module-core's `module.Run`): it reconnects to the broker with backoff, and
+since every call to core has a deadline, a register or
+`heartbeat_grace_misses` heartbeats in a row with no answer start a new
+session ([A module core does not
+answer](../contracts/module-lifecycle/#moduleheartbeat)). Nothing waits on the
+data plane: while core is away a channel answers its minions as it answers any
+failure, and closes a minion's WebSocket with core's socket, so the minion
+reconnects.
+
 A front whose certificate no system trusts (a self-signed one) takes one of
 three settings, the same in every module (module-core's `coretls`, used by
 channel-core and factory-core for every request to core):

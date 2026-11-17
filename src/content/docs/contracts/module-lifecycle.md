@@ -229,6 +229,19 @@ registration, if it never beat) is older than the interval times
 stays listed until an operator deletes it, and its heartbeats get
 `unknown_instance`, which makes it register again.
 
+**A module core does not answer.** Every call has a deadline (module-core: 10
+seconds; a heartbeat's is at most its interval), so a module never waits on
+core for good: core down, or its request dropped. A request no queue takes
+comes back at once ([mandatory](../amqp-conventions/#core-request-queue)):
+core has not declared `logos.core.rpc` on this broker yet, as after the broker
+came back without its state. A register with no answer ends the module's
+session, and so do `heartbeat_grace_misses` heartbeats in a row with no answer,
+by when core counts the instance dead. The module connects again with backoff
+(module-core: 1 s doubling to 30 s, every 5 s while no queue takes its
+requests) and registers, so it is registered again within seconds of core
+declaring its queue, and within about half a minute of core answering. A heartbeat core answered, even
+with an error, is no miss.
+
 Request:
 
 ```json

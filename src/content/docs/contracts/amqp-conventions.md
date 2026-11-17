@@ -49,7 +49,11 @@ logos.core.rpc
 ```
 
 durable, bound to exchange `logos.core.rpc` with routing key `core`. Modules
-publish their requests to that exchange with that key.
+publish their requests to that exchange with that key, as *mandatory*, with an
+expiration equal to the call timeout: while no queue takes them (core has not
+declared it on this broker yet, as after the broker came back without its
+state) a request comes back at once instead of being dropped unseen, and core
+never handles one after its caller gave up.
 
 ### Module request queue
 
@@ -103,7 +107,9 @@ sequenceDiagram
 
 - Core → module: 10 seconds by default; an operation may ask for more, up to 2
   minutes. The timeout is also the request's `expiration`.
-- Module → core: 10 seconds by default (module-core's core client).
+- Module → core: 10 seconds by default, for every call: the lifecycle's
+  (a heartbeat waits at most its interval) and the core client's. The timeout
+  is also the request's `expiration`.
 
 ### Message properties
 
@@ -118,7 +124,7 @@ AMQP properties:
 | `content_type` | `application/json` |
 | `type` | the envelope `type` (e.g. `mgmt.config.apply`) |
 | `timestamp` | core → module requests: when core sent it |
-| `expiration` | core → module requests: the call timeout in milliseconds |
+| `expiration` | the call timeout in milliseconds, both directions |
 
 Requests are transient (not persistent): a request lost with the broker is
 retried by its caller, or given up.
@@ -165,7 +171,10 @@ modules publish no events of their own.
 - **Durability**: core's exchanges and its request queue `logos.core.rpc` are
   durable. Module request queues are not (exclusive and short-lived), and
   requests and replies are transient, so a broker restart loses what was in
-  flight; callers retry or give up.
+  flight; callers retry or give up. A broker that starts as a new node (a
+  container recreated without a fixed host name: RabbitMQ keeps its state by
+  node name) has none of the queues either: core's is back when core declares
+  it, and modules' requests come back unrouted until then.
 - **Dead-letter**: `logos.core.rpc` names the dead-letter exchange `logos.dlx`
   for messages core rejects: requests it cannot parse, or without `reply_to`.
   No component declares `logos.dlx` yet, so for now such messages are dropped.
