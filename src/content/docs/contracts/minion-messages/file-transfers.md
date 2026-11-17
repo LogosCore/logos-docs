@@ -9,7 +9,7 @@ flows, all made of the same `chunk` and `ack` items:
 
 | Flow | Direction | The task's action | Core keeps it | Who sets the pace |
 |---|---|---|---|---|
-| [A minion sending a file](#a-minion-sending-a-file) | minion → core | [`download_file`](../../task-results-and-actions/#download_file) | yes, in its minion files bucket | the minion, acked by core |
+| [A minion sending a file](#a-minion-sending-a-file) | minion → core | [`download_file`](../../task-results-and-actions/#download_file); a [`screenshot`](../../task-results-and-actions/#screenshot)'s picture | yes, in its minion files bucket | the minion, acked by core |
 | [Core sending a file](#core-sending-a-file) | core → minion | [`upload_file`](../../task-results-and-actions/#upload_file) | it was kept already (a task file) | the minion, pulling |
 | [Streaming a file](#streaming-a-file) | minion → core → a downloader | [`stream_file`](../../task-results-and-actions/#stream_file) | a copy, within its size limit | the downloader |
 | [Streaming a file to a minion](#streaming-a-file-to-a-minion) | an uploader → core → minion | [`upload_stream`](../../task-results-and-actions/#upload_stream) | no | the uploader and the minion |
@@ -79,18 +79,20 @@ kind](../#mechanics-by-connection-kind):
 
 ## A minion sending a file
 
-A file core asked for, kept in core (a `download_file` task):
+A file core asked for, kept in core (a `download_file` task, or a
+`screenshot` task's picture):
 
 1. The minion picks the transfer's `xfer` and sends the first chunk, `off` 0,
-   with `total`, `task` and `name` (the file's path on its host). It sends
+   with `total`, `task` and `name` (the file's path on its host; a
+   screenshot's, a name alone: the picture is on no file system). It sends
    the next chunk in each message, from where core's last ack said, and
    checks in again **at once** while it has a chunk to send.
 2. Core keeps each chunk in order and acks the new `next`.
 3. With the last chunk (and its `sha256`), core joins the file and checks its
    size and SHA-256, in the background: the file is kept, or failed with
    why. The minion ends the task with the
-   [`file_download`](../../task-results-and-actions/#file_download) data once
-   core has every byte.
+   [`file_download`](../../task-results-and-actions/#file_download) data (a
+   picture: the [`screenshot`](../../task-results-and-actions/#screenshot) data) once core has every byte.
 
 Core refuses a chunk with an `err` naming it, and the minion ends the task
 failed with the reason:
@@ -98,7 +100,7 @@ failed with the reason:
 | `code` | When |
 |---|---|
 | `unknown_task` | a first chunk naming no task of the session |
-| `bad_message` | a task whose command sends no file (no result `file_download`), a chunk past `total`, a last chunk without `sha256`, or a transfer that ended |
+| `bad_message` | a task whose command sends no file (no result `file_download` or `screenshot`), a chunk past `total`, a last chunk without `sha256`, or a transfer that ended |
 | `too_large` | a file over core's limit (`MINION_FILE_MAX_SIZE`, 2 GiB by default) |
 
 A transfer with no chunk for a day is given up, its chunks dropped.
@@ -237,20 +239,35 @@ error, and the minion removes its temporary file.
 
 ## What core keeps
 
-- **Kept files** (a minion's downloads, and task files for uploads) live in
+- **Kept files** (a minion's downloads and screenshots, and task files for
+  uploads) live in
   core's **minion files bucket** (`MINION_FILE_BUCKET`, `minion-files`),
   apart from the wiki's and the builds'. While a minion's file comes, core
   keeps each chunk as an object of its own, so any core instance takes the
   next one, and joins them at the end. Files stay until their operation is
   deleted.
-- Once a file is joined, core reads its **type** from its first bytes. Any
-  member of the operation can download it from
+- Core reads a file's **type** from its first chunk, and again from the
+  whole once it is joined. Any member of the operation can download it from
   `GET /api/v1/minion-files/{id}`, which answers byte ranges and names it as
   the host did. It comes as an attachment; with `?preview=1` it comes inline,
   but only for the types the wiki shows inline (PDF, plain text, pictures,
   audio and video), with a sandbox CSP and `nosniff`, so nothing in it runs.
   The `minionFileStrings` query reads its printable strings (ASCII and
   UTF-16LE), a page at a time.
+- **A file still coming** reads too, nothing in it checked before its end:
+  - the same URL answers a range of the bytes that have come at once, and
+    `409` for one past them;
+  - with `?follow=1`, the bytes from where the range starts to the file's
+    end as they come: one response of the length the minion announced, cut
+    short if the transfer fails, unbuffered, never cached (no `ETag`),
+    inline with `?preview=1` as a kept file of its first chunk's type would
+    be;
+  - `minionFileStrings` reads what has come: a page that read all of it
+    says how far (`readTo`), and the next is asked for once the file's
+    `received` is past it.
+- **A screenshot's thumbnail**, a JPEG fitted into 400 pixels a side, is
+  kept beside its picture once the picture is, and goes with it:
+  `GET /api/v1/minion-files/{id}?thumb=1` ([`screenshot`](../../task-results-and-actions/#screenshot)).
 - **Streams** pass through a few chunks at a time, buffered where every core
   instance sees them, and nothing stays when they end. Their links are
   signed and last a day at most.
@@ -259,6 +276,7 @@ error, and the minion removes its temporary file.
 |---|---|
 | A chunk's data | 512 KiB |
 | A kept file | 2 GiB by default (`MINION_FILE_MAX_SIZE`, at most 64 GiB) |
+| A screenshot's thumbnail | 400 pixels a side; none for a picture of over 40 million pixels or 64 MiB |
 | A streamed file | no limit |
 | A minion's file with no chunk | given up after a day |
 | A stream with no downloader or uploader | cancelled after an hour |

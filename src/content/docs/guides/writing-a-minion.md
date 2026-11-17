@@ -226,6 +226,7 @@ number and runs each task in a goroutine of its own.
 | `machine.go`, `machine_*.go`, `host_*.go`, `integrity.go`, `smbios.go` | The `hello`: the machine id, the host, the integrity level. |
 | `download.go`, `upload.go` | File transfers both ways. |
 | `walk.go`, `volumes.go`, `rm.go`, `shell*.go`, `paths*.go` | Its commands' work on the host. |
+| `screenshot*.go`, `x11.go` | Screenshots: GDI on Windows, the X protocol elsewhere. |
 | `tunnel*.go`, `proc*.go`, `pipe_*.go`, `icmp_*.go`, `rtt.go` | Tunnels, terminals, named pipes, pings, and resend timing that follows the link. |
 | `delegate.go`, `delegate_reverse.go` | Delegation. |
 

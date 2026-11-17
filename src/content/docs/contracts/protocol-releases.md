@@ -13,6 +13,7 @@ to it in the same release round
 
 | Version | Date | What it brought |
 |---|---|---|
+| [v0.56.0](https://github.com/LogosCore/logos-golang-protocol/releases/tag/v0.56.0) | 2026-11-17 | Screenshots: the `screenshot` result, a picture of the host's screen sent as a file with a name and no path |
 | [v0.55.0](https://github.com/LogosCore/logos-golang-protocol/releases/tag/v0.55.0) | 2026-11-16 | Desktop fronts: `rdp`, `vnc`, `ssh` and `telnet`, drawn in the web app by core's guacd, a desktop's login (`credential`); the field format `timezone` |
 | [v0.54.0](https://github.com/LogosCore/logos-golang-protocol/releases/tag/v0.54.0) | 2026-11-12 | The live build log: `factory.build.log`, a running build's output line by line, each line with its step; optional, the result's `log` kept for a factory without it |
 | [v0.53.0](https://github.com/LogosCore/logos-golang-protocol/releases/tag/v0.53.0) | 2026-11-12 | Build fields for some platforms: `platforms` |

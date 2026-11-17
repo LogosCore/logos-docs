@@ -77,6 +77,7 @@ A command names them in the [build schema](../minion-build/#commands):
 | [`file_stream`](#file_stream) | A file the minion streamed: which one, how big | Download and a curl line, the stream's progress |
 | [`dir_walk`](#dir_walk) | Where a walk through a directory stands (its listings go to the file browser) | Its progress, Open in File Browser |
 | [`volumes`](#volumes) | The host's volumes: its drives, its mounts (each a folder of the file browser) | A table of them: kind, file system, space |
+| [`screenshot`](#screenshot) | A picture of the host's screen the minion sent core: which one | The picture, in its file's Preview |
 
 | Action | Core gives | Needs result | Run from |
 |---|---|---|---|
@@ -94,9 +95,9 @@ A command names them in the [build schema](../minion-build/#commands):
 | [`delegate`](#delegate) | nothing of the command's (each of its params has a default); core adds `stop_idle` | none | core, when a target that names the session as its delegate needs one; the session's commands |
 | [`reverse_delegate`](#reverse_delegate) | nothing (its params are the factory's: where it listens); core adds `stop_idle` | none | the session's commands |
 
-More come as commands need them (a process list, a screenshot); each gets
-a section here first, and a release of the protocol and core. Planned:
-`add_connection`, with the connection kinds
+More come as commands need them (a process list); each gets a section here
+first, and a release of the protocol and core. Planned: `add_connection`,
+with the connection kinds
 ([Channel ↔ Core: Connections](../channel-core-connections/#connection-management)).
 
 ## Running an action
@@ -403,6 +404,18 @@ The task's File tab has four views:
 - **Strings**: the printable strings in it, from core
   (`minionFileStrings`), with their offsets. You can search them, set the
   shortest length and pick the encoding. Double-click one to show it in Hex.
+
+While the file comes, its views open on what has come ([a file still
+coming](../minion-messages/file-transfers/#what-core-keeps)), the tab
+saying none of it is checked yet:
+
+- **Preview** draws a picture row by row as its bytes come (PNG, JPEG, GIF,
+  WebP, BMP), and shows text (and JSON) as it grows, its first 1 MiB; a
+  PDF, a video or a document previews once the file is kept;
+- **Hex** and **Strings** read the part that has come, and more as it does;
+- **Download** starts at once and finishes with the transfer.
+
+The same views show a file from the file browser.
 
 The toggle shows the task's data as raw JSON.
 
@@ -746,6 +759,74 @@ runs.
   file for the task, and ends the task with the `file_stream` data once its
   downloader has every byte.
 
+## screenshot
+
+A picture of the host's screen: the result of a command that takes one
+(BOB's `screenshot`).
+The picture is no file on the host: the minion makes it, and sends it as
+[a minion sends a file](../minion-messages/file-transfers/#a-minion-sending-a-file),
+its first chunk's `name` a file name it picks, without a path
+(`screen.png`). Core keeps it in its minion files bucket, as a download.
+The task's `data`, in one part at its end (once core has every byte), says
+which picture:
+
+```cddl
+screenshot = {
+  xfer: bstr .size 16,  ; the transfer the picture came in
+  size: uint,
+  sha256: bstr .size 32,
+  width: uint,          ; pixels
+  height: uint,
+  ? display: tstr,      ; the screen, as the host names it ("\\\\.\\DISPLAY2",
+                        ;   "HDMI-1"); left out for all of them in one picture
+  ? x: { * tstr => any },
+}
+```
+
+On the wire: `xfer` 1, `size` 2, `sha256` 3, `width` 4, `height` 5,
+`display` 6, `x` 7. The protocol package has it as `protocol.Screenshot`,
+read and checked by `protocol.ReadScreenshot`.
+
+- **One picture a task.** Which screen, and in what format, are the
+  command's own params (`display`, `format`), each with a default; without a
+  screen, the picture holds every screen as the host lays them out.
+- **A PNG or a JPEG.** Core reads the file's type from its first bytes, as
+  for any kept file, and when the task's last part comes checks its `xfer`,
+  `size` and `sha256` against the file it kept. A file that is neither, or
+  does not decode, or data that does not match it, shows as a problem, as
+  data that does not fit its result does.
+- **Not the file system's.** It has no path: the
+  [file browser](../file-browser/) takes nothing from it.
+- **Marked as a screenshot.** At the first chunk, core sets the file's
+  `kind` to `screenshot` from the task's result (a download's is empty, a
+  [task file](#task-files)'s `task`), and when the done part comes it copies
+  `width`, `height` and `display` onto the file. An operation's screenshots
+  are then found by their files alone: GraphQL's
+  `minionFiles(operationId, kind, last, before)` gives an operation's files
+  of one kind (`screenshot`, or `task` for the files operators uploaded),
+  every session's, newest first, a page at a time (50, at most 200), to
+  its members, from an index on the operation, the kind and the time. Each
+  says its task and session, and a screenshot's its `width`, `height`,
+  `display` and `thumb`.
+- **A thumbnail.** When core keeps a screenshot, it keeps a thumbnail beside
+  it in the bucket: a JPEG fitted into 400 × 400 px, tens of KB, removed
+  with the picture; a picture of over 40 million pixels, or 64 MiB, gets
+  none. `GET /api/v1/minion-files/{id}?thumb=1` gives it inline.
+
+How the picture moves, and where core keeps it and its thumbnail, is in
+[File Transfers](../minion-messages/file-transfers/#a-minion-sending-a-file).
+A page of an operation's screenshots, every session's as thumbnails, is for
+later: the `kind`, `minionFiles` and the thumbnails are its ground.
+
+### View
+
+The task opens on its File tab, before its output (which only says which
+screen), and the tab, as a download's, on **Preview**: the picture, fitted
+to the pane. The Overview's details give its name, its size in
+pixels and its screen where a download's give its path, and its small
+picture beside Download is the thumbnail. The toggle shows the task's data
+as raw JSON.
+
 ## switch_connection
 
 Moves the minion to another of its build's connections: what a session's
@@ -913,3 +994,17 @@ before stay valid. A change that cannot be made that way is a new name
   cannot tell a Windows path from a Unix one with a backslash in a name, nor
   where a root ends on a share, so the minion says how its paths join and
   where up leads.
+- **Why a screenshot is not a `file_download`.** A download's `path` is a
+  file on the host, and the file browser takes it as one; a screenshot is on
+  no file system. It also has what a file has not (its size in pixels, its
+  screen), and opens as a picture. So it is a result of its own that moves
+  as a download does: the same chunks, bucket and checks.
+- **Why the picture is a kept file, not `data`.** A screen's PNG runs to
+  megabytes: past one message, and past a task's 4 MiB of output and data.
+  Kept, it has what a download has: chunks that resume, its type read from
+  its bytes, a preview, ranges and a download.
+- **Why mark a screenshot's file, and keep a thumbnail.** Finding an
+  operation's screenshots through their tasks would join two collections for
+  every page of the list; the file's own `kind` makes it one indexed query.
+  A page of them at full size would load megabytes a tile; a thumbnail is
+  tens of KB.
