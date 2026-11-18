@@ -54,12 +54,15 @@ renamed). The groups:
   `guides/writing-a-channel`, `guides/writing-a-factory`,
   `guides/writing-a-minion`.
 - **Contracts**: `contracts/overview` (how modules reach core, and the
-  contracts table with each one's status), then the module plumbing (AMQP envelope and routing,
-  lifecycle, management, logs), the channel contracts (minion connection
-  schema, HTTP sync, connections, agentless channels), the build contracts
-  (minion build, credentials), and the minion's protocol
-  (`contracts/minion-messages/*`, with task results and actions, the file
-  browser and the VPN front).
+  contracts table with each one's status), then the module plumbing (AMQP
+  envelope and routing, lifecycle, management, logs), the channel contracts
+  (minion connection schema, HTTP sync, connections, agentless channels),
+  the factory contracts (minion build, task outsourcing, a draft, and
+  credentials), and the minion's protocol (`contracts/minion-messages/*`,
+  with task results and actions, the file browser and the VPN front). A
+  page goes in the group of the parties it is between: task outsourcing is
+  core ↔ factory, though it is about tasks: the minion sees only ordinary
+  tasks.
 - **Contributing**: `contributing/*`: repositories, development stack,
   testing and CI, changing the protocol (and releasing), architecture rules,
   writing the docs (`contributing/writing-the-docs.md` holds the page

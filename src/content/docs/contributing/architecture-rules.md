@@ -87,3 +87,17 @@ the docs explain it.
    gets](../../contracts/credentials/#what-a-module-gets), [The
    builder](../../guides/writing-a-factory/#the-builder), [Module
    Logs](../../contracts/module-logs/).
+
+10. **Minion traffic stays off the broker.** What carries a minion's
+    messages goes over the data plane, HTTP and WebSockets to core's
+    address: the sync call, a channel's control link and connection
+    sockets, a factory's link for its codec. What only decides about that
+    traffic goes over the control plane, RabbitMQ: registration,
+    management, builds. Data too large for a request goes by a link to
+    core, as a build's files do. Why: minion traffic is every message, both
+    ways, up to a MiB, and through a codec its plaintext and keys. On the
+    broker it would share the queue of a module's management and builds,
+    make the broker's memory and throughput a limit on every session, and
+    put session plaintext on a broker with no TLS and one account for all.
+    [Communication Model](../../architecture/#communication-model),
+    [Codecs, Design notes](../../contracts/minion-messages/codecs/#design-notes).

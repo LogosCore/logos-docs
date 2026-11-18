@@ -230,6 +230,10 @@ value or a default. Their types map to CBOR like this:
   running (a `connect` waiting for its dial, a `max_tasks` for the
   minion's word) takes none of the minion's room: core counts only the
   minion's tasks against its `get_tasks`.
+- **Draft**: a command with a [pipeline](../../task-outsourcing/) waits in
+  core while its factory's code runs the session's other commands as
+  steps, before and after the command's own job, each an ordinary task; one
+  with no job of its own never goes out.
 
 ## Acknowledging
 

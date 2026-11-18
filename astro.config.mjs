@@ -114,9 +114,10 @@ export default defineConfig({
               ],
             },
             {
-              label: "Builds",
+              label: "Factories",
               items: [
                 { slug: "contracts/minion-build" },
+                { slug: "contracts/task-outsourcing" },
                 { slug: "contracts/credentials" },
               ],
             },

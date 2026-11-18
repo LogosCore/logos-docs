@@ -393,9 +393,16 @@ core starts waits, and what the minion sends is refused.
   messages about double.
 - **Why names carry the module.** A factory's names never meet a suite or
   envelope core adds later, and a session's codec says whose it is.
-- **Why a link, not the control plane.** Builds go over AMQP and take
-  minutes; a codec call is in every message's path and must take
-  milliseconds. The link is a channel's control link, for factories.
+- **Why a link, not the control plane.** A codec call is the minion's
+  traffic itself: every message of a build, both ways, up to a MiB, with
+  its keys or its plaintext. Over RabbitMQ it would cross the broker as
+  base64 in JSON, in the queue a factory's management and builds share,
+  the broker's memory and throughput a limit on every session of the
+  build, and its plaintext on a broker that today has no TLS and one
+  account for all. So it takes the data plane, as a channel's traffic
+  does: the link is a channel's control link, for factories. What carries
+  minion traffic stays off the broker; what only decides about it, a build
+  or a management action, goes over the control plane.
 - **Why not WebAssembly yet.** A factory could give core its codec compiled
   to WebAssembly, run in core: no hop, and no dependency on the factory
   being up. It asks more of factory authors; the link is enough until a
