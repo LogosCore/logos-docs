@@ -108,9 +108,13 @@ is gone, at both ends.
 - **A request over a socket always gets its reply**, empty when core has
   nothing to say (through the sync call that is the 204): the minion knows
   its message arrived. A minion may answer what core starts (`re`), or
-  acknowledge in its next message: core takes either.
+  acknowledge in its next message: core takes either. A minion need not
+  wait for that reply before its next request: core takes a socket's
+  messages in the order they come and replies to each, by its `re`, in
+  that order.
 - **Pushes** follow every change to a session's tasks (queued, cancelled, a
-  part taken), coalesced over a tenth of a second: core sends cancels, and
+  part taken), coalesced over a tenth of a second (a tunnel's bytes within
+  5 ms, bringing a push already due forward): core sends cancels, and
   tasks within the allowance, on the connection that carried the session's
   latest message; and a stream's ack when a stream the minion holds may go
   on ([Streaming a file](../minion-messages/file-transfers/#streaming-a-file)).

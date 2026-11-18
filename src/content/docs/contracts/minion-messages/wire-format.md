@@ -189,6 +189,12 @@ packed = {
   credentials; a frame is sealed, and does not shrink). A minion may
   follow the same rule. What does not shrink, a compressed file or TLS in
   a tunnel, goes as it is.
+- **A tunnel's bytes, a stream at a time.** Most of what tunnels carry is
+  encrypted already and never shrinks, and deflating it only costs time.
+  After three of a stream's `tunnel_data` items in a row, of 256 bytes or
+  more, that did not shrink, the sender sends its next MiB of that stream
+  as it is, without trying, and then tries again. Core does so; a minion
+  may too.
 
 **Sizes.** The message's 768 KiB counts its items inflated; a connection's
 `max_message` counts them as sent, so core, which deflates an item as it

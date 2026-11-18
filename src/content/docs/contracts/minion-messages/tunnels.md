@@ -375,7 +375,9 @@ sides, and neither holds more than its window of it. Core waits for an ack
 its session's round trip, measured from its acks as TCP does (RFC 6298),
 and four times its spread: 5 s at least, a minute at most, a send again
 measuring nothing (Karn's rule); then it sends again, waking the session
-itself whatever else goes on. The room it gives a stream grows, doubling,
+itself whatever else goes on. Before a stream's ack measured one, the round
+trip is the tunnel task's own: from its push over a connection kept open to
+the minion's ack of it (its first send only). The room it gives a stream grows, doubling,
 while the minion fills it and the client keeps up: to 4 MiB, 32 MiB over a
 tunnel's streams together. A window shut that
 long with bytes waiting gets a probe, one byte past it, as TCP probes a
