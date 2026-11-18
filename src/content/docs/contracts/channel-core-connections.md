@@ -116,6 +116,11 @@ is gone, at both ends.
   on ([Streaming a file](../minion-messages/file-transfers/#streaming-a-file)).
   What a push carries is what every message core sends a minion carries
   ([Mechanics by connection kind](../minion-messages/#mechanics-by-connection-kind)).
+  A task going out is no change: one on its way over a connection does not
+  go again over it, in a push or a reply, while its ack may still come
+  ([Tasks](../minion-messages/tasks-and-results/#tasks)).
+  A push that does not get across is tried again by itself, a second
+  later, the wait doubling to 30 seconds while pushes fail.
 - **A minion checks in at once over a new socket**: its first message ties
   the connection to its session, and its `get_tasks` sets the allowance.
   After that it needs no schedule ([Check-ins are

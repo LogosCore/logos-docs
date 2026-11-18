@@ -211,7 +211,11 @@ value or a default. Their types map to CBOR like this:
 | `stream` | `file-offer`: the [file core streams](../file-transfers/#streaming-a-file-to-a-minion) for the task, `{xfer, name, stream: true}` |
 
 - **Core sends a task again**, when asked, until the minion acks it or a
-  result for it arrives.
+  result for it arrives. Over a connection kept open it is on its way until
+  its ack comes back: the same connection carries it again only after 30
+  seconds without one, the wait doubling each time to 5 minutes. Another
+  connection carries it at once, and so does each reply to a request and
+  each call.
 - **The minion runs each task once**: it keeps the ids of the tasks it
   received in the last 24 hours.
 - **A task the minion cannot run** (a command its build lacks, an `op` it
