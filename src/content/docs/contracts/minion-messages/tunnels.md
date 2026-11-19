@@ -740,10 +740,12 @@ WebSocket tunnel), the client and guacd the same release:
    10 seconds to be `ready`: core says why it is not before the web app's
    Guacamole tunnel gives up waiting for a word (15 seconds), which core
    sends none of meanwhile.
-3. Once guacd is `ready`, core relays the session: guacd's bytes to the
-   web app as they come (a message never cuts a character), the web app's
-   instructions to guacd, but for its tunnel's own (opcode empty): a ping,
-   which core answers. It records the session as it relays it
+3. Once guacd is `ready`, core relays the session: guacd's instructions
+   to the web app as they come, whole ones to a message (core's own, a
+   ping's answer, go between them, and the web app's Guacamole tunnel
+   parses its messages as one stream), the web app's instructions to
+   guacd, but for its tunnel's own (opcode empty): a ping, which core
+   answers. It records the session as it relays it
    ([Recordings](#recordings)). The session ends as either side ends it,
    and as either is gone: a web app that says nothing for a minute (its
    client pings every half second), or takes nothing for 10 seconds; guacd
