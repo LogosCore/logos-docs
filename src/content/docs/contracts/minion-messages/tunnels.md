@@ -747,7 +747,8 @@ WebSocket tunnel), the client and guacd the same release:
    ([Recordings](#recordings)). The session ends as either side ends it,
    and as either is gone: a web app that says nothing for a minute (its
    client pings every half second), or takes nothing for 10 seconds; guacd
-   that takes nothing for 10 seconds.
+   that takes nothing for 10 seconds, or says nothing for 15 (it sends a
+   `nop` where it wrote nothing for 5 seconds: its keep-alive).
 
 A desktop core or guacd does not open sends an `error` instruction (its
 message and Guacamole status code: `0x0207` guacd not reached, `0x0204` the
@@ -756,7 +757,11 @@ task's tunnel not open, `0x0300` a setting refused, each by its key,
 `0x0303` its login unusable, `0x0200` core could not read the task's port
 or its login, guacd's own) and
 closes the socket with the code as the reason, as Guacamole's tunnel reads
-it.
+it. So does a session core ends: `0x0308` the web app silent, `0x0300` a
+message from it not Guacamole's, `0x0202` guacd taking nothing or silent.
+One guacd ends closes the socket with no reason (guacd's own `error` comes
+first where it says why); a web app that takes nothing is not told: its
+socket closes.
 
 ## Recordings
 
