@@ -378,8 +378,10 @@ measuring nothing (Karn's rule); then it sends again, waking the session
 itself whatever else goes on. Before a stream's ack measured one, the round
 trip is the tunnel task's own: from its push over a connection kept open to
 the minion's ack of it (its first send only). The room it gives a stream grows, doubling,
-while the minion fills it and the client keeps up: to 4 MiB, 32 MiB over a
-tunnel's streams together. A window shut that
+while the minion fills it and the client keeps up: a round trip that
+delivered three quarters of the room or more, the client holding none of
+it back, doubles it, to 4 MiB, 32 MiB over a tunnel's streams together. A
+window shut that
 long with bytes waiting gets a probe, one byte past it, as TCP probes a
 zero window: the ack that gave room may have been lost, and the receiver,
 taking the byte or dropping it, acks. An ack whose `next` is below the last
