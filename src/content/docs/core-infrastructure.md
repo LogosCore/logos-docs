@@ -132,6 +132,15 @@ MongoDB resolves the database engine decision listed as pending in the
   - `desktop-recordings`: the desktops' and the terminals' recordings,
     each in parts as core kept it
     ([Recordings](../contracts/minion-messages/tunnels/#recordings)).
+- **Volumes**: each bucket keeps its objects in volumes of its own, and a
+  volume server has room for about one volume per size limit of a volume
+  in its free disk: per GB, as the Compose file's image and the Helm
+  chart cap a volume at 1 GB. A bucket grows one volume at a time
+  (`WEED_MASTER_VOLUME_GROWTH_COPY_1=1` on the master, in the Compose
+  file and the Helm chart's values). SeaweedFS's default of 7 would have
+  the six buckets take 49 volumes before they hold anything: on a small
+  disk the bucket written last would fail every write ("no free volumes
+  left"). A bucket that cannot grow needs free disk on the volume server.
 - **Why SeaweedFS**: lightweight, self-hosted, S3-compatible API. Avoids external cloud dependencies and keeps binary blobs out of the document database.
 - **Connections**: Core Server alone reads and writes. A factory never
   reaches it: a build's files and its artifact go through core, which
