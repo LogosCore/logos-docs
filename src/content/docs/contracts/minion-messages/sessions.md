@@ -104,12 +104,30 @@ hello = {
   ? 13: bstr .size 16,  ; sid: the persisted session the build claims
   ? 14: { sleep },      ; sleep: the check-in schedule it starts with
   ? 16: uint,           ; conn: the connection it says hello through,
-                        ;   its place in the build's connections, from 1
+                        ;   its place in its connections, from 1: the
+                        ;   hello's own (18) when it says them, else the
+                        ;   build's
   ? 17: uint,           ; max_tasks: how many tasks it runs at once as it
                         ;   starts, 0 to 64; absent: it does not say. Any
                         ;   minion may (1: one at a time); one whose factory
                         ;   declares max_tasks must (Tasks and Results, Max
                         ;   tasks)
+  ? 18: [+ connection], ; connections: the connections it has, in the
+                        ;   order it tries them; absent: the build's
+}
+
+connection = {
+  1: tstr,              ; channel: the channel module it goes through
+  2: tstr,              ; kind: the connection kind ("reverse-call", ...)
+  ? 3: tstr,            ; name: a slug, unique among the connections
+  ? 4: uint,            ; version: the connection schema version its
+                        ;   params follow
+  ? 5: { * uint => any },   ; params: the endpoint's, by field num
+  ? 6: { * uint => any },   ; values: its connection parameters, by num
+  ? 7: { ? 1: bool,     ; failover: auto
+         ? 2: uint },   ;   fail_after
+  ? 8: uint,            ; max_message: the largest message it carries;
+                        ;   absent: the protocol's limit
 }
 
 sleep = (
@@ -166,6 +184,15 @@ text.
   connections (1 for the first): a minion carries no connection names, and
   core knows each one's name, kind and channel from the build. When it
   moves to another, it says so with a [`conn_update`](#connections).
+- `connections` says the minion's connections itself, each as a build's
+  [connection](../../minion-build/#connections) is (its endpoint's channel,
+  kind, name, schema version and params, its connection parameter values,
+  failover settings and `max_message`), numbered as the minion config
+  numbers them. When a hello carries the list, core uses it
+  for the session in place of the build's: `conn` and every `conn_update`
+  are places in it, and the session's view lists it. Without it core takes
+  the build's connections, as before. A rehello with a list replaces the
+  one the session kept; one without keeps it.
 - A factory's own fields go under `x`, so a key core adds later never
   collides with one of them. Nothing declares them: core keeps them with
   the session as they came, and the session's details list them by their
@@ -359,12 +386,13 @@ starts, since the connections went with the process before.
 
 ## Connections
 
-A minion built with several connections uses one at a time, and says which:
+A minion's connections are the ones its `hello` says (`connections`), else
+its build's. A minion with several uses one at a time, and says which:
 in its `hello` (`conn`), and with a `conn_update` whenever it moves to
 another, whatever moved it: an operator's [`switch_connection`](../../task-results-and-actions/#switch_connection),
 a fallback after failures, its own logic. A `hello` that names none is
-taken to come through the connection that carried it, when only one of the
-build's fits: the build's only connection, else its only one of the kind
+taken to come through the connection that carried it, when only one of its
+connections fits (the hello's, else the build's): the only connection, else its only one of the kind
 and the channel the message came through (a target's, for a `bind`
 minion). When more fit, the minion has to say: core would not know its
 connection, nor that connection's `max_message`.
@@ -373,7 +401,8 @@ connection, nor that connection's `max_message`.
 conn_update = {
   0: 14,                ; t: conn_update
   1: uint,              ; conn: the connection it uses now, its place in
-                        ;   the build's connections, from 1
+                        ;   its connections (the hello's, else the
+                        ;   build's), from 1
   ? 2: tstr,            ; reason: why, at most 256 bytes
                         ;   ("operator", "fell back after 5 failures")
 }
@@ -386,6 +415,11 @@ conn_update = {
   session's view lists the build's connections with the one in use, and a
   **Switch to** button on each other one when the minion has a command for
   `switch_connection`.
+- A hello's `connections` may differ from the build's (a minion that added
+  one, or dropped one it could not use): core keeps the list on the session
+  and checks each entry as it checks a build's connection (a channel it
+  knows, a kind that channel carries). A hello whose list does not pass is
+  answered with `bad_message`; a `conn` past the list's end is too.
 - The session, its keys and its schedule stay the same whichever connection
   carries it. A rehello through another connection moves `conn` too, without
   a change recorded.
