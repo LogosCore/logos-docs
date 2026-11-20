@@ -192,7 +192,8 @@ text.
   for the session in place of the build's: `conn` and every `conn_update`
   are places in it, and the session's view lists it. Without it core takes
   the build's connections, as before. A rehello with a list replaces the
-  one the session kept; one without keeps it.
+  one the session kept; one without keeps it. A `connection_update`
+  ([Connections](#connections)) replaces it too, without a rehello.
 - A factory's own fields go under `x`, so a key core adds later never
   collides with one of them. Nothing declares them: core keeps them with
   the session as they came, and the session's details list them by their
@@ -425,6 +426,34 @@ conn_update = {
 - The session, its keys and its schedule stay the same whichever connection
   carries it. A rehello through another connection moves `conn` too, without
   a change recorded.
+
+### Refreshing the connections
+
+```cddl
+connection_update = {
+  0: 31,                ; t: connection_update
+  1: [+ connection],    ; connections: the minion's connections now, in
+                        ;   the order it tries them, as a hello's (18)
+}
+```
+
+A minion says its connections again with a `connection_update` whenever
+they change (one added, one dropped, a setting changed), as it says its
+schedule with a `sleep_update`:
+
+- It goes in **any message**, beside other items; core answers nothing to
+  it. A rehello with `connections` does the same.
+- Core checks the list as a hello's (a channel it knows, a kind that
+  channel carries, unique names) and **replaces the session's** with it:
+  `conn`, every later `conn_update` and the session's view use it from
+  then on. A minion whose hello said none starts having its own here, in
+  place of the build's.
+- The connection in use stays the same place. A list too short for it is
+  refused: say the move first (a `conn_update` in the same message, after
+  the `connection_update`, names a place in the new list). A list that does
+  not pass gets `bad_message`, and the session keeps the one it had.
+- No move is recorded: the list changed, not the connection the minion
+  uses.
 
 ## Feedback
 

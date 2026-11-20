@@ -149,6 +149,7 @@ everything as it comes, so operators never see the numbers.
 | 28 | `tunnel_ctl` | both | what a stream says besides its bytes: a terminal's size, a signal, a process's exit, who came to an accept | [Tunnels](tunnels/#controls) |
 | 29 | `delegate` | both | one step of what a delegate carries for the minions it serves: a sync and its reply, a call or an open and its answer, a connection's frame or close | [Delegation](delegation/#the-item) |
 | 30 | `packed` | both | one item, deflated | [Wire format](wire-format/#compression) |
+| 31 | `connection_update` | minion | its connections changed: the whole list again | [Sessions](sessions/#refreshing-the-connections) |
 
 ## Mechanics by connection kind
 

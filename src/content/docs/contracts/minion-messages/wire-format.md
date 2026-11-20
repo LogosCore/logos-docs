@@ -75,7 +75,8 @@ core-message = {        ; core → minion
                         ;   unix seconds; on every message with id
 }
 
-minion-item = stage / hello / sleep_update / conn_update / get_tasks / max_tasks
+minion-item = stage / hello / sleep_update / conn_update / connection_update
+            / get_tasks / max_tasks
             / feedback / identity / result / chunk / ack / err
             / tunnel / tunnel_reply / tunnel_data / tunnel_ack / tunnel_close
             / tunnel_datagram / tunnel_listen / tunnel_ctl / delegate / packed
@@ -364,6 +365,7 @@ given in its CDDL on the page that defines it.
 | | | 28 | [`tunnel_ctl`](../tunnels/#controls) |
 | | | 29 | [`delegate`](../delegation/#the-item) |
 | | | 30 | [`packed`](#compression) |
+| | | 31 | [`connection_update`](../sessions/#refreshing-the-connections) |
 
 **The message**: `v` 0, `id` 1, `re` 2, `items` 3, and core's `at` 4, as [above](#message).
 
@@ -451,7 +453,7 @@ the host shows it) and data are named as they come.
 - **Why the id is in the tag.** A frame is valid only under the id it was
   sent with, whatever a channel does to the header.
 - **Why two formats, by direction.** Each item type has its direction:
-  seventeen go one way (`stage`, `hello`, `get_tasks`, `result` and the
+  eighteen go one way (`stage`, `hello`, `get_tasks`, `result` and the
   rest of the minion's; `task`, `cancel`, `reack` and the rest of core's),
   and thirteen go both ways (`ack`, `chunk`, `err`, `max_tasks`, the tunnel
   items but `tunnel_listen`, `delegate` and `packed`). An item of the other
