@@ -33,7 +33,7 @@ request queue; the *caller* is the RPC **client**.
 | Build reports (`factory.build.progress`, `.log`, `.result`) | factory | **core** — `logos.core.rpc` |
 | Management and log tail (`mgmt.*`) | core | **module** — `logos.<module-type>.rpc.<instance>` |
 | Builds (`factory.build`, `.cancel`) | core | **factory** — `logos.factory.rpc.<instance>` |
-| Pipelines (`factory.pipeline`), a draft: [Task Outsourcing](../task-outsourcing/) | core | **factory** — `logos.factory.rpc.<instance>` |
+| Composite commands (`factory.compose`), a draft: [Task Outsourcing](../task-outsourcing/) | core | **factory** — `logos.factory.rpc.<instance>` |
 
 A module learns *its own* server queue name by convention (below); core learns a
 module's server queue from the `rpc_queue` field the module sends at
