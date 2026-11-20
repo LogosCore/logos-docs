@@ -97,6 +97,8 @@ an error only for an invalid config, at once.
 | `HTTPClient` | For those transfers. By default module-core's `coretls.Client()`, which trusts core as the environment says ([How modules reach core](../../core-infrastructure/#how-modules-reach-core)). It needs no timeout: each transfer ends with its build's deadline. |
 | `ShutdownGrace` | How long a stopping factory waits for the results of the builds it cancelled: 10 s by default. |
 | `Codec` | The layers of the minions' codec that are the factory's own: required when the schema names a suite or an envelope of its own, refused otherwise ([below](#a-codec-of-its-own)). |
+| `Composers` | The code of the schema's composite commands, a `Composer` by command id: required for each, refused for another id ([below](#composite-commands)). |
+| `MaxConcurrentDecisions` | Calls about composite commands' tasks answered at once, 4 by default: one past it gets `busy`, and core calls again. |
 
 The SDK adds a [builds section](../../contracts/minion-build/#managing-a-factory)
 to the factory's management (`max_concurrent_builds`, `drain`, `resume`,
@@ -135,6 +137,35 @@ err := factory.Run(ctx, factory.Config{
 tells apart; any other error goes as other. In tests, `codeclink.Answer`
 runs one call in process, and `factorytest.NewCore` is core's end of a real
 link. [Codecs](../../contracts/minion-messages/codecs/) is the contract.
+
+### Composite commands
+
+A composite command's task runs the session's other commands as subtasks,
+before and after the command's own op, as the factory's code decides ([Task
+Outsourcing](../../contracts/task-outsourcing/), not yet in core). `factory.Run`
+gets each composite command's code, a `Composer`, by command id:
+
+```go
+err := factory.Run(ctx, factory.Config{
+    Config:    module.Config{AMQPURL: amqpURL, Identity: id},
+    Build:     &schema,
+    Builder:   builder,
+    Composers: map[string]factory.Composer{"archive": archive{}},
+    CoreURL:   coreURL,
+})
+```
+
+Run answers core's calls (`factory.compose`), each within its deadline,
+`MaxConcurrentDecisions` at once. `Compose` gets the call
+(`factory.ComposeCall`: its event, the task's args, the end that brought it,
+the ctx the task's decisions left) and returns a `factory.Decision`:
+`RunSubtasks`, `RunOwnOp`, `Cancel` or `Finish`, with `After` for a timer
+and `Ctx` for what the next call needs. The contract's page has a whole one
+([A factory's code](../../contracts/task-outsourcing/#a-factorys-code)). A
+call's helpers read an end's data and output when they came by link, fetch
+the files ends list, and put a file for the task (`PutFile`) that a later
+subtask may send. In tests, `factorytest.Compose` answers one call as Run
+would.
 
 ## The builder
 

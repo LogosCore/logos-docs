@@ -57,7 +57,7 @@ renamed). The groups:
   contracts table with each one's status), then the module plumbing (AMQP
   envelope and routing, lifecycle, management, logs), the channel contracts
   (minion connection schema, HTTP sync, connections, agentless channels),
-  the factory contracts (minion build, task outsourcing, a draft, and
+  the factory contracts (minion build, task outsourcing, built in part, and
   credentials), and the minion's protocol (`contracts/minion-messages/*`,
   with task results and actions, the file browser and the VPN front). A
   page goes in the group of the parties it is between: task outsourcing is

@@ -2,8 +2,11 @@
 title: "Task Outsourcing"
 ---
 
-:::caution[Draft]
-An agreed design, not built yet: this page records it before the code.
+:::note[Status]
+Built in the protocol package and factory-core. Not yet in core, which does
+not know composite commands: a factory whose schema has one with no `op` is
+refused at registration, and one with an `op` goes to the minion as an
+ordinary command.
 :::
 
 A task can outsource part of its work to the session's other commands. A
@@ -438,17 +441,22 @@ at the minion's next check-in.
 
 ## A factory's code
 
-factory-core would take the code of its composite commands in
-`factory.Config` (a `Composer`), as it takes a `Codec`, and serve
+factory-core takes the code of each composite command in `factory.Config`,
+a `Composer` by command id (`Composers`), as it takes a `Codec`: Run refuses
+a composite command without one, and one for another id. It serves
 `factory.compose` on the factory's queue beside `factory.build`:
 
 - **Decisions are quick**, as a build's plan is: no slow work, and no
-  waiting but on the call's own links. `Compose` gets a context that ends
-  before the call's deadline.
-- **A few at a time**: past `MaxConcurrentDecisions` (4 by default)
-  factory-core answers `busy`, so that build offers and management keep
-  their room in the instance's 8 requests at a time ([Module request
-  queue](../amqp-conventions/#module-request-queue)).
+  waiting but on the call's own links. `Compose` gets a context that ends a
+  second before the call's deadline.
+- **A few at a time**: past `MaxConcurrentDecisions` (4 by default), and
+  while the factory stops, factory-core answers `busy`, so that build offers
+  and management keep their room in the instance's 8 requests at a time
+  ([Module request queue](../amqp-conventions/#module-request-queue)).
+- **Never an invalid decision**: factory-core checks each as core does, and
+  answers `invalid_decision` instead; an error from the code is
+  `compose_failed`, a panic `panic`. A finish's own output or data past
+  16 KiB it puts as a file for the task.
 - **A `ctx` outlives a version**: in a rolling upgrade, one task's calls may
   go to instances of two versions, so a `ctx` says its own format.
 
@@ -472,7 +480,7 @@ func (archive) Compose(ctx context.Context, c factory.ComposeCall) (factory.Deci
     }
     switch c.Event {
     case factory.Start:
-        return factory.Run(factory.Subtask{Command: "ls", Args: map[string]any{"path": c.Args["path"]}}), nil
+        return factory.RunSubtasks(factory.Subtask{Command: "ls", Args: map[string]any{"path": c.Args["path"]}}), nil
     case factory.Timer: // the download took too long: stop it (it ends cancelled)
         st.Failed = "the download took over 10 minutes"
         return factory.Cancel("fetch").Ctx(st), nil
@@ -488,7 +496,7 @@ func (archive) Compose(ctx context.Context, c factory.ComposeCall) (factory.Deci
         if st.Archive == "" {
             return factory.Decision{}, nil // nothing to clean up
         }
-        return factory.Run(rm(st.Archive)), nil
+        return factory.RunSubtasks(rm(st.Archive)), nil
     }
     e := c.End
     switch {
@@ -506,12 +514,12 @@ func (archive) Compose(ctx context.Context, c factory.ComposeCall) (factory.Deci
         }
         st.Archive = archivePath(e.Data) // its data, in the factory's own shape
         fetch := factory.Subtask{Command: "download", Args: map[string]any{"path": st.Archive}, Key: "fetch", As: "fetch the archive"}
-        return factory.Run(fetch).After(10 * time.Minute).Ctx(st), nil
+        return factory.RunSubtasks(fetch).After(10 * time.Minute).Ctx(st), nil
     case e.Key == "fetch": // remove the archive, whatever the download did
         if !e.OK && st.Failed == "" {
             st.Failed = "the download failed: " + e.Err
         }
-        return factory.Run(rm(st.Archive)).Ctx(st), nil
+        return factory.RunSubtasks(rm(st.Archive)).Ctx(st), nil
     default: // rm ended
         switch {
         case st.Failed != "":

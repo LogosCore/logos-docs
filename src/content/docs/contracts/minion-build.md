@@ -362,7 +362,7 @@ does when they build it: a minion built for one job carries nothing more.
 - An `op` or `num`, once given, belongs to that command or param: minions
   already built read it. Never move one or give it to another; a command or
   param that goes leaves its number unused.
-- **Draft**: a command may be composite (`composite`, `uses`): the
+- **Not yet in core**: a command may be composite (`composite`, `uses`): the
   factory's code runs the session's other commands as subtasks before and
   after the command's own op, or in its place for a command with no `op`,
   which never reaches the minion ([Task Outsourcing](../task-outsourcing/)).
