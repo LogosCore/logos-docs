@@ -142,7 +142,7 @@ link. [Codecs](../../contracts/minion-messages/codecs/) is the contract.
 
 A composite command's task runs the session's other commands as subtasks,
 before and after the command's own op, as the factory's code decides ([Task
-Outsourcing](../../contracts/task-outsourcing/), not yet in core). `factory.Run`
+Outsourcing](../../contracts/task-outsourcing/)). `factory.Run`
 gets each composite command's code, a `Composer`, by command id:
 
 ```go

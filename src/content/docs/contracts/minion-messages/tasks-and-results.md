@@ -234,10 +234,10 @@ value or a default. Their types map to CBOR like this:
   running (a `connect` waiting for its dial, a `max_tasks` for the
   minion's word) takes none of the minion's room: core counts only the
   minion's tasks against its `get_tasks`.
-- **Not yet in core**: a [composite](../../task-outsourcing/) command's task waits in
-  core while its factory's code runs the session's other commands as
-  subtasks, before and after the command's own op, each an ordinary task;
-  one with no `op` never goes out.
+- A [composite](../../task-outsourcing/) command's task waits in core,
+  taking none of the minion's room, while its factory's code runs the
+  session's other commands as subtasks, before and after the command's own
+  op, each an ordinary task; one with no `op` never goes out.
 
 ## Acknowledging
 

@@ -3,10 +3,11 @@ title: "Task Outsourcing"
 ---
 
 :::note[Status]
-Built in the protocol package and factory-core. Not yet in core, which does
-not know composite commands: a factory whose schema has one with no `op` is
-refused at registration, and one with an `op` goes to the minion as an
-ordinary command.
+Built in the protocol package, factory-core and core. Not yet in the web
+app: it shows a composite command's task and its subtasks as tasks of the
+session, not yet the task's status line, its own op or which task each
+subtask runs for; and its build form does not yet pick what a composite
+command uses (core picks it, as it takes the build).
 :::
 
 A task can outsource part of its work to the session's other commands. A

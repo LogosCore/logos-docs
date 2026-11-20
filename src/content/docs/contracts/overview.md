@@ -44,7 +44,7 @@ servers depending on the operation:
 | Log tail control | core → module | **module** (same queue) | `mgmt.logs.start`, `mgmt.logs.stop` |
 | Log batches | module → core | — (pub/sub on `logos.module.logs`) | live log records, while a stream is open |
 | Builds | core → factory | **factory** (its `rpc_queue`) | `factory.build`, `factory.build.cancel` |
-| Composite commands (not yet sent by core: [Task Outsourcing](../task-outsourcing/)) | core → factory | **factory** (its `rpc_queue`) | `factory.compose` |
+| Composite commands ([Task Outsourcing](../task-outsourcing/)) | core → factory | **factory** (its `rpc_queue`) | `factory.compose` |
 | Build reports | factory → core | **core** (`logos.core.rpc`) | `factory.build.progress`, `factory.build.log`, `factory.build.result` |
 | Lifecycle events | core → any subscriber | — (pub/sub on `logos.events`) | `module.registered`, `.deregistered`, `.declared_dead`, `.blocked`, `.unblocked`, `.deleted` |
 
@@ -106,7 +106,7 @@ Every contract in this section follows the same baseline:
 | [Connections](../channel-core-connections/) | The connection kinds, the control link, connection sockets, targets, failover | Channel ↔ Core | Built; `add_connection` a draft |
 | [Agentless Channels](../agentless-channels/) | `bind` kinds whose channel acts as the minion | Channel ↔ Core | Built |
 | [Minion Build](../minion-build/) | Build schemas, builds, the minion config, minion error codes | Core ↔ Factory | Built |
-| [Task Outsourcing](../task-outsourcing/) | Composite commands: their factory's code runs the session's other commands as subtasks, before and after the command's own op | Core ↔ Factory | Built in part; not yet in core |
+| [Task Outsourcing](../task-outsourcing/) | Composite commands: their factory's code runs the session's other commands as subtasks, before and after the command's own op | Core ↔ Factory | Built; not yet in the web app's views |
 | [Credentials](../credentials/) | Credential fields, what a module gets, the logins a channel reports | Core → Channel, Factory, Minion | Built |
 | [Minion Messages](../minion-messages/) | The minion's protocol: the wire format, sessions, tasks, files, identity | Minion ↔ Core | Built (`v` 3) |
 | [Tunnels](../minion-messages/tunnels/) | Streams a minion opens from its host, behind core's fronts | Minion ↔ Core | Built |
