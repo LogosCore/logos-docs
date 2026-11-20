@@ -209,6 +209,7 @@ value or a default. Their types map to CBOR like this:
 | `string_map` | map of text to text |
 | `file` | `file-offer`: the [file core sends](../file-transfers/#core-sending-a-file) for the task, `{xfer, name, size, sha256}` |
 | `stream` | `file-offer`: the [file core streams](../file-transfers/#streaming-a-file-to-a-minion) for the task, `{xfer, name, stream: true}` |
+| `structured` (draft) | the value's CBOR form: maps with text keys, arrays, text, integers, floats, booleans ([Structured values](../../minion-build/#structured-values)) |
 
 - **Core sends a task again**, when asked, until the minion acks it or a
   result for it arrives. Over a connection kept open it is on its way until

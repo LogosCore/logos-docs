@@ -222,7 +222,8 @@ reported, or not of its type, holds: whoever knows the value decides.
 | `enum_list` | array of option values | each one of `options[].value`, no repeats; `max_items`; `required` means at least one |
 
 `file` exists too, for [build schemas](../minion-build/#field-types-for-builds)
-only, and `credential` and `credential_list`, for build and connection
+only, `structured` (a draft) for commands' params only
+([Structured values](../minion-build/#structured-values)), and `credential` and `credential_list`, for build and connection
 schemas ([Credentials](../credentials/#credential-fields)): what holds
 their values belongs to an operation, and a module's settings are no
 operation's. A management manifest that declares one is refused.

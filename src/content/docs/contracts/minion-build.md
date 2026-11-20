@@ -279,6 +279,56 @@ path names no file. In the command form it is a file picker: a file picked
 there goes from the browser once the task is queued; none picked, it goes
 with curl from the task's view.
 
+#### Structured values
+
+:::caution[Draft]
+An agreed design, not built yet.
+:::
+
+A command's `params` may take a `structured` value: a value the flat types
+cannot hold, such as a list of objects or a nested configuration. It is
+taken as JSON and goes to the minion as its CBOR form, inside the task
+([Arguments](../minion-messages/tasks-and-results/#tasks)): a minion reads it
+with the CBOR it reads every message with.
+
+| Type | JSON value | Rules |
+|---|---|---|
+| `structured` | any JSON value: object, array, number, string, boolean | `format`: what the value is, checked (below); `max_size`: the largest value, in bytes of its CBOR form, at most 64 KiB, which is also the limit without one. |
+
+- **Command params only.** A build's fields, connection parameters,
+  management properties and action params refuse it: a value for a minion's
+  task is what it is for.
+- **`required`** means a value must be given. A **`default`** is a JSON
+  value that passes the param's own rules; core puts it in, as any default.
+- **JSON to CBOR.** An object becomes a map with text keys (key order is not
+  kept), an array an array, a string text, a boolean `true` or `false`. A
+  number written without a fraction or an exponent that fits in 64 bits
+  becomes an integer, any other a float (64-bit). `null` is refused, inside a
+  value too: absent is how a value says nothing. Nested at most 12 deep,
+  its top level counted: a minion's decoder takes 16 levels
+  ([Limits](../minion-messages/wire-format/#limits)), and the message, its
+  items, the task and its args take 4.
+- **In the app.** The command form edits it in a JSON editor, which shows
+  core's problem at its place; a format may bring an editor of its own. A
+  command line takes it as JSON after `key=`, quoted as any value with
+  spaces; one typed without it opens the form. The task's view shows the
+  value as JSON.
+
+`format` names what a `structured` value is. Unlike a string's
+[format](../module-management/#fields), a UI hint never checked, core checks
+a structured value against its format, and refuses a schema whose
+`structured` param names a format it does not know: a factory can declare
+only what core can check, and a minion gets only values its format allows.
+Each format is one row here, its JSON value and its rules; the CBOR form is
+the same for every format.
+
+| `format` | Value | Checked |
+|---|---|---|
+| none | any JSON value | size and depth alone |
+
+More formats come as rows of this table, each with core's checks and, when
+it needs one, the app's editor.
+
 ### Fields for some platforms
 
 A build field, shared or a target's, may apply to builds for some platforms
@@ -1101,6 +1151,15 @@ downloads an artifact.
 
 ## Design notes
 
+- **Structured values are CBOR, not bytes.** Minions read CBOR already: a
+  structured param's value goes as CBOR maps and arrays inside the task, not
+  as an opaque byte string in an encoding each minion would have to read too.
+  Formats differ by shape (what core checks, how the app edits it), never by
+  encoding, so one minion decoder serves every format.
+- **A structured value's format is checked.** A string's `format` is a hint:
+  a wrong one costs a helper in the UI. A structured value's shapes what the
+  minion parses, so core checks it, and a format core does not know is
+  refused at registration rather than passed through unchecked.
 - **Targets, not conditional fields.** What differs between a service
   executable and shellcode is mostly which parameters apply. A closed list of
   targets with their own fields is easy to validate and to render. Fields that
