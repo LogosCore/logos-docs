@@ -408,6 +408,8 @@ conn_update = {
 }
 ```
 
+- A `conn_update` whose `conn` is past the minion's connections (its
+  hello's, else the build's) gets `bad_message`, and nothing is recorded.
 - The message carrying it goes **over the new connection**: core learns of
   the move from a message that came through it.
 - Core keeps the connection in use on the session, and the moves it
