@@ -106,7 +106,7 @@ The site's Contributing → Writing the Docs page is the reference; in short:
   "Mechanics by connection kind" table, the wire format's Registry, and the
   protocol's tests that copy the docs' JSON examples verbatim (in
   `logos-golang-protocol`: the build schema, build request and action
-  conditions examples).
+  conditions examples, and Task Outsourcing's).
 - **Links**: relative directory URLs (`../architecture/`,
   `../contracts/minion-build/#targets`), never `.md`.
 - **Asides**: Starlight's (`:::note`, `:::tip`, `:::caution`, `:::danger`),

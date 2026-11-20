@@ -3,8 +3,7 @@ title: "Task Outsourcing"
 ---
 
 :::caution[Draft]
-A design under discussion: nothing of it is built. It records where the
-discussion stands, so that its open questions are settled before any code.
+An agreed design, not built yet: this page records it before the code.
 :::
 
 A task can outsource part of its work to the session's other commands. A
@@ -205,9 +204,9 @@ Request `payload`:
 
 ```json
 {
-  "task_id": "…",
-  "session_id": "…",
-  "build_id": "…",
+  "task_id": "7c9e6679-7425-40de-944b-e07fc1f90ae7",
+  "session_id": "1b4e28ba-2fa1-41d2-883f-0016d3cca427",
+  "build_id": "5b0c4f6e-8a1d-4c2b-9e7f-3d2a1b0c9e8f",
   "seq": 3,
   "event": "ended",
   "deadline": "2026-11-20T14:30:10Z",
@@ -220,17 +219,16 @@ Request `payload`:
   "own_op": "ended",
   "subtasks_under_way": 0,
   "subtasks_ended": 1,
-  "ctx": "…",
-  "upload_url": "/api/factory/tasks/…/files?expires=…&sig=…",
+  "upload_url": "/api/factory/tasks/7c9e6679-7425-40de-944b-e07fc1f90ae7/files?expires=1795185070&sig=…",
   "end": {
-    "task_id": "…",
+    "task_id": "7c9e6679-7425-40de-944b-e07fc1f90ae7",
     "own_op": true,
     "command": "archive",
     "args": { "path": "C:\\Users\\alice\\Documents" },
     "state": "done",
     "ok": true,
     "data": { "archive": "C:\\Users\\alice\\AppData\\Local\\Temp\\docs.zip" },
-    "out": "…"
+    "out": "YXJjaGl2ZWQgMTIgZmlsZXM="
   }
 }
 ```
@@ -280,7 +278,7 @@ The factory's answer, the reply `payload`:
     }
   ],
   "after": "10m",
-  "ctx": "…",
+  "ctx": "eyJhcmNoaXZlIjoiQzpcXFVzZXJzXFxhbGljZVxcQXBwRGF0YVxcTG9jYWxcXFRlbXBcXGRvY3MuemlwIn0=",
   "status": "downloading the archive"
 }
 ```
@@ -349,7 +347,7 @@ A download's end, with the file its task got:
 
 ```json
 {
-  "task_id": "…",
+  "task_id": "3f2504e0-4f89-41d3-9a0c-0305e82c3301",
   "command": "download",
   "args": { "path": "C:\\Users\\alice\\AppData\\Local\\Temp\\docs.zip" },
   "key": "fetch",
@@ -364,8 +362,9 @@ A download's end, with the file its task got:
   },
   "files": [
     {
-      "id": "…", "name": "docs.zip", "size": 48213, "sha256": "…",
-      "url": "/api/factory/tasks/…/files/…?expires=…&sig=…"
+      "id": "d4f9a1c2-5b3e-4c7d-8e9f-0a1b2c3d4e5f", "name": "docs.zip", "size": 48213,
+      "sha256": "63af51616216a711fb32172e019b127a511e67e1603563840de4724e1d60c9ff",
+      "url": "/api/factory/tasks/7c9e6679-7425-40de-944b-e07fc1f90ae7/files/d4f9a1c2-5b3e-4c7d-8e9f-0a1b2c3d4e5f?expires=1795185070&sig=…"
     }
   ]
 }
@@ -538,6 +537,8 @@ func rm(path string) factory.Subtask {
 | Calls about one task, in all | 10,000; past them the task ends failed |
 | A `ctx` | 64 KiB |
 | A subtask's `key` | 64 bytes |
+| A subtask's `as` | 120 characters, one line |
+| A `status`, a finish's `message` or `err` | 1,000 bytes; a status on one line |
 | A timer (`after`) | 1 second to a day |
 | An end's `data`, and its `out`, in a call | 16 KiB each; larger, by link |
 | A finish's own `data`, and its `out` | 16 KiB each; larger, as a file the factory put |
@@ -578,6 +579,18 @@ func rm(path string) factory.Subtask {
 - **What it sends passes the checks an operator's task does**, its
   subtasks, its own op's args and its files alike: the factory's code is
   trusted no more than an operator's input.
+
+## In the protocol package
+
+`logos-golang-protocol`'s `protocol` package:
+
+| Go | What |
+|---|---|
+| `BuildCommand.Composite`, `.Uses`, `.HasOp` | The declaration. `ValidateBuildSchema` checks what a composite uses: commands of the schema with an op, each on every target the composite is on |
+| `BuildSchema.PickCommands`, `.SessionCommands` | A build's commands when an operator picks a composite (what it uses comes with it), and what a session can run (a composite with no op, once its build has what it uses). `ValidateBuildRequest` refuses a composite with no op among a build's commands, and one whose uses the build lacks |
+| `TypeFactoryCompose`, `ComposeRequest`, `ComposeEnd`, `ComposeEvent`, `OwnOpState`, `EndState`, `HeaderFileName` | The call and its ends; `Validate` |
+| `Decision`, `Subtask`, `OwnOpRun`, `ComposeCancel`, `Finish` | The answer: `Validate`, and `ValidateFor` against its call; `Timer` reads `after` |
+| `MaxSubtasks`, `MaxComposeInline`, `ComposeNoAnswer`, … | The limits above |
 
 ## Design notes
 

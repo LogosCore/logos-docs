@@ -156,5 +156,7 @@ deploy. The docs have no tags: `main` is the site.
   its reply, progress and results; the [Module
   Management](../../contracts/module-management/#action-conditions) page's
   action conditions; the [Codecs](../../contracts/minion-messages/codecs/#the-json-envelope)
-  page's JSON envelope check-in. An edit to one is an edit to
+  page's JSON envelope check-in; the [Task
+  Outsourcing](../../contracts/task-outsourcing/) page's composite command,
+  call, decision and download's end. An edit to one is an edit to
   `logos-golang-protocol`'s tests.
