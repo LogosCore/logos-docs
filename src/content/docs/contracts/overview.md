@@ -106,7 +106,7 @@ Every contract in this section follows the same baseline:
 | [Connections](../channel-core-connections/) | The connection kinds, the control link, connection sockets, targets, failover | Channel ↔ Core | Built; `add_connection` a draft |
 | [Agentless Channels](../agentless-channels/) | `bind` kinds whose channel acts as the minion | Channel ↔ Core | Built |
 | [Minion Build](../minion-build/) | Build schemas, builds, the minion config, minion error codes | Core ↔ Factory | Built |
-| [Task Outsourcing](../task-outsourcing/) | Composite commands: their factory's code runs the session's other commands as subtasks, before and after the command's own op | Core ↔ Factory | Built; not yet in the web app's views |
+| [Task Outsourcing](../task-outsourcing/) | Composite commands: their factory's code runs the session's other commands as subtasks, before and after the command's own op | Core ↔ Factory | Built |
 | [Credentials](../credentials/) | Credential fields, what a module gets, the logins a channel reports | Core → Channel, Factory, Minion | Built |
 | [Minion Messages](../minion-messages/) | The minion's protocol: the wire format, sessions, tasks, files, identity | Minion ↔ Core | Built (`v` 3) |
 | [Tunnels](../minion-messages/tunnels/) | Streams a minion opens from its host, behind core's fronts | Minion ↔ Core | Built |

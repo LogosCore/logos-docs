@@ -2,14 +2,6 @@
 title: "Task Outsourcing"
 ---
 
-:::note[Status]
-Built in the protocol package, factory-core and core. Not yet in the web
-app: it shows a composite command's task and its subtasks as tasks of the
-session, not yet the task's status line, its own op or which task each
-subtask runs for; and its build form does not yet pick what a composite
-command uses (core picks it, as it takes the build).
-:::
-
 A task can outsource part of its work to the session's other commands. A
 **composite** command does: the factory's own code, in the factory module,
 decides which of the session's commands to run as the task's **subtasks**,
