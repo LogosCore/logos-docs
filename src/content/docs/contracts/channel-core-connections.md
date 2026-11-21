@@ -10,7 +10,8 @@ targets with their states, retries and policies, Connect and Disconnect,
 idle closes, the kinds in connection and build schemas (with a kind's
 `max_message`, `max_call` and `max_open`), endpoints of a kind, connection
 management (the `hello`'s connection, `conn_update`, `switch_connection`)
-and failover. `add_connection` is an agreed design, not built yet.
+and failover. [`add_connection`](../task-results-and-actions/#add_connection)
+is an agreed design, not built yet.
 :::
 
 How a channel carries the [connection kinds](../../module-types/#connection-kinds)
@@ -800,7 +801,11 @@ the changes it reported.
 gives its place (`conn`) and the connection it becomes (`connection`), and
 the minion says its connections again with a `connection_update`. The
 session's connection list has an **Edit** button on each connection when
-the minion has a command for it.
+the minion has a command for it. **Adding** one is
+[`add_connection`](../task-results-and-actions/#add_connection) (a draft):
+core gives the connection whole, the minion puts it after the ones it has
+and says its connections again; the list has an **Add connection** button
+when the minion has a command for it.
 
 **Switching** is an [action](../task-results-and-actions/#switch_connection):
 **`switch_connection`**, core giving the connection's place (`conn`). A
@@ -860,9 +865,9 @@ A listening connection waits for core's dial, which a switch asks for: a
 minion may leave it out of failover whatever its `auto` says, and fail over
 only between the connections it reaches out through.
 
-**Giving a running minion a new connection** (a fresh redirector when one is
-burned) is planned the same way: an action, `add_connection`, with the kind,
-the settings and the values, which core checks against the channel's and the
+**Giving a running minion a new connection** is an action the same way,
+[`add_connection`](../task-results-and-actions/#add_connection) (a draft):
+the connection whole, which core checks against the channel's and the
 factory's fields as a build's connection.
 
 ## Kinds in the build schema and in builds

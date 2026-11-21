@@ -2,6 +2,11 @@
 title: "Task Results and Actions"
 ---
 
+:::note[Status]
+Built, but for [`add_connection`](#add_connection): an agreed design, not
+built yet.
+:::
+
 A build command can say two things about itself, each by naming one of
 core's own:
 
@@ -91,15 +96,14 @@ A command names them in the [build schema](../minion-build/#commands):
 | [`list_volumes`](#list_volumes) | nothing | `volumes` | the file browser's roots: Refresh, and once by itself |
 | [`switch_connection`](#switch_connection) | `conn` (int) | none | a session's connection: Switch to |
 | [`edit_connection`](#edit_connection) | `conn` (int), `connection` (structured) | none | a session's connection: Edit |
+| [`add_connection`](#add_connection) | `connection` (structured) | none | a session's connections: Add connection |
 | [`tunnel`](#tunnel) | nothing of the command's; core adds `front`, `port`, `host`, `to`, `stop_idle`, `cap`, and where the command opens them `path`, `source`, `tls`, `program`, `args`, `rows`, `cols` | none | the session's commands: core opens an operational port, a SOCKS proxy, an HTTP proxy, a forward to `host:to` or a terminal in front |
 | [`reverse_tunnel`](#reverse_tunnel) | `bind` (string), `listen` (int); `udp` (bool) in a command that opens `udp`; core adds `host`, `to`, `stop_idle`, `cap` | none | the session's commands: the minion listens at `bind:listen`, core connects each connection there to `host:to` (with `udp`, sends each source's datagrams on) |
 | [`delegate`](#delegate) | nothing of the command's (each of its params has a default); core adds `stop_idle` | none | core, when a target that names the session as its delegate needs one; the session's commands |
 | [`reverse_delegate`](#reverse_delegate) | nothing (its params are the factory's: where it listens); core adds `stop_idle` | none | the session's commands |
 
 More come as commands need them (a process list); each gets a section here
-first, and a release of the protocol and core. Planned: `add_connection`,
-with the connection kinds
-([Channel ↔ Core: Connections](../channel-core-connections/#connection-management)).
+first, and a release of the protocol and core.
 
 ## Running an action
 
@@ -912,6 +916,40 @@ connection-patch = {
   changed, so it does not undo an edit core had not heard of, and the
   minion's `connection_update` afterwards puts core's view right.
 
+## add_connection
+
+Gives the minion a connection it did not have: another endpoint of a
+channel it speaks, or another channel. What a session's connections' **Add
+connection** runs. It is [`edit_connection`](#edit_connection) without a
+connection to change.
+
+- **Core gives** `connection`, a [`structured`](../minion-build/#structured-values)
+  value of the [format](../field-types/#formats) `connection`: the
+  connection whole. The form shows it as a connection's form, empty, or
+  filled from one of the session's connections as a start. Core checks it
+  against its channel's fields and the factory's connection parameters, as
+  a build's connection, and refuses a `name` one of the session's
+  connections has ("a connection called ws exists"). An unnamed one is
+  `<channel>-<place>`, as a build's.
+- **The minion gets it whole**, in its numbered form (a hello's
+  [connection](../minion-messages/sessions/#hello)): there is nothing to
+  compare it with, so no [patch](#the-patch).
+- **The minion** puts it after its connections, the others keeping their
+  places and order, and says its connections again, whole, with a
+  [`connection_update`](../minion-messages/sessions/#refreshing-the-connections),
+  which the session shows. It does not move to it:
+  [`switch_connection`](#switch_connection) does, and failover may, as to
+  any of its connections.
+- **No result.** The task's output says what it added ("connection 3: ws,
+  http reverse-persistent"), and it fails when the minion cannot take it (a
+  channel or a kind it was not built with: "this minion speaks no dns"; no
+  room for another, where the factory bounds them).
+- A command may take more, each with a default: a `switch`, say, moving to
+  the new connection once it is added.
+- Whether a minion that restarts keeps it is the factory's to say, as for an
+  edit; one that keeps it says it in its hello's `connections`.
+- It goes as tasks go, within the minion's `get_tasks` allowance.
+
 ## tunnel
 
 A tunnel through the minion's host ([Tunnels](../minion-messages/tunnels/)):
@@ -1023,6 +1061,12 @@ before stay valid. A change that cannot be made that way is a new name
 (`dir_listing_v2`), and the old one stays for the minions already built.
 
 ## Design notes
+
+- **A connection added goes last.** Every place a minion and core share
+  (a hello's `conn`, a `conn_update`, a switch's `conn`, the session's
+  record of moves) stays the connection it was, and failover tries the new
+  one after the ones it had: the order changes only when the operator
+  edits it, not as a side effect of adding one.
 
 - **Why core's vocabulary, not each factory's own shapes.** A factory could
   declare a schema for its `data` and the web app draw a generic table from
