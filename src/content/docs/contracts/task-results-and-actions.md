@@ -104,7 +104,8 @@ with the connection kinds
 ## Running an action
 
 A factory may give several commands one action, and a build carries the ones
-its operator picked. Which one core runs:
+its operator picked. A [legacy](../minion-build/#legacy-commands) command
+is never one of them. Which one core runs:
 
 - **From a view's item** (List directory on a folder): the session's
   commands with the action, the view's own command first when it has the
@@ -860,10 +861,15 @@ or its channel. What a session's connection's **Edit** runs.
   value: the connection it becomes, whole. Both params should have the
   [format](../field-types/#formats) `connection`. `conn` is then picked by
   name, and `connection` is filled from one of the session's connections
-  and edited as JSON; core checks it against its channel's fields and the
-  factory's connection parameters and sends the minion its numbered form.
-- **The minion** puts the connection at that place, keeping the others and
-  their order, and says its connections again with a
+  and edited as JSON; core checks it whole against its channel's fields
+  and the factory's connection parameters.
+- **The minion gets what changed** ([below](#the-patch)): core compares the
+  checked connection, in its numbered form, with the one the session has at
+  `conn` (the minion's own, else the build's) and sends only the
+  difference. An edit that changes nothing is refused when it is queued
+  ("connection 2: nothing changed").
+- **The minion** applies it to the connection at that place, keeping the
+  others and their order, and says its connections again, whole, with a
   [`connection_update`](../minion-messages/sessions/#refreshing-the-connections),
   which the session shows. A connection it is using goes on with the new
   settings from its next exchange; whether it can change the one under
@@ -872,6 +878,39 @@ or its channel. What a session's connection's **Edit** runs.
   changed"), and it fails when the minion cannot take it (a channel or a
   kind it was not built with: "this minion speaks no dns").
 - It goes as tasks go, within the minion's `get_tasks` allowance.
+
+### The patch
+
+```cddl
+connection-patch = {
+  ? 1: tstr,            ; channel  ┐ both, or neither: with them, the
+  ? 2: tstr,            ; kind     ┘ connection whole, in place of the old
+  ? 3: tstr,            ; name: the new one
+  ? 4: uint,            ; version: the new one
+  ? 5: { * uint => any / null },  ; params: those that changed, by num;
+                        ;   null: gone
+  ? 6: { * uint => any / null },  ; values: likewise
+  ? 7: { ? 1: bool, ? 2: uint },  ; failover: the new settings, whole
+  ? 8: uint,            ; max_message: the new one (0: the protocol's)
+}
+```
+
+- **A change of channel or kind sends the connection whole**, `channel` and
+  `kind` with the rest, as a [hello's](../minion-messages/sessions/#hello)
+  connection: its params follow another schema, so a difference from the
+  old ones means nothing. The minion replaces the old one with it.
+- **Otherwise only what differs**: a param or value that changed, by its
+  number, with its new value (in its type's CBOR form, as a task's args);
+  one the new connection does not have, `null`; `name`, `version`,
+  `failover` and `max_message` only when they change. The minion changes
+  those and keeps the rest.
+- **Defaults are filled in on both sides first**, so a param left out that
+  has a default does not count as gone: `null` is for an optional one
+  without a default.
+- **Core's view of the old one can lag** (an edit queued before the last
+  one's `connection_update` came): a patch touches only what the operator
+  changed, so it does not undo an edit core had not heard of, and the
+  minion's `connection_update` afterwards puts core's view right.
 
 ## tunnel
 

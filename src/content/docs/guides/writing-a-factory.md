@@ -535,7 +535,9 @@ self-signed certificate).
    Every channel, field (`file` fields too) and connection parameter has a
    `num`, every command an `op` and each of its params a `num`; once given,
    a number stays its field's or command's. A field or target removed,
-   renamed or given another meaning raises `version`.
+   renamed or given another meaning raises `version`; a command retired or
+   renamed stays, marked [`legacy`](../../contracts/minion-build/#legacy-commands),
+   beside its successor's new `id` and `op`.
 3. **`CoreURL` set** (`LOGOS_CORE_BASE_URL`), and core's TLS settings where
    core has a certificate nobody trusts.
 4. **A plan that follows the request**: the steps that will run, nothing

@@ -123,7 +123,8 @@ hello = {
 connection = {
   1: tstr,              ; channel: the channel module it goes through
   2: tstr,              ; kind: the connection kind ("reverse-call", ...)
-  ? 3: tstr,            ; name: a slug, unique among the connections
+  ? 3: tstr,            ; name: a slug, unique among the connections;
+                        ;   absent: the session's at its place
   ? 4: uint,            ; version: the connection schema version its
                         ;   params follow
   ? 5: { * uint => any },   ; params: the endpoint's, by field num
@@ -198,6 +199,10 @@ text.
   the build's connections, as before. A rehello with a list replaces the
   one the session kept; one without keeps it. A `connection_update`
   ([Connections](#connections)) replaces it too, without a rehello.
+  A minion need not know its connections' names: an entry without a
+  `name` keeps the one the session has at its place (its own list's,
+  else the build's), unless another entry of the list names it; one past
+  them is `<channel>-<place>`, as a build's unnamed connection is.
 - `roundtrip_time` is the round trip the minion measured on its latest
   exchange before the hello, in milliseconds: from sending a message to
   core to receiving the reply that answers it (its `re`), by the minion's
@@ -461,7 +466,8 @@ schedule with a `sleep_update`:
 - It goes in **any message**, beside other items; core answers nothing to
   it. A rehello with `connections` does the same.
 - Core checks the list as a hello's (a channel it knows, a kind that
-  channel carries, unique names) and **replaces the session's** with it:
+  channel carries, unique names), names its unnamed entries as a hello's
+  ([Hello](#hello)), and **replaces the session's** with it:
   `conn`, every later `conn_update` and the session's view use it from
   then on. A minion whose hello said none starts having its own here, in
   place of the build's.

@@ -324,8 +324,9 @@ connection and sends the minion its numbered form, the one a hello's
 [`connections`](../minion-messages/sessions/#hello) and a
 `connection_update` carry: `{1: channel, 2: kind, 3: name, 4: version, 5:
 params, 6: values, 7: failover, 8: max_message}`, params and values by their
-fields' numbers, defaults filled in. Names are for operators, numbers for
-the minion, as everywhere a minion reads settings. Command params only, as
+fields' numbers, defaults filled in ([`edit_connection`](../task-results-and-actions/#edit_connection)'s
+goes as a patch: what changed of the connection it replaces). Names are for
+operators, numbers for the minion, as everywhere a minion reads settings. Command params only, as
 any `structured`. In the command form, the session's connections are
 offered first: the one picked fills the JSON editor (none picked, an empty
 one), and the operator edits it there as any structured value.
@@ -375,6 +376,7 @@ does when they build it: a minion built for one job carries nothing more.
 | `targets[]` | Optional. Narrows the command to these targets; empty means every target. |
 | `default` | Picked in a new build until the operator unpicks it, and what a build that names no commands gets. |
 | `required` | In every build of its targets: the minion cannot run without it (`sleep`, `exit`), so the operator cannot leave it out. |
+| `legacy` | Optional. A command the factory's minions no longer get, kept for the builds that have it ([Legacy commands](#legacy-commands)): never `default` or `required`, and no new build picks it. |
 | `params[]` | What a task of the command takes: field specs as in a management action, and `file` (a [task file](../task-results-and-actions/#task-files), sent to the minion with the task): one at most, with no default. Each has a `num`, unique in the command, 1 to 65 535: what a task names the arg by on the wire; only a command's params have one. A param core adds to every command of its [action](../task-results-and-actions/) (a tunnel's `front`, `port`, `host`, `to`, `stop_idle`, `cap`) a factory does not declare: it has no `num`, and never goes to the minion. A param may apply only by another's value ([`when`](../module-management/#fields), one of core's included: a tunnel command's `timeout`, say, with any front but `terminal`) and be `advanced` (under the form's More options). |
 | `result` | Optional. What its task's `data` is: one of core's [results](../task-results-and-actions/) (`dir_listing`), its shape and view. Without one, the `data` shows as raw JSON. A name core does not know refuses the schema. |
 | `action` | Optional. What core can ask the command to do itself: one of core's [actions](../task-results-and-actions/) (`list_dir`). The command takes the action's params, gives every other param a default, and has the result the action needs. A name core does not know refuses the schema. |
@@ -422,7 +424,28 @@ does when they build it: a minion built for one job carries nothing more.
   reaches the minion ([Task Outsourcing](../task-outsourcing/)).
 - A command removed or renamed needs a new `version`, like a field. Adding
   one does not, a required one included: core adds it to every build of its
-  targets.
+  targets. Nor does marking one `legacy`, the way to retire or rename a
+  command without one.
+
+#### Legacy commands
+
+A factory that retires a command, or renames it, keeps the old one in its
+schema marked `legacy`, with its `id`, `op` and params as they were, and
+declares the new one with an `id` and an `op` of its own: minions already
+built run the old op, and new ones the new.
+
+- **No new build picks it.** The build form does not offer it, and a build
+  request that names it is refused ("`switch` is legacy: only the builds
+  that have it keep it"). A build made again from one that has it leaves it
+  out and takes the commands of its action that are not legacy (with an
+  action) in its place. A composite command does not use one.
+- **The builds that have it keep it.** Their sessions' consoles, `help`
+  and command forms list it, marked legacy, and its tasks run as before.
+- **It serves no action.** Core and the web app never run it for one: no
+  view's item, navigation or session button (Browse files, Switch to,
+  Edit) picks it, nor does core when it starts an action itself. Its
+  `action` stays declared, and a task of it, typed in the console, does
+  what it always did.
 
 ### Minion error codes
 
@@ -1155,6 +1178,12 @@ downloads an artifact.
 
 ## Design notes
 
+- **Legacy, not an alias.** A renamed command could have been an alias, its
+  old `id` read as the new one, or a migration, rewriting the builds that
+  name it. Either makes one number mean two things or rewrites what a
+  minion was built with. A legacy command is the old one as it was: the
+  minions built with it keep the op they know, new ones get a new op, and
+  the schema says which builds can still be made.
 - **Structured values are CBOR, not bytes.** Minions read CBOR already: a
   structured param's value goes as CBOR maps and arrays inside the task, not
   as an opaque byte string in an encoding each minion would have to read too.
