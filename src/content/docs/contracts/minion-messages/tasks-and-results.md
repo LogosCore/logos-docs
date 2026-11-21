@@ -195,21 +195,9 @@ its factory compiled in, and carries no command or param names. Operators,
 core and the API name commands and params by `id` and `key` as before; core
 puts the numbers in when it sends the task. Core fills in defaults and checks
 the args before the task is queued, so a minion gets every arg that has a
-value or a default. Their types map to CBOR like this:
-
-| Param type | CBOR |
-|---|---|
-| `string`, `url`, `secret`, `enum` | text |
-| `int`, `bytes` | integer (`bytes`: a byte count) |
-| `number` | float |
-| `bool` | `true` / `false` |
-| `duration` | unsigned integer, milliseconds |
-| `datetime` | integer, unix seconds |
-| `string_list`, `enum_list` | array of text |
-| `string_map` | map of text to text |
-| `file` | `file-offer`: the [file core sends](../file-transfers/#core-sending-a-file) for the task, `{xfer, name, size, sha256}` |
-| `stream` | `file-offer`: the [file core streams](../file-transfers/#streaming-a-file-to-a-minion) for the task, `{xfer, name, stream: true}` |
-| `structured` (draft) | the value's CBOR form: maps with text keys, arrays, text, integers, floats, booleans ([Structured values](../../minion-build/#structured-values)) |
+value or a default. Each type's CBOR form (a duration in milliseconds, a
+datetime in unix seconds, a file as its `file-offer`, a credential itself)
+is in [Field Types](../../field-types/#types).
 
 - **Core sends a task again**, when asked, until the minion acks it or a
   result for it arrives. Over a connection kept open it is on its way until

@@ -35,7 +35,7 @@ so a module checks what it gets against the same table core keeps
 
 ## Credential fields
 
-Two [field types](../module-management/#field-types):
+Two [field types](../field-types/#types):
 
 | Type | JSON value | Rules |
 |---|---|---|

@@ -99,6 +99,7 @@ export default defineConfig({
               items: [
                 { slug: "contracts/module-lifecycle" },
                 { slug: "contracts/module-management" },
+                { slug: "contracts/field-types" },
                 { slug: "contracts/module-logs" },
                 { slug: "contracts/amqp-envelope" },
                 { slug: "contracts/amqp-conventions" },

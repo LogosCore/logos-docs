@@ -832,7 +832,7 @@ Moves the minion to another of its build's connections: what a session's
 
 - **Core gives** `conn`, an `int`: the connection's place in the build's
   connections, from 1, as a [`hello`](../minion-messages/sessions/#connections)
-  names it. The command's `conn` should have the [format](../module-management/#fields)
+  names it. The command's `conn` should have the [format](../field-types/#formats)
   `connection`: operators then pick the connection by name in the command
   form, and type its name in the console (`connect ws`; Tab completes it),
   without knowing the build's order. A name two connections share is typed
@@ -871,7 +871,7 @@ tunnel items. No result: the task's view is core's.
   ([Terminal](../minion-messages/tunnels/#terminal)). They carry no `num`, so the minion never sees them, and
   a build schema that declares one is refused. Each stream's tunnel item
   names where it goes.
-- **Each applies by the front** (its [`when`](../module-management/#fields)):
+- **Each applies by the front** (its [`when`](../field-types/#the-field-description)):
   `host`, `to`, `path` and `tls` with `forward` alone, `source` with any
   but `terminal`, `program`, `args`, `rows` and `cols` with `terminal`
   alone. The form shows only those of the front picked; one given with

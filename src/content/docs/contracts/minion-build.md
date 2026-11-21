@@ -236,26 +236,17 @@ a parameter goes by its `num`, the channel's settings by the channel's own.
 
 ### Field types for builds
 
-Three field types are added. `datetime` and `enum_list` join the shared types,
-so management properties and connection schemas can use them too; `file` is
-accepted only in build schemas: in a build's fields, and in a command's
-`params` (a file to send the minion with the task).
-
-| Type | JSON value | Rules |
-|---|---|---|
-| `datetime` | string, RFC 3339, e.g. `"2027-01-31T00:00:00Z"` | `min`, `max` as RFC 3339 strings |
-| `enum_list` | array of option values | each one of `options[].value`, no repeats; `max_items`; `required` means at least one |
-| `file` | string: a [build file](#build-files) id | `accept`: up to 32 extensions (`.ico`) or media types (`image/x-icon`, or `image/*` for any subtype), any file when empty; `max_size`: the largest file, in bytes. No `default`. |
-
-`credential` and `credential_list` (the operation's credentials, of the types
-`accept` names) are taken in build schemas too: in a build's fields, its
-connection parameters and a command's params. The factory gets them in the
-request's `credentials`; a command's minion, in the task's arg. See
-[Credentials](../credentials/).
-
-`accept` and `max_size` are new field spec members, for `file` only. In the
-UI, `datetime` is a date and time picker, `enum_list` a set of checkboxes, and
-`file` an upload or a choice from the operation's build files.
+A build schema's fields, connection parameters and command params use the
+shared [field types](../field-types/), with three a build schema alone
+takes ([which types where](../field-types/#which-types-where)): `file` (a
+build field's [build file](#build-files), or a command's task file),
+`credential` and `credential_list` (the operation's credentials, of the
+types `accept` names; the factory gets them in the request's
+`credentials`, a command's minion in the task's arg:
+[Credentials](../credentials/)), and, for command params only, `stream` and
+`structured`. In the UI, `datetime` is a date and time picker, `enum_list`
+a set of checkboxes, and `file` an upload or a choice from the operation's
+build files.
 
 In a command's `params`, a `file` value is not a build file: it is a file the
 operator uploads to core for the task (a [task

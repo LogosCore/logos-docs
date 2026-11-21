@@ -100,6 +100,7 @@ Every contract in this section follows the same baseline:
 | [AMQP Envelope](../amqp-envelope/) and [Routing](../amqp-conventions/) | The control plane's envelope, exchanges, queues and routing keys | Core ↔ Module | Built |
 | [Module Lifecycle](../module-lifecycle/) | Register, heartbeat, deregister; blocking and deleting instances | Module → Core | Built |
 | [Module Management](../module-management/) | Configuration, actions, status values | Core → Module | Prototype |
+| [Field Types](../field-types/) | The field description and types every schema uses: where each type may be used, its JSON and CBOR forms | Core ↔ Module, Core → Minion | Built |
 | [Module Logs](../module-logs/) | The live log tail | Core ↔ Module | Prototype |
 | [HTTP Sync](../channel-core-sync/) | The sync call | Channel ↔ Core | Built; channels are not authenticated yet |
 | [Minion Connection Schema](../minion-connection/) | What a minion is given to reach a channel, per connection kind | Channel → Core | Built |

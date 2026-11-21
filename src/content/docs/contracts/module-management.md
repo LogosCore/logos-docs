@@ -92,25 +92,11 @@ half-managed.
 
 ### Fields
 
-Properties and action parameters share one field description:
-
-| Field | Meaning |
-|---|---|
-| `key` | Identifier, `^[a-z][a-z0-9_]{0,62}$`, unique within its list. |
-| `type` | One of the [field types](#field-types). |
-| `label`, `description` | Shown in the UI. Up to 120 and 1000 bytes. |
-| `group`, `order`, `unit`, `placeholder` | UI hints only. |
-| `format` | For `string`, `secret` and `int`: what the value is, so the UI can offer a helper. A lowercase name like a key; the value is never checked against it, and unknown formats are ignored. Known: `user_agent` (an HTTP User-Agent; the UI generates one from an OS, a browser available on it and one of its four newest versions, by the release dates its vendor publishes (the default: the newest out for a week; a release only scheduled when the dates were read counts two weeks late), or a common one at random; under the field it says what the value is and how many versions behind its browser, warns when it is outdated or carries what no real browser sends (a version not out yet, `Windows NT 11.0`, a full Chrome version, Safari off Apple's systems, Edge without Chrome's token, Windows 7 or 8 with a browser that left them, Firefox's `rv:` apart from its version, `HeadlessChrome`), and offers the same OS and browser at the default version), `path` (a URL path, e.g. `/cdn/assets/`; the UI generates paths of 1 to 6 words from word lists it ships, divided by `/`, `-`, `.` or `_`, offering only those that pass the field's `pattern` and `max_length`), `multiline` (a string or a secret over several lines, a PEM key say: the UI edits it in a box of several lines, which keeps its line breaks, a secret's too, as a text area cannot be masked; a one-line box drops them), `timezone` (a time zone as IANA names it, `Europe/Berlin`, `UTC`: the UI suggests the browser's own list as it is typed, by any part of the name, each with its offset now, the browser's own zone first; a name typed whole is taken as it is), and for an `int` `connection` (one of a minion's build's connections, by its place from 1: a command's param, such as [`switch_connection`](../task-results-and-actions/#switch_connection)'s `conn`; a session's command form picks it from the session's connections by name, kind and address, and its console takes and completes it by name). |
-| `required` | A value must be present (and, for strings, non-empty; for a `string_list` or `string_map`, no empty item or value; for an `enum_list`, at least one option). |
-| `default` | The module's own value when core holds none — typically what it read from its env. Must satisfy the field's own constraints. Not to be set for `secret`: core does not check it, and never shows one. For an action param, it only pre-fills the UI's form: neither core nor the module fills in an absent param, so a `required` param is always sent. |
-| `min`, `max` | Numbers for `int` / `number` / `bytes`, duration strings for `duration`, RFC 3339 timestamps for `datetime`. |
-| `pattern`, `max_length` | For string-like types (each item of a `string_list`, each value of a `string_map`). `pattern` is a Go (RE2) regular expression, unanchored: anchor it with `^…$` to match the whole value. |
-| `key_pattern` | For `string_map`: what every key must match. |
-| `max_items` | For `string_list`, `string_map`, `enum_list` and `credential_list`: most items or entries. |
-| `options` | For `enum` and `enum_list`: 1 to 64, each a `value`, optional `label` and `description` (shown under the label in the option list). |
-| `when` | An action's or a command's param only: it applies while another param of the same form, an `enum` with no `when` of its own, holds one of `values`: `{"key": "front", "values": ["forward"]}`, a tunnel's destination a forward's alone. The UI shows it only then, and leaves it out of what it sends; one given otherwise is refused (`host: only when front is forward`), it takes no default, and a `required` one is required only while it applies. A command's may name a param core adds to its [action](../task-results-and-actions/) (a tunnel's `front`). Refused anywhere else. |
-| `advanced` | An action's or a command's param only: one seldom changed (a connect timeout). The UI shows it under More options, folded until opened or until it has a problem to show. Refused anywhere else. |
-| `platforms` | A build's field only: the platforms (`os/arch`, either half `any`) of the builds it applies to, `["linux/arm"]`; empty, every one. A build for another platform has no such field ([Fields for some platforms](../minion-build/#fields-for-some-platforms)). Refused anywhere else. |
+Properties and action parameters share the field description every schema
+uses, with its keys, types and checks: [Field Types](../field-types/). A
+manifest takes the types a module's own settings may hold ([which types
+where](../field-types/#which-types-where)): no credentials, files, streams
+or structured values. An action param's `default` only pre-fills the form.
 
 A **property** adds `apply`:
 
@@ -205,28 +191,7 @@ reported, or not of its type, holds: whoever knows the value decides.
 
 ### Field types
 
-| Type | JSON value | Rules |
-|---|---|---|
-| `string` | string | `pattern`, `max_length` |
-| `int` | integer | `min`, `max`; must fit in int64 |
-| `number` | number | `min`, `max` |
-| `bool` | boolean | — |
-| `enum` | string | one of `options[].value` |
-| `duration` | string, e.g. `"30s"` | Go duration syntax; `min`, `max` as durations |
-| `bytes` | integer | not negative; `min`, `max` |
-| `url` | string | absolute URL (scheme and host) |
-| `secret` | string | write-only: never returned by core or by the module |
-| `string_list` | array of strings | each item checked like a `string`; `max_items` |
-| `string_map` | object of string keys to string values | keys non-empty and matching `key_pattern`; each value checked like a `string`; `max_items`. Key order is not kept. |
-| `datetime` | string, RFC 3339, e.g. `"2027-01-31T00:00:00Z"` | `min`, `max` as RFC 3339 timestamps |
-| `enum_list` | array of option values | each one of `options[].value`, no repeats; `max_items`; `required` means at least one |
-
-`file` exists too, for [build schemas](../minion-build/#field-types-for-builds)
-only, `structured` (a draft) for commands' params only
-([Structured values](../minion-build/#structured-values)), and `credential` and `credential_list`, for build and connection
-schemas ([Credentials](../credentials/#credential-fields)): what holds
-their values belongs to an operation, and a module's settings are no
-operation's. A management manifest that declares one is refused.
+The types, their JSON values and rules: [Field Types](../field-types/#types).
 
 ### Limits
 
