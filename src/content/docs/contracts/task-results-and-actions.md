@@ -860,9 +860,9 @@ or its channel. What a session's connection's **Edit** runs.
   and `connection`, a [`structured`](../minion-build/#structured-values)
   value: the connection it becomes, whole. Both params should have the
   [format](../field-types/#formats) `connection`. `conn` is then picked by
-  name, and `connection` is filled from one of the session's connections
-  and edited as JSON; core checks it whole against its channel's fields
-  and the factory's connection parameters.
+  name, and `connection` is filled from the connection `conn` picks and
+  edited as a connection's form; core checks it whole against its
+  channel's fields and the factory's connection parameters.
 - **The minion gets what changed** ([below](#the-patch)): core compares the
   checked connection, in its numbered form, with the one the session has at
   `conn` (the minion's own, else the build's) and sends only the

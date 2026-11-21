@@ -327,9 +327,12 @@ params, 6: values, 7: failover, 8: max_message}`, params and values by their
 fields' numbers, defaults filled in ([`edit_connection`](../task-results-and-actions/#edit_connection)'s
 goes as a patch: what changed of the connection it replaces). Names are for
 operators, numbers for the minion, as everywhere a minion reads settings. Command params only, as
-any `structured`. In the command form, the session's connections are
-offered first: the one picked fills the JSON editor (none picked, an empty
-one), and the operator edits it there as any structured value.
+any `structured`. In a session's command form it is a connection's form,
+as a build's connection has: its channel, kind and name, every setting of
+the channel for the kind and every connection parameter of the factory,
+set or not, and its failover. One of the session's connections fills it
+(the one a `connection` int param of the same command picks, as it is
+picked), and Edit as JSON shows its value as text.
 
 More formats come as rows of this table, each with core's checks and, when
 it needs one, the app's editor.
