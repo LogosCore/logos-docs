@@ -823,6 +823,17 @@ as it relays them (`pkg/recordings`), one recording each:
   again at the head of the next; past 32 MiB held, what comes is dropped,
   whole instructions or events at a time, and counted (`lost`): the
   recording plays past them.
+- **A desktop's becomes a video** once it ended, where core has an
+  encoder ([guacenc](../../../core-infrastructure/#guacenc--recording-videos-optional)):
+  H.264 in MP4 (`video/<recording>.mp4`), drawn by `guacenc` at the
+  desktop's size, a tenth to a fiftieth of its parts' bytes. Its keys are
+  kept beside it first (`keys/<recording>.json`: guacd's first `sync`, and
+  each `key` instruction's keysym, pressed and timestamp), then its parts
+  are deleted. Core converts one at a time, the oldest first, those made
+  before it had an encoder too. An encoder that does not answer is asked
+  again later, the pauses growing; one that fails a recording 5 times
+  leaves it as it was, its parts kept and played as before. Without an
+  encoder none is converted. A terminal's is not: it is small already.
 - **Its record** (`desktop_recordings`, named likewise): its number in the
   task, from 1; its `format` (`guac`, a desktop's; `asciicast`, a
   terminal's); who opened it and when (an operator's id and name; none for
@@ -841,6 +852,9 @@ as it relays them (`pkg/recordings`), one recording each:
   terminal's stream), `core_stopped` (core stopped while it recorded: a
   sweep each minute ends a recording whose core has not written its record
   for 2 minutes, as far as its parts go) or `not_opened` (why, in `msg`).
+  A desktop's video (`video`): `CONVERTING`, `CONVERTED` (its bytes,
+  `video_size`) or `FAILED` (why, in `video_error`); none until it is
+  converted.
   The task counts its recordings (`MinionTask.recordings`), and its live
   updates say it as one starts, ends or is deleted.
 - **Read** by anyone of the operation, viewers too: GraphQL
@@ -848,13 +862,18 @@ as it relays them (`pkg/recordings`), one recording each:
   `GET /api/v1/recordings/{id}`, one's file, an attachment
   (`desktop-<front>-<task>-<number>.guac`, or
   `terminal-<task>-<number>.cast`, `application/x-asciicast`), its parts
-  one after another. One still recording reads as far as core kept it.
+  one after another; a converted one's video
+  (`desktop-<front>-<task>-<number>.mp4`, `video/mp4`, in ranges, to seek
+  in), and `GET /api/v1/recordings/{id}/keys` its keys. One still
+  recording reads as far as core kept it.
 - **Kept until the operation is deleted**, after the task ends. An
-  operator deletes one that ended (`deleteRecording`), its parts with it.
+  operator deletes one that ended (`deleteRecording`), its parts, video
+  and keys with it.
 - **In the web app**, a desktop or terminal task's Recordings tab lists
   them, downloads one's file and plays one, what was typed beside it, line
   by line, each line playing from where it began. A desktop's plays in
-  Guacamole's player as it is read. A terminal's plays in xterm.js, as the
+  Guacamole's player as it is read, or, converted, as a video in the
+  browser's own player, its keys read as Guacamole's player reads them. A terminal's plays in xterm.js, as the
   Terminal tab draws one, at its sizes: pauses past 2 seconds are skipped
   unless turned off, at 1× to 16×, its keys named (`<Up>`, `<Ctrl+C>`). Its
   output also downloads as text (`terminal-<task>-<number>.txt`): the

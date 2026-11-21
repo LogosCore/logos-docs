@@ -18,6 +18,7 @@ graph TD
         WEB[Web app]
         HP[hocuspocus]
         GD[guacd]
+        GE[guacenc, optional]
         RMQ[(RabbitMQ)]
         DB[(MongoDB)]
         RDS[(Redis)]
@@ -37,6 +38,7 @@ graph TD
     CS -. "OIDC" .-> KC
     CS -- "desktop sessions, Guacamole protocol" --> GD
     GD -- "a desktop's server, through its task's port" --> CS
+    CS -. "a recording in, its video out, HTTP" .-> GE
 
     CH -- "sync call, control link, connection sockets" --> CS
     CH -- "AMQP" --> RMQ
@@ -278,6 +280,29 @@ saying which (channel-core's clients).
 - **Version**: the release the web app's vendored Guacamole client is
   (`frontend/src/vendor/guacamole`): change them together.
 
+## guacenc — Recording videos (optional)
+
+- **Role**: makes a video of each desktop's recording once it ended
+  ([Recordings](../contracts/minion-messages/tunnels/#recordings)), a tenth
+  to a fiftieth of its size: `guacenc`, guacamole-server's own, draws it,
+  and ffmpeg encodes it as H.264 in MP4. Core sends it a recording and
+  stores the video it answers with; one at a time.
+- **Configuration**: core's `GUACENC_URL` (`http://guacenc:4823`): the
+  development stack sets it (empty in `.env` turns it off), and the Helm
+  chart when `guacenc.enabled` (on by default; `guacenc.tmpSize` the room a
+  recording takes while it encodes).
+  **Optional**: without it core converts nothing, and every recording
+  stays as it was recorded, played by Guacamole's player. With it set but
+  the encoder away, recordings wait, playable as they are, and core asks
+  again later; once it answers, those left are converted, the oldest
+  first.
+- **Reach**: core alone, as guacd; it keeps nothing past a conversion.
+- **Image**: `logos-guacd`'s own, with ffmpeg in it, run with another
+  command (`guacenc-worker`, a small HTTP worker of `logos-core/deploy/guacd`):
+  one image, so the recorder and the renderer are always the same
+  guacamole-server. Its own container, not guacd's: an encoding takes a
+  core of CPU while it runs, and live desktops keep theirs.
+
 ## Keycloak — Single Sign-On (optional)
 
 - **Role**: a development identity provider for OIDC login, under the Compose
@@ -288,14 +313,14 @@ saying which (channel-core's clients).
 
 - **Docker Compose** (`logos-core/docker-compose.yml`) runs the development
   stack: core (`core-dev`, rebuilt as its code changes), the web app,
-  hocuspocus, guacd and nginx (the `development` profile), RabbitMQ, MongoDB, Redis,
+  hocuspocus, guacd, guacenc and nginx (the `development` profile), RabbitMQ, MongoDB, Redis,
   SeaweedFS (master, volume, filer and S3 gateway), and Keycloak (the `sso`
   profile). [Development Stack](../contributing/development-stack/) runs it.
 - **Modules** are not part of it. Each module repository has a Compose project
   of its own, which joins core's network (`logos-core_logos`). Its instance
   registers with core when it starts.
 - **Kubernetes**: a Helm chart (`logos-core/deploy/helm/logos`, with a kind
-  configuration for local clusters) deploys core, its stores, guacd and RabbitMQ.
+  configuration for local clusters) deploys core, its stores, guacd, guacenc (when enabled) and RabbitMQ.
   Modules are not in it.
 
 ## Observability
@@ -325,6 +350,7 @@ traces in SeaweedFS, Grafana) and is planned. None of it runs.
 | hocuspocus | MongoDB | MongoDB wire protocol | Wiki documents |
 | Core Server | guacd | Guacamole protocol (TCP 4822) | Desktop sessions, relayed to the web app |
 | guacd | Core Server's operational ports | RDP, VNC, SSH, Telnet | A desktop's server, through its task's port and minion |
+| Core Server | guacenc | HTTP (4823) | A desktop's recording in, its video out |
 | Core Server | Redis | RESP | Sessions, caches, recent minion messages, stream chunks |
 | Core Server | SeaweedFS | HTTP (S3-compatible) | Object storage |
 | Factory Modules | Core Server (or its front) | HTTP(S) | Build files in, artifacts out (`/api/factory/builds/`) |
