@@ -793,7 +793,14 @@ the minion has a command for it. **Adding** one is
 [`add_connection`](../task-results-and-actions/#add_connection):
 core gives the connection whole, the minion puts it after the ones it has
 and says its connections again; the list has an **Add connection** button
-when the minion has a command for it.
+when the minion has a command for it. **Removing** one is
+[`remove_connection`](../task-results-and-actions/#remove_connection) (a
+draft): core gives its place (`conn`), never the one in use, the only one
+or one a target names; the minion takes it out, the ones after it moving
+up a place, and its `connection_update` says where the one in use went.
+Core moves its own places with the list, a target's among them. Each
+connection but the one in use has a **Remove** button when the minion has
+a command for it.
 
 **Switching** is an [action](../task-results-and-actions/#switch_connection):
 **`switch_connection`**, core giving the connection's place (`conn`). A

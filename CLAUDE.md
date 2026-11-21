@@ -129,7 +129,9 @@ writing about it.
   `bind-persistent`) and the **three paths** to core (the sync call, a
   connection socket per minion connection, the control link): Connections.
   Failover between a build's connections is built, and so is
-  `add_connection` (its action's section in Task Results and Actions).
+  `add_connection` (its action's section in Task Results and Actions);
+  `remove_connection` is a draft there, with `connection_update`'s `conn`
+  (Sessions).
 - **The sync call** carries the sealed frame as the raw body with
   `Logos-Message-Id`, `Logos-Build-Id` and `Logos-Channel-Instance` headers;
   core answers 200 with its reply or 204 with none, 409 for a replay and 422

@@ -2,6 +2,11 @@
 title: "Task Results and Actions"
 ---
 
+:::note[Status]
+Built, but for [`remove_connection`](#remove_connection): an agreed design,
+not built yet.
+:::
+
 A build command can say two things about itself, each by naming one of
 core's own:
 
@@ -92,6 +97,7 @@ A command names them in the [build schema](../minion-build/#commands):
 | [`switch_connection`](#switch_connection) | `conn` (int) | none | a session's connection: Switch to |
 | [`edit_connection`](#edit_connection) | `conn` (int), `connection` (structured) | none | a session's connection: Edit |
 | [`add_connection`](#add_connection) | `connection` (structured) | none | a session's connections: Add connection |
+| [`remove_connection`](#remove_connection) | `conn` (int) | none | a session's connection: Remove |
 | [`tunnel`](#tunnel) | nothing of the command's; core adds `front`, `port`, `host`, `to`, `stop_idle`, `cap`, and where the command opens them `path`, `source`, `tls`, `program`, `args`, `rows`, `cols` | none | the session's commands: core opens an operational port, a SOCKS proxy, an HTTP proxy, a forward to `host:to` or a terminal in front |
 | [`reverse_tunnel`](#reverse_tunnel) | `bind` (string), `listen` (int); `udp` (bool) in a command that opens `udp`; core adds `host`, `to`, `stop_idle`, `cap` | none | the session's commands: the minion listens at `bind:listen`, core connects each connection there to `host:to` (with `udp`, sends each source's datagrams on) |
 | [`delegate`](#delegate) | nothing of the command's (each of its params has a default); core adds `stop_idle` | none | core, when a target that names the session as its delegate needs one; the session's commands |
@@ -945,6 +951,33 @@ connection to change.
   edit; one that keeps it says it in its hello's `connections`.
 - It goes as tasks go, within the minion's `get_tasks` allowance.
 
+## remove_connection
+
+Takes one of the minion's connections away: an endpoint no longer to be
+used. What a session's connection's **Remove** runs. It names the
+connection as [`switch_connection`](#switch_connection) does.
+
+- **Core gives** `conn`, an `int` of the [format](../field-types/#formats)
+  `connection`: the connection's place in the minion's connections, from 1
+  (its own when its hello or a `connection_update` said them, else the
+  build's).
+- **Core refuses it when it is queued** for the connection in use
+  ("connection 2 is in use: switch first"), the minion's only connection,
+  and one a [target](../channel-core-connections/) names (a connection
+  core dials: "remove its target first").
+- **The minion** takes it out, the ones after it each moving up a place,
+  and says its connections again, whole, with a
+  [`connection_update`](../minion-messages/sessions/#refreshing-the-connections)
+  whose `conn` says the place of the one in use when it moved. Core takes
+  the list as any update, records no move, and moves its own places with
+  it: the one in use, and a target's that named a later one.
+- **No result.** The task's output says what it removed ("connection 2: ws
+  removed"), and it fails when the minion cannot ("connection 2 is in use";
+  its only one; no connection 4).
+- Whether a minion that restarts keeps the removal is the factory's to say,
+  as for an edit.
+- It goes as tasks go, within the minion's `get_tasks` allowance.
+
 ## tunnel
 
 A tunnel through the minion's host ([Tunnels](../minion-messages/tunnels/)):
@@ -1062,6 +1095,13 @@ before stay valid. A change that cannot be made that way is a new name
   record of moves) stays the connection it was, and failover tries the new
   one after the ones it had: the order changes only when the operator
   edits it, not as a side effect of adding one.
+- **A removal moves the places after it, and says so.** A minion's
+  connections are a list without gaps, in the order failover tries them,
+  so the ones after a removed one move up. The `connection_update` that
+  follows says where the one in use went (`conn`), so core keeps it as the
+  same connection rather than recording a move, and core moves its own
+  places with the list. The one in use, and the last, cannot go: a minion
+  is never left without a connection it is using.
 
 - **Why core's vocabulary, not each factory's own shapes.** A factory could
   declare a schema for its `data` and the web app draw a generic table from

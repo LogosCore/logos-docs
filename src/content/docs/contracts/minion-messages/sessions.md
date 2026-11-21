@@ -2,6 +2,12 @@
 title: "Sessions"
 ---
 
+:::note[Status]
+Built, but for `connection_update`'s `conn` (key 2), which
+[`remove_connection`](../../task-results-and-actions/#remove_connection)
+brings: an agreed design, not built yet.
+:::
+
 Every **new process** of a build ends up in a **session** of its own before
 it does anything else. A session is what operators see in the Sessions page,
 and what tasks are given to. This page covers how a process gets one (staging
@@ -456,6 +462,9 @@ connection_update = {
   0: 31,                ; t: connection_update
   1: [+ connection],    ; connections: the minion's connections now, in
                         ;   the order it tries them, as a hello's (18)
+  ? 2: uint,            ; conn: the connection in use, its place in this
+                        ;   list, when the list moved it (one before it
+                        ;   removed); absent: the place it had
 }
 ```
 
@@ -471,14 +480,17 @@ schedule with a `sleep_update`:
   `conn`, every later `conn_update` and the session's view use it from
   then on. A minion whose hello said none starts having its own here, in
   place of the build's.
-- The connection in use stays the same place. A list too short for it is
-  refused: say the move first, with a `conn_update` before the
-  `connection_update` (in the same message, or an earlier one). Items are
-  taken in their order: a `conn_update` after it names a place in the new
-  list. A list that does
-  not pass gets `bad_message`, and the session keeps the one it had.
+- The connection in use stays the same place, unless the update says
+  where it is now (`conn`): a list that moved it, a connection before it
+  [removed](../../task-results-and-actions/#remove_connection), says its new
+  place, which core takes as the same connection. A list too short for
+  the place in use is refused: say the move first, with a `conn_update`
+  before the `connection_update` (in the same message, or an earlier one).
+  Items are taken in their order: a `conn_update` after it names a place
+  in the new list. A list that does not pass, or a `conn` past it, gets
+  `bad_message`, and the session keeps the one it had.
 - No move is recorded: the list changed, not the connection the minion
-  uses.
+  uses. The moves recorded before keep the places they had then.
 
 ## Feedback
 
