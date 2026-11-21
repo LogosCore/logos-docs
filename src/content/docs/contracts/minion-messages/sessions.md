@@ -2,12 +2,6 @@
 title: "Sessions"
 ---
 
-:::note[Status]
-Built, but for `connection_update`'s `removed` (key 2), which
-[`remove_connection`](../../task-results-and-actions/#remove_connection)
-brings: an agreed design, not built yet.
-:::
-
 Every **new process** of a build ends up in a **session** of its own before
 it does anything else. A session is what operators see in the Sessions page,
 and what tasks are given to. This page covers how a process gets one (staging
