@@ -968,9 +968,10 @@ connection as [`switch_connection`](#switch_connection) does.
 - **The minion** takes it out, the ones after it each moving up a place,
   and says its connections again, whole, with a
   [`connection_update`](../minion-messages/sessions/#refreshing-the-connections)
-  whose `conn` says the place of the one in use when it moved. Core takes
-  the list as any update, records no move, and moves its own places with
-  it: the one in use, and a target's that named a later one.
+  whose `removed` says the place it took out. Core takes the list as any
+  update and moves what it keeps with it: the names of the ones after it,
+  and the place in use when it was after it, recording no move. A target
+  names its build's connection, which a removal leaves as it is.
 - **No result.** The task's output says what it removed ("connection 2: ws
   removed"), and it fails when the minion cannot ("connection 2 is in use";
   its only one; no connection 4).
@@ -1098,10 +1099,13 @@ before stay valid. A change that cannot be made that way is a new name
 - **A removal moves the places after it, and says so.** A minion's
   connections are a list without gaps, in the order failover tries them,
   so the ones after a removed one move up. The `connection_update` that
-  follows says where the one in use went (`conn`), so core keeps it as the
-  same connection rather than recording a move, and core moves its own
-  places with the list. The one in use, and the last, cannot go: a minion
-  is never left without a connection it is using.
+  follows says which place went (`removed`): a minion knows few of its
+  connections' names, so core, which keeps them by place, could not tell
+  otherwise which went, and would shift the names onto the wrong
+  connections. Knowing it, core moves the names and the place in use with
+  the list, the same connection kept rather than a move recorded. The one
+  in use, and the last, cannot go: a minion is never left without a
+  connection it is using.
 
 - **Why core's vocabulary, not each factory's own shapes.** A factory could
   declare a schema for its `data` and the web app draw a generic table from

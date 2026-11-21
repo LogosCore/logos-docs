@@ -797,8 +797,9 @@ when the minion has a command for it. **Removing** one is
 [`remove_connection`](../task-results-and-actions/#remove_connection) (a
 draft): core gives its place (`conn`), never the one in use, the only one
 or one a target names; the minion takes it out, the ones after it moving
-up a place, and its `connection_update` says where the one in use went.
-Core moves its own places with the list, a target's among them. Each
+up a place, and its `connection_update` says which place it took out
+(`removed`). Core moves the names it keeps and the place in use with the
+list; a target names its build's connection, which stays as it is. Each
 connection but the one in use has a **Remove** button when the minion has
 a command for it.
 

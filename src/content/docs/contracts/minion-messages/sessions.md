@@ -3,7 +3,7 @@ title: "Sessions"
 ---
 
 :::note[Status]
-Built, but for `connection_update`'s `conn` (key 2), which
+Built, but for `connection_update`'s `removed` (key 2), which
 [`remove_connection`](../../task-results-and-actions/#remove_connection)
 brings: an agreed design, not built yet.
 :::
@@ -462,9 +462,9 @@ connection_update = {
   0: 31,                ; t: connection_update
   1: [+ connection],    ; connections: the minion's connections now, in
                         ;   the order it tries them, as a hello's (18)
-  ? 2: uint,            ; conn: the connection in use, its place in this
-                        ;   list, when the list moved it (one before it
-                        ;   removed); absent: the place it had
+  ? 2: uint,            ; removed: the place, in the list before, of the
+                        ;   connection it took out (remove_connection);
+                        ;   absent: none taken out
 }
 ```
 
@@ -480,15 +480,19 @@ schedule with a `sleep_update`:
   `conn`, every later `conn_update` and the session's view use it from
   then on. A minion whose hello said none starts having its own here, in
   place of the build's.
-- The connection in use stays the same place, unless the update says
-  where it is now (`conn`): a list that moved it, a connection before it
-  [removed](../../task-results-and-actions/#remove_connection), says its new
-  place, which core takes as the same connection. A list too short for
-  the place in use is refused: say the move first, with a `conn_update`
-  before the `connection_update` (in the same message, or an earlier one).
-  Items are taken in their order: a `conn_update` after it names a place
-  in the new list. A list that does not pass, or a `conn` past it, gets
-  `bad_message`, and the session keeps the one it had.
+- The connection in use stays the same place. A list too short for it is
+  refused: say the move first, with a `conn_update` before the
+  `connection_update` (in the same message, or an earlier one). Items are
+  taken in their order: a `conn_update` after it names a place in the new
+  list. A list that does not pass gets `bad_message`, and the session
+  keeps the one it had.
+- **A connection taken out** ([`remove_connection`](../../task-results-and-actions/#remove_connection))
+  is said by its place in the list before (`removed`): the ones after it
+  moved up a place, and core moves what it keeps with them. The names it
+  keeps for unnamed entries skip the removed one's, and the place in use,
+  when it was after it, is one less: the same connection, no move. An
+  update that says it removed the connection in use, or a place past the
+  list before, gets `bad_message`.
 - No move is recorded: the list changed, not the connection the minion
   uses. The moves recorded before keep the places they had then.
 
