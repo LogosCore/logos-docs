@@ -70,7 +70,7 @@ minion does, what its build asks of it, and what it may leave out.
 | `reack` | It answers `unknown_item`, and core's tasks stay as they were; a `cancel` still ends one it lacks. Worth taking with a persisted session or a `bind-persistent` connection, where core asks. |
 | `feedback` | Its operators see nothing of its troubles but the host's log. |
 | `max_tasks` in the `hello` (a schema without the flag) | The session shows "max not reported". |
-| The `hello`'s other fields: host, user, domain, process, integrity, addresses, version, `x` | Core shows what it was told. |
+| The `hello`'s other fields: host, user, domain, process, integrity, addresses, version, `roundtrip_time`, `x` | Core shows what it was told. |
 | A `hello` again under its session, when its host or process changes | Core keeps what the last one said. Core itself sends `rehello` today only as a `bind-call` page's first call. |
 | Packing its own items | Its messages go unpacked. |
 | Guarding against replays of core's messages: remembering their ids (a day's task ids, say), or, keeping nothing (a page), refusing a message whose `at` is more than 10 minutes from its clock with `err` `stale` | Core does not rely on it: a captured core message sent to the minion again runs again ([Freshness and replay](../../contracts/minion-messages/wire-format/#freshness-and-replay)). |

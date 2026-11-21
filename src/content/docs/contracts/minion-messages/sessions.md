@@ -114,6 +114,10 @@ hello = {
                         ;   tasks)
   ? 18: [+ connection], ; connections: the connections it has, in the
                         ;   order it tries them; absent: the build's
+  ? 19: uint,           ; roundtrip_time: milliseconds from sending a
+                        ;   message to core to the reply that answers it,
+                        ;   as the minion measured its latest; absent: it
+                        ;   has none to say
 }
 
 connection = {
@@ -194,6 +198,18 @@ text.
   the build's connections, as before. A rehello with a list replaces the
   one the session kept; one without keeps it. A `connection_update`
   ([Connections](#connections)) replaces it too, without a rehello.
+- `roundtrip_time` is the round trip the minion measured on its latest
+  exchange before the hello, in milliseconds: from sending a message to
+  core to receiving the reply that answers it (its `re`), by the minion's
+  own clock. A staged minion's first hello says its `stage`'s, and a
+  rehello its latest check-in's. A minion that has had no exchange yet (a
+  first hello under the build id) leaves it out, and so does a `bind-call`
+  page: it answers core's calls, and never waits on a reply of its own.
+  Core only shows it: in the session's details, and in the tooltip of the
+  Sessions table's **Last seen**. A rehello that says it replaces it; one
+  without keeps the last. A session whose hellos never said one (a minion
+  built before the field, a `bind-call` page) shows none: no row in its
+  details, no line in the tooltip.
 - A factory's own fields go under `x`, so a key core adds later never
   collides with one of them. Nothing declares them: core keeps them with
   the session as they came, and the session's details list them by their
@@ -381,7 +397,8 @@ minion, and a lost minion that checks in again is on time at once. In the
 Sessions page, "Last seen" is green while a session is on time or connected
 (a persistent connection serving it open), yellow once it is late and red
 once it is lost, and its filter picks any of the three: "on time or
-connected", "late", "lost". Core records a session connected when its first
+connected", "late", "lost". Its tooltip shows the round trip the minion
+last said ([`roundtrip_time`](#hello)), when it said one. Core records a session connected when its first
 persistent connection opens and clears it when its last closes, and as core
 starts, since the connections went with the process before.
 
