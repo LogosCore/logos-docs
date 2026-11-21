@@ -81,6 +81,19 @@ minion's.
   not outlive a restart: their clients' connections close, and the minion's
   sockets for them close when it next says anything of them (core answers
   `tunnel_close` 3).
+- **Which port.** A tunnel whose `port` is 0 gets one its session took
+  before: the one it last took for the same use (the same front and, for a
+  forward or a desktop, the same destination; for a terminal, the same
+  program), then the last for the same front, then the last for any. A
+  session with none of those free gets one of the **least heated** ports at
+  random: the ports taken the fewest times, every operation's tunnels
+  counted, so tunnels spread over the range rather than coming back to its
+  first ports. Core keeps each session's uses (`operational_port_uses`: the
+  port, the front, the destination or program, how many times, the first
+  and the last), which go with their operation, and each port's heat
+  (`operational_port_heat`: how many times it was taken, and the last),
+  which holds nothing of an operation and stays. A port named is taken as
+  asked, and counted the same.
 - **Who.** An operator of the operation opens and closes them, through the
   task; every member sees which are open, and the operation's **Ports**
   lists them.
@@ -1369,6 +1382,16 @@ proxy, a terminal, a VPN) is core's work alone, with no factory release
 and no minion built again. Actions named after fronts (`socks_proxy`,
 `port_forward`) had a command serve one front, a minion that could carry a
 forward unable to, and every new front a protocol action and a rebuild.
+
+**A session's port comes back; a new one is a cold one.** An operator's
+tools hold a tunnel's port (a `proxychains` line, a saved RDP connection,
+a browser's proxy): opened again, the same tunnel on the same port keeps
+them working, so core offers it before any other. Without that, the first
+free port went to every new tunnel, and the range's first ports carried
+nearly all of them, each seen by whatever watches the network in front of
+core. Heat counts takings, not time held: a port's heat says how often
+tools were pointed at it, and a count that only grows still spreads new
+tunnels evenly, each cold port taken until it is as warm as the rest.
 
 **What an RDP desktop still shows its server.** Its defaults say nothing
 of the operator (above), but a desktop is still guacd's, not Windows'

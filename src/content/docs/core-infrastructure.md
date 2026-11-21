@@ -85,6 +85,7 @@ See [AMQP Routing Conventions](../contracts/amqp-conventions/) for the queues an
   | `minion_tasks`, `minion_task_parts`, `minion_files` | tasks, what they returned, and the files minions sent |
   | `fs_entries`, `fs_listings` | the [file browser](../contracts/file-browser/)'s view of each machine |
   | `operational_ports`, `minion_listeners` | [tunnels](../contracts/minion-messages/tunnels/)' ports on core, and minions' listeners |
+  | `operational_port_uses`, `operational_port_heat` | what each session took operational ports for, and how many times each port was taken |
 
   Next to them: users, operations and their members, login sessions (an
   insert-only record of who signed in; live sessions are in Redis), API keys,
