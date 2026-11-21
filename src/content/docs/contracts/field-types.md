@@ -126,7 +126,9 @@ and a format the UI does not know is ignored.
 | `connection` | `int` | One of a minion's connections, by its place from 1: a command's param, such as [`switch_connection`](../task-results-and-actions/#switch_connection)'s `conn`. A session's command form picks it from the session's connections by name, kind and address, and its console takes and completes it by name. |
 
 A `structured` value's `format` is another thing: core checks the value
-against it ([Structured values](../minion-build/#structured-values)).
+against it, and `connection` (a connection for the minion, sent in its
+numbered form; picked from the session's in the command form, then edited
+as JSON) is the one so far ([Structured values](../minion-build/#structured-values)).
 
 ## Design notes
 

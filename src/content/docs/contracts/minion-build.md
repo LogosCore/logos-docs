@@ -310,12 +310,25 @@ with the CBOR it reads every message with.
 a structured value against its format, and refuses a schema whose
 `structured` param names a format it does not know: a factory can declare
 only what core can check, and a minion gets only values its format allows.
-Each format is one row here, its JSON value and its rules; the CBOR form is
-the same for every format.
+Each format is one row here, its JSON value and its rules. The CBOR form is
+the value's own, except where a format says otherwise.
 
 | `format` | Value | Checked |
 |---|---|---|
 | none | any JSON value | size and depth alone |
+| `connection` | one connection, as a build's: `{"channel", "kind", "name"?, "version"?, "params"?, "values"?, "failover"?, "max_message"?}`, `params` the channel's fields for the kind and `values` the factory's connection parameters for the channel and kind, both by key; `failover` `{"auto"?, "fail_after"?}` | a channel core knows and a kind it carries; `params` against the channel's fields, `values` against the factory's connection parameters, as a build's connection; a slug `name`; `max_message` at most 768 KiB |
+
+**The `connection` format** hands a minion a connection to take on (a
+command that adds one, or changes one, say). Core checks it as a build's
+connection and sends the minion its numbered form, the one a hello's
+[`connections`](../minion-messages/sessions/#hello) and a
+`connection_update` carry: `{1: channel, 2: kind, 3: name, 4: version, 5:
+params, 6: values, 7: failover, 8: max_message}`, params and values by their
+fields' numbers, defaults filled in. Names are for operators, numbers for
+the minion, as everywhere a minion reads settings. Command params only, as
+any `structured`. In the command form, the session's connections are
+offered first: the one picked fills the JSON editor (none picked, an empty
+one), and the operator edits it there as any structured value.
 
 More formats come as rows of this table, each with core's checks and, when
 it needs one, the app's editor.
