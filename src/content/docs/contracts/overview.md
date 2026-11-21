@@ -104,7 +104,7 @@ Every contract in this section follows the same baseline:
 | [Module Logs](../module-logs/) | The live log tail | Core ↔ Module | Prototype |
 | [HTTP Sync](../channel-core-sync/) | The sync call | Channel ↔ Core | Built; channels are not authenticated yet |
 | [Minion Connection Schema](../minion-connection/) | What a minion is given to reach a channel, per connection kind | Channel → Core | Built |
-| [Connections](../channel-core-connections/) | The connection kinds, the control link, connection sockets, targets, failover | Channel ↔ Core | Built; `add_connection` a draft |
+| [Connections](../channel-core-connections/) | The connection kinds, the control link, connection sockets, targets, failover | Channel ↔ Core | Built |
 | [Agentless Channels](../agentless-channels/) | `bind` kinds whose channel acts as the minion | Channel ↔ Core | Built |
 | [Minion Build](../minion-build/) | Build schemas, builds, the minion config, minion error codes | Core ↔ Factory | Built; `structured` params a draft |
 | [Task Outsourcing](../task-outsourcing/) | Composite commands: their factory's code runs the session's other commands as subtasks, before and after the command's own op | Core ↔ Factory | Built |
@@ -114,7 +114,7 @@ Every contract in this section follows the same baseline:
 | [VPN Front](../vpn-front/) | An operator's machine routed into a minion's networks | VPN client ↔ Core ↔ Minion | Built; not yet run on a real network |
 | [Delegation](../minion-messages/delegation/) | A minion serving a channel's transport for other minions | Minion ↔ Core | Built |
 | [Codecs](../minion-messages/codecs/) | Core's envelopes and suite, or a factory's own, translated over its factory link | Core ↔ Factory | Built |
-| [Task Results and Actions](../task-results-and-actions/) | A task's data, and the commands core runs for its own views | Minion → Core | Built; `add_connection` a draft |
+| [Task Results and Actions](../task-results-and-actions/) | A task's data, and the commands core runs for its own views | Minion → Core | Built |
 | [File Browser](../file-browser/) | A machine's file system as tasks saw it | Core, from tasks' results | Built |
 
 A page about a design that is agreed but not built yet opens with a

@@ -2,11 +2,6 @@
 title: "Task Results and Actions"
 ---
 
-:::note[Status]
-Built, but for [`add_connection`](#add_connection): an agreed design, not
-built yet.
-:::
-
 A build command can say two things about itself, each by naming one of
 core's own:
 

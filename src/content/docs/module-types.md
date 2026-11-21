@@ -165,6 +165,4 @@ for a channel and `logos-golang-factory-core` for a factory. Then
 [Writing a Factory](../guides/writing-a-factory/) and
 [Writing a Minion](../guides/writing-a-minion/).
 
-Still open: giving a running minion a new connection
-([`add_connection`](../contracts/task-results-and-actions/#add_connection),
-a draft), and module packaging.
+Still open: module packaging.
