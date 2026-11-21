@@ -90,6 +90,7 @@ A command names them in the [build schema](../minion-build/#commands):
 | [`walk_dir`](#walk_dir) | `path` (string) | `dir_walk` | a listing's or the file browser's folder: Walk from here |
 | [`list_volumes`](#list_volumes) | nothing | `volumes` | the file browser's roots: Refresh, and once by itself |
 | [`switch_connection`](#switch_connection) | `conn` (int) | none | a session's connection: Switch to |
+| [`edit_connection`](#edit_connection) | `conn` (int), `connection` (structured) | none | a session's connection: Edit |
 | [`tunnel`](#tunnel) | nothing of the command's; core adds `front`, `port`, `host`, `to`, `stop_idle`, `cap`, and where the command opens them `path`, `source`, `tls`, `program`, `args`, `rows`, `cols` | none | the session's commands: core opens an operational port, a SOCKS proxy, an HTTP proxy, a forward to `host:to` or a terminal in front |
 | [`reverse_tunnel`](#reverse_tunnel) | `bind` (string), `listen` (int); `udp` (bool) in a command that opens `udp`; core adds `host`, `to`, `stop_idle`, `cap` | none | the session's commands: the minion listens at `bind:listen`, core connects each connection there to `host:to` (with `udp`, sends each source's datagrams on) |
 | [`delegate`](#delegate) | nothing of the command's (each of its params has a default); core adds `stop_idle` | none | core, when a target that names the session as its delegate needs one; the session's commands |
@@ -846,6 +847,31 @@ Moves the minion to another of its build's connections: what a session's
   after which the minion moves back (`0s` staying).
 - It goes as tasks go, within the minion's `get_tasks` allowance: a minion
   that takes no tasks takes no switch.
+
+## edit_connection
+
+Changes one of the minion's connections in place: its settings, its kind,
+or its channel. What a session's connection's **Edit** runs.
+
+- **Core gives** `conn`, an `int`: the connection's place in the minion's
+  connections, from 1 (its own when its hello or a `connection_update` said
+  them, else the build's), as for [`switch_connection`](#switch_connection);
+  and `connection`, a [`structured`](../minion-build/#structured-values)
+  value: the connection it becomes, whole. Both params should have the
+  [format](../field-types/#formats) `connection`. `conn` is then picked by
+  name, and `connection` is filled from one of the session's connections
+  and edited as JSON; core checks it against its channel's fields and the
+  factory's connection parameters and sends the minion its numbered form.
+- **The minion** puts the connection at that place, keeping the others and
+  their order, and says its connections again with a
+  [`connection_update`](../minion-messages/sessions/#refreshing-the-connections),
+  which the session shows. A connection it is using goes on with the new
+  settings from its next exchange; whether it can change the one under
+  way, or moves first, is the factory's to decide and say.
+- **No result.** The task's output says what changed ("connection 2: url
+  changed"), and it fails when the minion cannot take it (a channel or a
+  kind it was not built with: "this minion speaks no dns").
+- It goes as tasks go, within the minion's `get_tasks` allowance.
 
 ## tunnel
 

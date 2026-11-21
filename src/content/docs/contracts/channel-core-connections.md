@@ -795,6 +795,13 @@ operator **changes** it with a command.
 The session's view lists the build's connections with the one in use, and
 the changes it reported.
 
+**Editing** a connection is an action too,
+[`edit_connection`](../task-results-and-actions/#edit_connection): core
+gives its place (`conn`) and the connection it becomes (`connection`), and
+the minion says its connections again with a `connection_update`. The
+session's connection list has an **Edit** button on each connection when
+the minion has a command for it.
+
 **Switching** is an [action](../task-results-and-actions/#switch_connection):
 **`switch_connection`**, core giving the connection's place (`conn`). A
 factory maps it to a command of its own, which may take more: a `for`,
