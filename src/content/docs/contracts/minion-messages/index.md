@@ -136,7 +136,7 @@ everything as it comes, so operators never see the numbers.
 | 15 | `resume` | core | go on with a task from where its last part said | [Tasks and Results](tasks-and-results/#resuming-a-task) |
 | 16 | `poll` | core | come back sooner than the schedule: something may go on any moment | [Tasks and Results](tasks-and-results/#coming-back-sooner) |
 | 17 | `max_tasks` | both | how many tasks the minion runs at once: core sets it, the minion says what it has | [Tasks and Results](tasks-and-results/#max-tasks) |
-| 18 | `feedback` | minion | a warning or an error for its operators | [Sessions](sessions/#feedback) |
+| 18 | `feedback` | minion | an error, a warning or information for its operators | [Sessions](sessions/#feedback) |
 | 19 | `reack` | core | which of the tasks core thinks the minion runs it still has | [Tasks and results](tasks-and-results/#tasks-the-minion-lost) |
 | 20 | `identity` | minion | who its tasks, or a task, run as when not its process's own | [Identity](identity/) |
 | 21 | `tunnel` | both | opens a stream of a tunnel task: core's, or the minion's in a reverse tunnel | [Tunnels](tunnels/#streams) |

@@ -492,8 +492,9 @@ schedule with a `sleep_update`:
 
 ## Feedback
 
-A minion tells its operators what goes wrong on its side, what it would
-otherwise only log on the host, with `feedback` items:
+A minion tells its operators what goes wrong on its side, and what is worth
+their knowing, what it would otherwise only log on the host, with
+`feedback` items:
 
 ```cddl
 feedback = {
@@ -501,8 +502,8 @@ feedback = {
   1: bstr .size 8,      ; id: the minion's own, random: core keeps one entry
                         ;   per id in a session, so a message sent again
                         ;   adds nothing
-  2: uint,              ; level: 1 warning, 2 error; a later one reads as a
-                        ;   warning
+  2: uint,              ; level: 1 warning, 2 error, 3 info; a later one
+                        ;   reads as a warning
   3: tstr,              ; msg: what happened, for people, 1 KiB at most
   ? 4: tstr,            ; code: the factory's short tag for the kind of
                         ;   problem ("checkin_failed"): lowercase letters,
@@ -521,6 +522,8 @@ feedback = {
   the operation. The session counts the errors and warnings that came
   since someone last marked them read; read is the same for everyone of
   the operation (**Mark all read**).
+- **Info is never counted**: kept and shown as the others are, it marks
+  nothing, neither a session nor a task, and needs no marking read.
 - **Operators see it** in the Sessions table's **Feedback** column (unread
   errors and warnings, sorted and filtered by core), in the session's
   **Feedback** tab (newest first, paged, by level and by a word of its
@@ -531,7 +534,8 @@ feedback = {
 
 What a minion sends is its own: what it would only log, such as check-ins
 that failed several times in a row, a connection it refused, or a command
-that crashed (an error: the task fails, the minion goes on). A minion that
+that crashed (an error: the task fails, the minion goes on); info is what
+is no trouble but worth knowing, such as a fallback it took. A minion that
 keeps a bounded number unsent, and folds the same one into a count
 (`count`), sends no flood when a long outage ends.
 

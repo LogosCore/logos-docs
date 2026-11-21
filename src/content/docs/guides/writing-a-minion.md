@@ -68,7 +68,7 @@ minion does, what its build asks of it, and what it may leave out.
 | The schedule: the `hello`'s `sleep`, a `sleep_update` when it changes | Core takes a minion on a reverse kind to check in once a day: its session goes late only after a day. With a schedule, late and lost follow it. |
 | `poll` | The minion answers `unknown_item` and keeps its schedule. Streams and tunnels over `reverse-call` then go at its pace, not core's. |
 | `reack` | It answers `unknown_item`, and core's tasks stay as they were; a `cancel` still ends one it lacks. Worth taking with a persisted session or a `bind-persistent` connection, where core asks. |
-| `feedback` | Its operators see nothing of its troubles but the host's log. |
+| `feedback` | Its operators see nothing of its troubles, or of what it would tell them, but the host's log. |
 | `max_tasks` in the `hello` (a schema without the flag) | The session shows "max not reported". |
 | The `hello`'s other fields: host, user, domain, process, integrity, addresses, version, `roundtrip_time`, `x` | Core shows what it was told. |
 | A `hello` again under its session, when its host or process changes | Core keeps what the last one said. Core itself sends `rehello` today only as a `bind-call` page's first call. |

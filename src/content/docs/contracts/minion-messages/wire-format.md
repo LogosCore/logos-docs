@@ -385,7 +385,7 @@ keys](../sessions/#stage), and the data of each of core's
 | Identity scopes | the session's 1, one task's 2 | [Identity](../identity/) |
 | Identity ways (`how`) | impersonation 1, network 2, become 3 | [Identity](../identity/) |
 | Machine id sources | `smbios-uuid` 1 … `ephemeral` 10, `ssh-host-key` 11 | [Sessions](../sessions/#machine-identity) |
-| Feedback levels | warning 1, error 2 | [Sessions](../sessions/#feedback) |
+| Feedback levels | warning 1, error 2, info 3 | [Sessions](../sessions/#feedback) |
 | Entry types | `dir` 1, `file` 2, `link` 3, `other` 4 | [Listings](../tasks-and-results/#listings) |
 | Listing errors | denied 1, not found 2, other 3 | [Listings](../tasks-and-results/#listings) |
 | Tunnel results | open 0, refused 1, host unreachable 2, network unreachable 3, timed out 4, not allowed 5, failed 6, unsupported 7, not found 8, denied 9, in use 10 (from 0) | [Tunnels](../tunnels/#streams) |
