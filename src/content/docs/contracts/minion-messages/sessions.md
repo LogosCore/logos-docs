@@ -449,8 +449,10 @@ schedule with a `sleep_update`:
   then on. A minion whose hello said none starts having its own here, in
   place of the build's.
 - The connection in use stays the same place. A list too short for it is
-  refused: say the move first (a `conn_update` in the same message, after
-  the `connection_update`, names a place in the new list). A list that does
+  refused: say the move first, with a `conn_update` before the
+  `connection_update` (in the same message, or an earlier one). Items are
+  taken in their order: a `conn_update` after it names a place in the new
+  list. A list that does
   not pass gets `bad_message`, and the session keeps the one it had.
 - No move is recorded: the list changed, not the connection the minion
   uses.
