@@ -117,7 +117,7 @@ Every contract in this section follows the same baseline:
 | [VPN Front](../vpn-front/) | An operator's machine routed into a minion's networks | VPN client ↔ Core ↔ Minion | Built; not yet run on a real network |
 | [Delegation](../minion-messages/delegation/) | A minion serving a channel's transport for other minions | Minion ↔ Core | Built |
 | [Codecs](../minion-messages/codecs/) | Core's envelopes and suite, or a factory's own, translated over its factory link | Core ↔ Factory | Built |
-| [Task Results and Actions](../task-results-and-actions/) | A task's data, and the commands core runs for its own views | Minion → Core | Built |
+| [Task Results and Actions](../task-results-and-actions/) | A task's data, and the commands core runs for its own views | Minion → Core | Built; `process_list` a draft |
 | [File Browser](../file-browser/) | A machine's file system as tasks saw it | Core, from tasks' results | Built |
 
 A page about a design that is agreed but not built yet opens with a

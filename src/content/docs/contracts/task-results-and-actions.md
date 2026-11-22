@@ -78,6 +78,7 @@ A command names them in the [build schema](../minion-build/#commands):
 | [`dir_walk`](#dir_walk) | Where a walk through a directory stands (its listings go to the file browser) | Its progress, Open in File Browser |
 | [`volumes`](#volumes) | The host's volumes: its drives, its mounts (each a folder of the file browser) | A table of them: kind, file system, space |
 | [`screenshot`](#screenshot) | A picture of the host's screen the minion sent core: which one | The picture, in its file's Preview |
+| [`process_list`](#process_list) | The host's processes (a draft) | A table of them, a tree at first: Kill, List its folder, Download |
 
 | Action | Core gives | Needs result | Run from |
 |---|---|---|---|
@@ -89,6 +90,8 @@ A command names them in the [build schema](../minion-build/#commands):
 | [`stream_file`](#stream_file) | `path` (string) | `file_stream` | a listing's file: Stream |
 | [`walk_dir`](#walk_dir) | `path` (string) | `dir_walk` | a listing's or the file browser's folder: Walk from here |
 | [`list_volumes`](#list_volumes) | nothing | `volumes` | the file browser's roots: Refresh, and once by itself |
+| [`list_processes`](#list_processes) | nothing | `process_list` | a process list's Refresh (a draft) |
+| [`kill_process`](#kill_process) | `pid` (int), `started` (int), `force` (bool) | none | a process list's process: Kill (a draft) |
 | [`switch_connection`](#switch_connection) | `conn` (int) | none | a session's connection: Switch to |
 | [`edit_connection`](#edit_connection) | `conn` (int), `connection` (structured) | none | a session's connection: Edit |
 | [`add_connection`](#add_connection) | `connection` (structured) | none | a session's connections: Add connection |
@@ -98,8 +101,9 @@ A command names them in the [build schema](../minion-build/#commands):
 | [`delegate`](#delegate) | nothing of the command's (each of its params has a default); core adds `stop_idle` | none | core, when a target that names the session as its delegate needs one; the session's commands |
 | [`reverse_delegate`](#reverse_delegate) | nothing (its params are the factory's: where it listens); core adds `stop_idle` | none | the session's commands |
 
-More come as commands need them (a process list); each gets a section here
-first, and a release of the protocol and core.
+More come as commands need them: each gets a section here first, then a
+release of the protocol and core. `process_list`, `list_processes` and
+`kill_process` have theirs, as drafts.
 
 ## Running an action
 
@@ -827,6 +831,163 @@ pixels and its screen where a download's give its path, and its small
 picture beside Download is the thumbnail. The toggle shows the task's data
 as raw JSON.
 
+## process_list
+
+:::caution[Draft]
+A design, not built yet: `process_list`, and its actions
+[`list_processes`](#list_processes) and [`kill_process`](#kill_process).
+:::
+
+The host's processes: the result of a command that lists them (a `ps`, a
+`processes`), those the minion sees (on Linux, its PID namespace's: a
+container's own):
+
+```cddl
+process-list = {
+  sep: "/" / "\\",          ; the host's path separator, on every part
+  ? processes: [* process], ; some of them, in any order
+  ? x: { * tstr => any },
+}
+
+process = {
+  pid: uint,
+  ? ppid: uint,             ; its parent's pid, as the host keeps it, the
+                            ;   parent alive or not; left out for none
+  name: tstr,               ; its image's name, without a path: "sshd",
+                            ;   "svchost.exe"
+  ? path: tstr,             ; its executable, absolute, as the host writes it
+  ? cmdline: tstr,          ; its command line as the host shows it: a
+                            ;   Windows process's own, a Unix one's args
+                            ;   joined by spaces
+  ? user: tstr,             ; who it runs as, as the host names them: "root",
+                            ;   "CORP\\ann", "NT AUTHORITY\\SYSTEM"
+  ? started: int,           ; when it started, unix seconds
+  ? session: uint,          ; Windows: the session it runs in, 0 for services
+  ? integrity: "low" / "medium" / "high" / "system" / "root" / "user",
+                            ; as the hello's: its token's level on Windows,
+                            ;   root or user (its effective uid) on Unix
+  ? arch: tstr,             ; GOARCH-style, as the hello's: "386" for a
+                            ;   32-bit process on 64-bit Windows
+  ? threads: uint,
+  ? memory: uint,           ; bytes resident: its working set, its RSS
+  ? cpu_time: uint,         ; milliseconds of CPU it used, user and kernel
+  ? state: "running" / "sleeping" / "waiting" / "stopped" / "zombie",
+                            ; waiting: in the kernel, uninterruptible (D);
+                            ;   stopped: by a signal, or every thread
+                            ;   suspended (Windows); zombie: ended, not yet
+                            ;   reaped by its parent
+  ? x: { * tstr => any },
+}
+```
+
+On the wire: `sep` 1, `processes` 2, `x` 3; a process's `pid` 1, `ppid` 2,
+`name` 3, `path` 4, `cmdline` 5, `user` 6, `started` 7, `session` 8,
+`integrity` 9, `arch` 10, `threads` 11, `memory` 12, `cpu_time` 13, `state`
+14, `x` 15. `integrity` goes by the hello's numbers (`low` 1 … `user` 6),
+`state` by its own: `running` 1, `sleeping` 2, `waiting` 3, `stopped` 4,
+`zombie` 5. Core keeps their names, as it does a listing's entry types; one
+a later version adds shows by its number. The
+[Registry](../minion-messages/wire-format/#registry) takes these numbers
+with the release that builds them.
+
+- **In parts, if it takes several**, as `volumes` may: core joins them by
+  the generic rule, the processes appended in `seq` order. A list past a
+  task's 4 MiB (tens of thousands of processes, or very long command lines)
+  is truncated, as any task's data, and its view says it is not whole.
+- **Checked as it comes**: `sep` on every part; each process a pid and a
+  name; a path absolute for the host's `sep`. A pid the data gives twice
+  shows once, as it first came.
+- **What the minion could read.** A process it may not open (another
+  user's, a protected one) has what it could read of it: its pid and its
+  name at least.
+- **Not the file system's.** The [file browser](../file-browser/) takes
+  nothing from it; a process's path opens its folder there when an operator
+  asks (its view, below).
+- **This session's minion** is the process whose pid its latest
+  [hello](../minion-messages/sessions/#hello) said: core marks it, the data
+  says nothing of it.
+
+More of a process's actions come as commands need them: suspend and resume,
+a memory dump (a `file_download`), its modules and handles.
+
+### View
+
+The task's Data tab shows the list as a table, read from core a page at a
+time, searched and sorted by core:
+
+- **A tree** at first: each process under its parent, siblings in the order
+  they started, then by pid. A process whose parent is not in the list (it
+  ended, or the chain of parents loops back, as reused pids on Windows can
+  make it) is a root.
+- **Flat**, sorted by a column: pid, name, user, memory, CPU time, started
+  or threads, either way.
+- **A search** matches the name, the pid, the user, the path and the
+  command line. In the tree, a match shows under its ancestors, muted where
+  they do not match.
+- **Its columns**: pid; name, indented by depth, this session's minion
+  marked; user; memory; CPU time; started; the command line, whole in its
+  title. Integrity, session, state and architecture where the list has
+  them: the architecture where it is not the host's (the hello's), the
+  state where it is not running or sleeping.
+- **A process's context menu**: copy its pid, name, path or command line;
+  **Kill…** ([`kill_process`](#kill_process)): a confirmation first, with
+  the process's name and pid, **Force** (off), and for this session's
+  minion a warning that the minion ends with it. Where it has a path, **List
+  its folder** ([`list_dir`](#list_dir), the path up to its last `sep`) and
+  **Download** ([`download_file`](#download_file)). Each runs the session's
+  commands with the action, a submenu when there are several.
+- **Refresh**, above the table, runs [`list_processes`](#list_processes): a
+  new task, which the view opens.
+
+GraphQL's `minionTaskProcesses(taskId, search, order, desc, first, after)`
+gives a page of a task's processes to a member of its operation (50, at
+most 500), each with its `depth` in the tree, its `children` in the list,
+`minion` (this session's) and `context` (shown for a match below it, not
+matching itself); `order` is `TREE` (the default), `PID`, `NAME`, `USER`,
+`MEMORY`, `CPU_TIME`, `STARTED` or `THREADS`, and `totalCount` counts the
+matches. Core reads the task's data, joined, and orders it for each page.
+The toggle shows the data as raw JSON.
+
+## list_processes
+
+:::caution[Draft]
+A design, not built yet.
+:::
+
+Lists the host's processes: what a process list's Refresh runs.
+
+- **Core gives** nothing: a command of it takes no param core must give,
+  and its own have defaults (a command may leave out command lines, or
+  Linux's kernel threads, by a param of its own).
+- **The result is a `process_list`.**
+
+## kill_process
+
+:::caution[Draft]
+A design, not built yet.
+:::
+
+Ends a process on the host: what a process list's Kill runs.
+
+- **Core gives** `pid`, an `int`: the process; `started`, an `int`: when it
+  started, unix seconds, as the list said it, or 0 when the list did not
+  say; `force`, a `bool`.
+- **No result.** The task's output says what it did. The list stays as it
+  was read: Refresh shows the process gone.
+- **The process listed, or none.** Pids are reused: given a `started`, the
+  minion ends the process only if the one with that pid started then (to
+  the second), and fails the task otherwise, saying the pid is another
+  process's now. Given 0, it ends whatever has the pid.
+- **`force`**: off, the minion asks the process to end where the host has a
+  way every process gets (SIGTERM on Unix: it may clean up first, or not
+  end at all); on, it ends it at once (SIGKILL; Windows' TerminateProcess).
+  Windows has no ask that every process heeds: a minion ends the process
+  at once either way, unless its factory says otherwise.
+- **Its own process** the minion ends last: it sends the task's done part,
+  then exits.
+- The task fails, saying why, for a pid no process has, or a process the
+  minion may not end (another user's, a protected one).
+
 ## switch_connection
 
 Moves the minion to another of its build's connections: what a session's
@@ -1140,6 +1301,25 @@ before stay valid. A change that cannot be made that way is a new name
   no file system. It also has what a file has not (its size in pixels, its
   screen), and opens as a picture. So it is a result of its own that moves
   as a download does: the same chunks, bucket and checks.
+- **Why a process list is a result of core's.** A factory's own data in a
+  table could not offer Kill on a row, nor know which row is the minion:
+  core knows both of a `process_list`.
+- **Why `kill_process` takes the start time.** The list was read some time
+  before Kill, and a pid comes back once its process ends: Windows hands
+  them out again soon. A pid and a start time name one process, so the
+  minion ends the one listed, or none.
+- **Why core pages and orders the list.** A server runs thousands of
+  processes: the view reads a page at a time, as every table of the web app
+  does, and core searches, sorts and builds the tree over the whole list.
+- **Why CPU time, not a percent.** A percent is a rate: two readings, some
+  time apart. A list is one reading, and the CPU time used is what it holds.
+  A factory that samples may give a percent under `x`.
+- **Why core marks the minion's process.** Its hello says its pid: data
+  that said it too could only disagree.
+- **Why the hello's integrity numbers.** The same levels, with the same
+  meaning: one set in the Registry.
+- **Why `sep`.** A process's folder, for List its folder, is its path up to
+  its last separator, which only the host's `sep` says, as for `volumes`.
 - **Why the picture is a kept file, not `data`.** A screen's PNG runs to
   megabytes: past one message, and past a task's 4 MiB of output and data.
   Kept, it has what a download has: chunks that resume, its type read from
