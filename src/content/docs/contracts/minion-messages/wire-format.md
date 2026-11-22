@@ -381,13 +381,14 @@ keys](../sessions/#stage), and the data of each of core's
 | Set | Numbers | Defined in |
 |---|---|---|
 | Err codes | `bad_message` 1 … `stale` 7 | [Errors](#errors) |
-| Integrity levels | `low` 1, `medium` 2, `high` 3, `system` 4, `root` 5, `user` 6 | [Sessions](../sessions/#hello) |
+| Integrity levels | `low` 1, `medium` 2, `high` 3, `system` 4, `root` 5, `user` 6 | [Sessions](../sessions/#hello), [`process_list`](../../task-results-and-actions/#process_list) |
 | Identity scopes | the session's 1, one task's 2 | [Identity](../identity/) |
 | Identity ways (`how`) | impersonation 1, network 2, become 3 | [Identity](../identity/) |
 | Machine id sources | `smbios-uuid` 1 … `ephemeral` 10, `ssh-host-key` 11 | [Sessions](../sessions/#machine-identity) |
 | Feedback levels | warning 1, error 2, info 3 | [Sessions](../sessions/#feedback) |
 | Entry types | `dir` 1, `file` 2, `link` 3, `other` 4 | [Listings](../tasks-and-results/#listings) |
 | Listing errors | denied 1, not found 2, other 3 | [Listings](../tasks-and-results/#listings) |
+| Process states | `running` 1, `sleeping` 2, `waiting` 3, `stopped` 4, `zombie` 5 | [`process_list`](../../task-results-and-actions/#process_list) |
 | Tunnel results | open 0, refused 1, host unreachable 2, network unreachable 3, timed out 4, not allowed 5, failed 6, unsupported 7, not found 8, denied 9, in use 10 (from 0) | [Tunnels](../tunnels/#streams) |
 | Tunnel close reasons | done 1, reset 2, no such stream 3, task ended 4 | [Tunnels](../tunnels/#streams) |
 | Tunnel open kinds | unix socket 1, named pipe 2, process 3, accept 4, ICMP 5 | [Tunnels](../tunnels/#streams), [VPN front](../../vpn-front/#icmp) |

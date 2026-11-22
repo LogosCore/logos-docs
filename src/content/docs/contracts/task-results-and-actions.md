@@ -78,7 +78,7 @@ A command names them in the [build schema](../minion-build/#commands):
 | [`dir_walk`](#dir_walk) | Where a walk through a directory stands (its listings go to the file browser) | Its progress, Open in File Browser |
 | [`volumes`](#volumes) | The host's volumes: its drives, its mounts (each a folder of the file browser) | A table of them: kind, file system, space |
 | [`screenshot`](#screenshot) | A picture of the host's screen the minion sent core: which one | The picture, in its file's Preview |
-| [`process_list`](#process_list) | The host's processes (a draft) | A table of them, a tree at first: Kill, List its folder, Download |
+| [`process_list`](#process_list) | The host's processes | A table of them, a tree at first: Kill, List its folder, Download |
 
 | Action | Core gives | Needs result | Run from |
 |---|---|---|---|
@@ -90,8 +90,8 @@ A command names them in the [build schema](../minion-build/#commands):
 | [`stream_file`](#stream_file) | `path` (string) | `file_stream` | a listing's file: Stream |
 | [`walk_dir`](#walk_dir) | `path` (string) | `dir_walk` | a listing's or the file browser's folder: Walk from here |
 | [`list_volumes`](#list_volumes) | nothing | `volumes` | the file browser's roots: Refresh, and once by itself |
-| [`list_processes`](#list_processes) | nothing | `process_list` | a process list's Refresh (a draft) |
-| [`kill_process`](#kill_process) | `pid` (int), `started` (int), `force` (bool) | none | a process list's process: Kill (a draft) |
+| [`list_processes`](#list_processes) | nothing | `process_list` | a process list's Refresh |
+| [`kill_process`](#kill_process) | `pid` (int), `started` (int), `force` (bool) | none | a process list's process: Kill |
 | [`switch_connection`](#switch_connection) | `conn` (int) | none | a session's connection: Switch to |
 | [`edit_connection`](#edit_connection) | `conn` (int), `connection` (structured) | none | a session's connection: Edit |
 | [`add_connection`](#add_connection) | `connection` (structured) | none | a session's connections: Add connection |
@@ -102,8 +102,7 @@ A command names them in the [build schema](../minion-build/#commands):
 | [`reverse_delegate`](#reverse_delegate) | nothing (its params are the factory's: where it listens); core adds `stop_idle` | none | the session's commands |
 
 More come as commands need them: each gets a section here first, then a
-release of the protocol and core. `process_list`, `list_processes` and
-`kill_process` have theirs, as drafts.
+release of the protocol and core.
 
 ## Running an action
 
@@ -833,11 +832,6 @@ as raw JSON.
 
 ## process_list
 
-:::caution[Draft]
-A design, not built yet: `process_list`, and its actions
-[`list_processes`](#list_processes) and [`kill_process`](#kill_process).
-:::
-
 The host's processes: the result of a command that lists them (a `ps`, a
 `processes`), those the minion sees (on Linux, its PID namespace's: a
 container's own):
@@ -886,12 +880,12 @@ On the wire: `sep` 1, `processes` 2, `x` 3; a process's `pid` 1, `ppid` 2,
 14, `x` 15. `integrity` goes by the hello's numbers (`low` 1 … `user` 6),
 `state` by its own: `running` 1, `sleeping` 2, `waiting` 3, `stopped` 4,
 `zombie` 5. Core keeps their names, as it does a listing's entry types; one
-a later version adds shows by its number. The
-[Registry](../minion-messages/wire-format/#registry) takes these numbers
-with the release that builds them.
+a later version adds shows by its number. Both sets are in the
+[Registry](../minion-messages/wire-format/#registry).
 
 - **In parts, if it takes several**, as `volumes` may: core joins them by
-  the generic rule, the processes appended in `seq` order. A list past a
+  the generic rule, the processes appended in `seq` order (`ProcessList`,
+  `ReadProcessList` in the protocol package). A list past a
   task's 4 MiB (tens of thousands of processes, or very long command lines)
   is truncated, as any task's data, and its view says it is not whole.
 - **Checked as it comes**: `sep` on every part; each process a pid and a
@@ -919,14 +913,16 @@ time, searched and sorted by core:
   they started, then by pid. A process whose parent is not in the list (it
   ended, or the chain of parents loops back, as reused pids on Windows can
   make it) is a root.
-- **Flat**, sorted by a column: pid, name, user, memory, CPU time, started
-  or threads, either way.
+- **Flat**, sorted by a column's header, either way (a second click: the
+  other way; memory, CPU time, threads and started the largest or the
+  latest first), until **Tree** goes back: pid, name, user, memory, CPU
+  time, threads or started.
 - **A search** matches the name, the pid, the user, the path and the
   command line. In the tree, a match shows under its ancestors, muted where
   they do not match.
 - **Its columns**: pid; name, indented by depth, this session's minion
-  marked; user; memory; CPU time; started; the command line, whole in its
-  title. Integrity, session, state and architecture where the list has
+  marked; user; memory; CPU time; threads; started; the command line, whole
+  in its title. Integrity, session, state and architecture where the list has
   them: the architecture where it is not the host's (the hello's), the
   state where it is not running or sleeping.
 - **A process's context menu**: copy its pid, name, path or command line;
@@ -944,15 +940,11 @@ gives a page of a task's processes to a member of its operation (50, at
 most 500), each with its `depth` in the tree, its `children` in the list,
 `minion` (this session's) and `context` (shown for a match below it, not
 matching itself); `order` is `TREE` (the default), `PID`, `NAME`, `USER`,
-`MEMORY`, `CPU_TIME`, `STARTED` or `THREADS`, and `totalCount` counts the
-matches. Core reads the task's data, joined, and orders it for each page.
+`MEMORY`, `CPU_TIME`, `STARTED` or `THREADS`; `totalCount` counts the
+matches, and `sep` is the host's separator. Core reads the task's data, joined, and orders it for each page.
 The toggle shows the data as raw JSON.
 
 ## list_processes
-
-:::caution[Draft]
-A design, not built yet.
-:::
 
 Lists the host's processes: what a process list's Refresh runs.
 
@@ -962,10 +954,6 @@ Lists the host's processes: what a process list's Refresh runs.
 - **The result is a `process_list`.**
 
 ## kill_process
-
-:::caution[Draft]
-A design, not built yet.
-:::
 
 Ends a process on the host: what a process list's Kill runs.
 
