@@ -425,8 +425,8 @@ does when they build it: a minion built for one job carries nothing more.
   runs the session's other commands as subtasks before and after the
   command's own op, or in its place for a command with no `op`, which never
   reaches the minion ([Task Outsourcing](../task-outsourcing/)).
-- A factory may also declare **factory commands** (`factory_commands`;
-  factory-core does not run them yet), which it runs itself: every session of its
+- A factory may also declare **factory commands** (`factory_commands`),
+  which it runs itself: every session of its
   builds has them, and no build picks one or carries it ([Factory
   Commands](../factory-commands/)).
 - A command removed or renamed needs a new `version`, like a field. Adding

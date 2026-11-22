@@ -99,6 +99,8 @@ an error only for an invalid config, at once.
 | `Codec` | The layers of the minions' codec that are the factory's own: required when the schema names a suite or an envelope of its own, refused otherwise ([below](#a-codec-of-its-own)). |
 | `Composers` | The code of the schema's composite commands, a `Composer` by command id: required for each, refused for another id ([below](#composite-commands)). |
 | `MaxConcurrentDecisions` | Calls about composite commands' tasks answered at once, 4 by default: one past it gets `busy`, and core calls again. |
+| `FactoryCommands` | The code of the schema's factory commands, a `FactoryCommand` by command id: required for each, refused for another id ([below](#factory-commands)). |
+| `MaxConcurrentCommands` | Factory commands' tasks run at once, 4 by default: one past it gets `busy`, and core offers it to another instance, or again. Draining the instance stops new ones too. |
 
 The SDK adds a [builds section](../../contracts/minion-build/#managing-a-factory)
 to the factory's management (`max_concurrent_builds`, `drain`, `resume`,
@@ -166,6 +168,34 @@ call's helpers read an end's data and output when they came by link, fetch
 the files ends list, and put a file for the task (`PutFile`) that a later
 subtask may send. In tests, `factorytest.Compose` answers one call as Run
 would.
+
+### Factory commands
+
+A factory command is one the factory runs itself, never a minion: every
+session of its builds has it ([Factory
+Commands](../../contracts/factory-commands/)). `factory.Run` gets each one's
+code, a `FactoryCommand`, by command id:
+
+```go
+err := factory.Run(ctx, factory.Config{
+    Config:          module.Config{AMQPURL: amqpURL, Identity: id},
+    Build:           &schema,
+    Builder:         builder,
+    FactoryCommands: map[string]factory.FactoryCommand{"whois": whois{registry: reg}},
+    CoreURL:         coreURL,
+})
+```
+
+Run accepts core's calls (`factory.command`) at once,
+`MaxConcurrentCommands` at a time, and calls the command's `Run` with the
+task (`factory.CommandTask`: the command's args, the session and its build,
+the files and credentials the args name). What it writes to `Out` goes to
+core as it comes; it returns a `factory.CommandResult`, or an error, which
+fails the task. Its context ends when the task is stopped, when core no
+longer waits for it, or when the factory stops. The contract's page has a
+whole one ([A factory's code](../../contracts/factory-commands/#a-factorys-code)).
+In tests, `factorytest.Command` runs one task as Run would, filling in a
+session and its build when the call has none.
 
 ## The builder
 

@@ -58,7 +58,7 @@ renamed). The groups:
   envelope and routing, lifecycle, management, logs), the channel contracts
   (minion connection schema, HTTP sync, connections, agentless channels),
   the factory contracts (minion build, task outsourcing, factory commands,
-  built in the protocol and core, and credentials), and the minion's protocol (`contracts/minion-messages/*`,
+  built but in the web app, and credentials), and the minion's protocol (`contracts/minion-messages/*`,
   with task results and actions, the file browser and the VPN front). A
   page goes in the group of the parties it is between: task outsourcing is
   core ↔ factory, though it is about tasks: the minion sees only ordinary

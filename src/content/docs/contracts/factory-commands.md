@@ -4,12 +4,13 @@ title: "Factory Commands"
 
 :::note[Status]
 Built in part: the protocol package has its types and checks ([In the
-protocol package](#in-the-protocol-package)), and core runs factory
-commands' tasks: it lists the commands in every session, queues their
-tasks, offers them to the factory's instances, takes their reports and
-serves their links. factory-core does not run them yet, so no factory has
-one, and the web app shows such a task's state (`FACTORY`) as it is. The
-questions at the page's end are open.
+protocol package](#in-the-protocol-package)); core runs factory commands'
+tasks (it lists the commands in every session, queues their tasks, offers
+them to the factory's instances, takes their reports and serves their
+links); factory-core runs a factory's code for them ([A factory's
+code](#a-factorys-code)). No factory declares one yet, and the web app shows
+such a task's state (`FACTORY`) as it is. The questions at the page's end
+are open.
 :::
 
 A **factory command** is a command its factory runs itself, in the factory
@@ -365,6 +366,63 @@ fewest tasks first:
   ends failed, as a build does (`factory_lost`), and an instance that stops
   cleanly reports its tasks failed first (`shutdown`).
 - **Draining** an instance stops its new tasks, not those it runs.
+
+## A factory's code
+
+factory-core takes the code of each factory command in `factory.Config`, a
+`FactoryCommand` by command id (`FactoryCommands`), as it takes a
+composite's `Composer`: Run refuses a factory command without one, and one
+for another id. It serves `factory.command` and `factory.command.cancel` on
+the factory's queue beside `factory.build`:
+
+- **Accepted at once, run in the background.** A call is checked against
+  the schema (`ValidateFor`: one that does not fit is `validation_failed`);
+  past `MaxConcurrentCommands` (4 by default), while the instance drains and
+  while it stops, it is answered `busy`. A task sent again is accepted again
+  and never run twice; one cancelled before it came is accepted and never
+  run.
+- **`Run` gets a context** that ends when the task is stopped, when core no
+  longer waits for it (`not_found` to a report), or when the factory stops.
+  It returns a `CommandResult` (`OK`, `Err`, `Exit`, `Data`, `Files`), which
+  is a task done; an error, or a panic, fails the task with its message.
+- **Its output goes as it is written.** `CommandTask.Out` is sent in reports
+  of 16 KiB at most, a quarter of a second apart at most, 4 MiB in all (what
+  core keeps); while nothing is printed, an empty report every minute says
+  the task still runs. The last of it goes before the result.
+- **Never an invalid result**: factory-core checks it as core does, and
+  fails the task saying why instead. Data past 16 KiB it puts as a file for
+  the task. It sends the result until core answers.
+- **At shutdown** a task still running is stopped, and reported failed
+  ("the factory stopped during the task") within the shutdown grace.
+
+`CommandTask` embeds the call. `File`, `Credential` and `CredentialList` read
+what a param's arg names; `ReadFile` and `Download` fetch the task's files
+and its build's (`Artifact` is the build's artifact as one); `BuildRequest`
+reads the build's request; `PutFile` puts a file for the task. For tests,
+`factorytest.Command` runs one task as Run would, its links on a
+`factorytest.Store`, filling in a session and its build when the call has
+none.
+
+The `whois` above might read like this, its registry the factory's own:
+
+```go
+func (w whois) Run(ctx context.Context, t *factory.CommandTask) (factory.CommandResult, error) {
+    addr, _ := t.Args["address"].(string)
+    if addr == "" {
+        addr = t.Session.PeerAddress // the session's external address
+    }
+    if addr == "" {
+        return factory.CommandResult{Err: "no address given, and the session has no external one"}, nil
+    }
+    t.Printf("looking up %s", addr)
+    holder, err := w.registry.Lookup(ctx, addr)
+    if err != nil {
+        return factory.CommandResult{}, err // the factory could not run it: the task fails
+    }
+    t.Printf("%s: %s", addr, holder)
+    return factory.CommandResult{OK: true, Data: map[string]any{"address": addr, "holder": holder}}, nil
+}
+```
 
 ## Limits
 

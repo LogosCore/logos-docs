@@ -101,7 +101,7 @@ mean more than one thing in Logos; their entries say which is which.
 - **Task, command, result**: An operator's instruction to a session's minion, for one of the commands
   its build has (named on the wire by its number, `op`), and what the minion
   sends back. [Tasks and Results](../contracts/minion-messages/tasks-and-results/).
-- **Factory command**: A command its factory runs itself, never a minion (no factory runs one yet):
+- **Factory command**: A command its factory runs itself, never a minion (no factory declares one yet):
   every session of the factory's builds has it, and no build picks it.
   [Factory Commands](../contracts/factory-commands/).
 

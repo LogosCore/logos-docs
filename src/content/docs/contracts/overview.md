@@ -45,9 +45,9 @@ servers depending on the operation:
 | Log batches | module → core | — (pub/sub on `logos.module.logs`) | live log records, while a stream is open |
 | Builds | core → factory | **factory** (its `rpc_queue`) | `factory.build`, `factory.build.cancel` |
 | Composite commands ([Task Outsourcing](../task-outsourcing/)) | core → factory | **factory** (its `rpc_queue`) | `factory.compose` |
-| Factory commands ([Factory Commands](../factory-commands/), no factory runs them yet) | core → factory | **factory** (its `rpc_queue`) | `factory.command`, `factory.command.cancel` |
+| Factory commands ([Factory Commands](../factory-commands/), no factory declares one yet) | core → factory | **factory** (its `rpc_queue`) | `factory.command`, `factory.command.cancel` |
 | Build reports | factory → core | **core** (`logos.core.rpc`) | `factory.build.progress`, `factory.build.log`, `factory.build.result` |
-| Factory command reports (no factory sends them yet) | factory → core | **core** (`logos.core.rpc`) | `factory.command.output`, `factory.command.result` |
+| Factory command reports (no factory declares one yet) | factory → core | **core** (`logos.core.rpc`) | `factory.command.output`, `factory.command.result` |
 | Lifecycle events | core → any subscriber | — (pub/sub on `logos.events`) | `module.registered`, `.deregistered`, `.declared_dead`, `.blocked`, `.unblocked`, `.deleted` |
 
 Registration bootstraps everything else: core cannot issue a management RPC to a
@@ -110,7 +110,7 @@ Every contract in this section follows the same baseline:
 | [Agentless Channels](../agentless-channels/) | `bind` kinds whose channel acts as the minion | Channel ↔ Core | Built |
 | [Minion Build](../minion-build/) | Build schemas, builds, the minion config, minion error codes | Core ↔ Factory | Built; `structured` params a draft |
 | [Task Outsourcing](../task-outsourcing/) | Composite commands: their factory's code runs the session's other commands as subtasks, before and after the command's own op | Core ↔ Factory | Built |
-| [Factory Commands](../factory-commands/) | Commands a factory runs itself, never a minion, in every session of its builds | Core ↔ Factory | Built in part: the protocol package and core; factory-core and the web app not yet |
+| [Factory Commands](../factory-commands/) | Commands a factory runs itself, never a minion, in every session of its builds | Core ↔ Factory | Built in part: the protocol package, core and factory-core; the web app not yet |
 | [Credentials](../credentials/) | Credential fields, what a module gets, the logins a channel reports | Core → Channel, Factory, Minion | Built |
 | [Minion Messages](../minion-messages/) | The minion's protocol: the wire format, sessions, tasks, files, identity | Minion ↔ Core | Built (`v` 3) |
 | [Tunnels](../minion-messages/tunnels/) | Streams a minion opens from its host, behind core's fronts | Minion ↔ Core | Built |
