@@ -519,16 +519,18 @@ feedback = {
   page's answer to core's call. Core answers nothing: the message that
   carried it went, and one sent again adds nothing.
 - **Core keeps it with the session**: the newest 1,000 entries, gone with
-  the operation. The session counts the errors and warnings that came
-  since someone last marked them read; read is the same for everyone of
-  the operation (**Mark all read**).
-- **Info is never counted**: kept and shown as the others are, it marks
-  nothing, neither a session nor a task, and needs no marking read.
-- **Operators see it** in the Sessions table's **Feedback** column (unread
-  errors and warnings, sorted and filtered by core), in the session's
+  the operation. The session counts the errors that came since someone
+  last marked them read; read is the same for everyone of the operation
+  (**Mark all read**).
+- **Only errors are unread**: warnings and info are kept and shown as
+  errors are, and never counted, so a warning that comes back for a
+  problem no one can mend flags nothing. An error or a warning marks the
+  task it is about in its list; info marks nothing.
+- **Operators see it** in the Sessions table, beside the session's number
+  (unread errors, which core also sorts and filters by), in the session's
   **Feedback** tab (newest first, paged, by level and by a word of its
-  message or code), as counts on the session's console tab, and on the
-  task it is about.
+  message or code), as a count of unread errors on the session's console
+  tab, and on the task it is about.
 - **A polling minion sends it with its next check-in**, at once rather
   than on its schedule.
 
