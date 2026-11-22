@@ -940,6 +940,18 @@ time, searched and sorted by core:
   one is its uid's, so only `root` for an account of another name), the
   architecture where it is not the host's (the hello's), the state where it
   is not running or sleeping.
+- **Marks**, each user's own: **Mark by name…** in a process's context
+  menu marks every process of its name (a color or a style, an icon or an
+  emoji, as sessions are marked), in every process list of every
+  operation; a name matches whatever its case (`Firefox.exe` is
+  `firefox.exe`). Nobody else sees them. **Built-in marks**, the
+  deployment's own, mark names for every user, who sees one until they clear
+  it or set their own (**Use the built-in mark** goes back to it): core reads
+  them at start from a file the deployment mounts ([Built-in process
+  marks](../../core-infrastructure/#built-in-process-marks)), none without
+  one. The mark dialog's tooltips say each choice's value as that file
+  writes it: `color: red-strong`, `icon: Flame`, `emoji: 🦊 (U+1F98A)` (the
+  file takes the emoji itself; its code points are there to check it by).
 - **A process's context menu**: copy its pid, name, path or command line;
   **Kill…** ([`kill_process`](#kill_process)): a confirmation first, with
   the process's name and pid, **Force** (off), and for this session's
@@ -957,14 +969,21 @@ list, `minion` (this session's), `context` (shown for a match below it, not
 matching itself), the lines that draw the tree to it: `last` (the last of
 its parent's processes shown) and `guides` (for each level above its
 parent's, whether a line goes on down there; a root and a flat list's rows
-have neither), `stem` (its processes shown below it), and `hidden` (how many
-under it a fold hides). `order` is `TREE` (the default), `PID`, `NAME`,
+have neither), `stem` (its processes shown below it), `hidden` (how many
+under it a fold hides), `mark` (the one it shows the caller: their own on
+its name, else its built-in mark unless they cleared it; `builtin` says
+which; null for none), and `builtinMark` (its name has one). `order` is `TREE` (the default), `PID`, `NAME`,
 `USER`, `MEMORY`, `CPU_TIME`, `STARTED` or `THREADS`; in the tree with no
 search, `fold` is `NONE` (the default), `SYSTEM` or `ALL`, and `flip` the
 pids folded the other way. `totalCount` counts the matches (those folds hide
 too), `hidden` how many folds hide, `systemTrees` how many of the operating
 system's own trees the list has, and `sep` is the host's separator. Core
 reads the task's data, joined, and orders and folds it for each page.
+`setMinionProcessMark(name, mark)` sets the caller's mark on a name, a mark
+as a session's, in place of its built-in mark (null, or one with nothing
+set, clears it: none shows, a built-in one hidden too);
+`resetMinionProcessMark(name)` takes theirs, or their clearing, away, back
+to the built-in mark. An agent API key may do neither.
 The toggle shows the data as raw JSON.
 
 ## list_processes

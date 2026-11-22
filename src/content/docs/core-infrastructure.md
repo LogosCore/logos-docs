@@ -327,6 +327,56 @@ saying which (channel-core's clients).
   configuration for local clusters) deploys core, its stores, guacd, guacenc (when enabled) and RabbitMQ.
   Modules are not in it.
 
+### Built-in process marks
+
+A deployment's own marks on processes by name, which every user sees in
+process lists ([Task Results and
+Actions](../contracts/task-results-and-actions/#process_list), Marks) until
+they clear one or set their own. Core reads them once, at start, from
+`/etc/logos/builtin-process-marks.json`, a file the deployment mounts:
+without one, or with an empty one, there are none. The file is a JSON array
+of marks:
+
+```json
+[
+  { "name": "lsass.exe", "color": "red-strong", "icon": "ShieldAlert" },
+  { "name": "sshd", "color": "blue-soft", "emoji": "🔑" },
+  { "name": "explorer.exe", "color": "ghost" }
+]
+```
+
+| Field | |
+|---|---|
+| `name` | The processes' name, 1 to 255 bytes, matched whatever its case (`LSASS.EXE` is `lsass.exe`). One mark a name. |
+| `color` | A color, `<hue>-<strength>`: a hue of `red`, `orange`, `amber`, `yellow`, `lime`, `green`, `teal`, `cyan`, `blue`, `indigo`, `violet` or `pink`, a strength of `soft`, `medium` or `strong`. Or a style in its place: `haxor`, `rainbow`, `amber-crt`, `synthwave`, `glitch`, `on-fire`, `gold` or `ghost`. |
+| `icon` | A [lucide](https://lucide.dev/icons/) icon's name as the web app writes it (`ShieldAlert`), or `si:<slug>` for a brand's (`si:github`). |
+| `emoji` | The emoji itself (`"🔑"`), not its code points. |
+
+A mark has a `name` and at least one of the others, and an icon or an
+emoji, not both. The web app's mark dialog gives each value in its
+tooltips.
+
+- **Docker Compose**: a bind mount on core's service, the file readable by
+  core's user (uid 10001: mode `0644` is):
+
+  ```yaml
+  services:
+    core:
+      volumes:
+        - ./builtin-process-marks.json:/etc/logos/builtin-process-marks.json:ro
+  ```
+
+- **Helm**: the marks as a list in `core.builtinProcessMarks`, the same
+  fields in YAML; the chart writes them to a ConfigMap mounted at that path.
+- **A change** takes effect when core restarts (the chart rolls its pod).
+- **Core logs** how many marks it read, at start. A file that does not read,
+  or is not a JSON array of marks, gives none, logged as an error, and core
+  starts all the same. A mark that does not check, or a second one for a
+  name, is left out and logged as a warning, with its place in the array;
+  the others are used.
+- **Users' own marks and clearings stay**, whatever the file says: a user who
+  cleared a mark the file then drops, and later has again, still sees none.
+
 ## Observability
 
 Nothing is collected centrally yet:
