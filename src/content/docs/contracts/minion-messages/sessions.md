@@ -400,7 +400,7 @@ sleep_update = { 0: 5, sleep }   ; t: sleep_update
 Late and lost only describe a session: it stays open, nothing is sent to its
 minion, and a lost minion that checks in again is on time at once. In the
 Sessions page, "Last seen" is green while a session is on time or connected
-(a persistent connection serving it open), yellow once it is late and red
+(a persistent connection serving it open), yellow once it is late and gray
 once it is lost, and its filter picks any of the three: "on time or
 connected", "late", "lost". Its tooltip shows the round trip the minion
 last said ([`roundtrip_time`](#hello)), when it said one. Core records a session connected when its first
