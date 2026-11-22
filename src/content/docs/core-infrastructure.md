@@ -144,6 +144,10 @@ MongoDB resolves the database engine decision listed as pending in the
   the six buckets take 49 volumes before they hold anything: on a small
   disk the bucket written last would fail every write ("no free volumes
   left"). A bucket that cannot grow needs free disk on the volume server.
+- **Watched and maintained** on the admins' Storage page: what each
+  bucket holds, the slots left, and reclaiming deleted files' space. Core
+  reads the master's API for it (`SEAWEEDFS_MASTER_URL`), a minute apart
+  ([Storage](../storage/)).
 - **Why SeaweedFS**: lightweight, self-hosted, S3-compatible API. Avoids external cloud dependencies and keeps binary blobs out of the document database.
 - **Connections**: Core Server alone reads and writes. A factory never
   reaches it: a build's files and its artifact go through core, which
@@ -353,4 +357,5 @@ traces in SeaweedFS, Grafana) and is planned. None of it runs.
 | Core Server | guacenc | HTTP (4823) | A desktop's recording in, its video out |
 | Core Server | Redis | RESP | Sessions, caches, recent minion messages, stream chunks |
 | Core Server | SeaweedFS | HTTP (S3-compatible) | Object storage |
+| Core Server | SeaweedFS's master and volume servers | HTTP (9333, 8080) | The Storage page: volumes, slots, disks; reclaiming space, adding a volume |
 | Factory Modules | Core Server (or its front) | HTTP(S) | Build files in, artifacts out (`/api/factory/builds/`) |

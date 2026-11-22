@@ -49,7 +49,8 @@ renamed). The groups:
 - **Start here**: `index` (the landing page, with a reading path per reader),
   `architecture` (the parts, how they talk, and the built/planned table: the
   one status list), `module-types`, `core-responsibilities`,
-  `core-infrastructure`, `glossary`.
+  `core-infrastructure`, `storage` (the admins' Storage page, its warnings
+  and maintenance; retention cleanups a draft), `glossary`.
 - **Guides**: `implementing-a-module` (what every module does, the Go SDKs),
   `guides/writing-a-channel`, `guides/writing-a-factory`,
   `guides/writing-a-minion`.

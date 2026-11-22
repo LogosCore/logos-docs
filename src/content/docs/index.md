@@ -23,7 +23,8 @@ and contributing to Logos.
 
 - **Concepts**: the parts and how they talk ([Architecture](architecture/),
   [Module Types](module-types/), [Core Responsibilities](core-responsibilities/),
-  [Core Infrastructure](core-infrastructure/)).
+  [Core Infrastructure](core-infrastructure/)), and the object store as
+  admins keep it ([Storage](storage/)).
 - **Guides**: building a module and its minions, step by step, with the
   Go SDKs.
 - **Contracts**: the reference. Each page states what the code does, checked

@@ -78,6 +78,7 @@ export default defineConfig({
             { slug: "module-types" },
             { slug: "core-responsibilities" },
             { slug: "core-infrastructure" },
+            { slug: "storage" },
             { slug: "glossary" },
           ],
         },
