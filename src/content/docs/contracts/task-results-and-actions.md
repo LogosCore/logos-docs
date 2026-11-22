@@ -912,19 +912,34 @@ time, searched and sorted by core:
 - **A tree** at first: each process under its parent, siblings in the order
   they started, then by pid. A process whose parent is not in the list (it
   ended, or the chain of parents loops back, as reused pids on Windows can
-  make it) is a root.
-- **Flat**, sorted by a column's header, either way (a second click: the
-  other way; memory, CPU time, threads and started the largest or the
-  latest first), until **Tree** goes back: pid, name, user, memory, CPU
-  time, threads or started.
+  make it) is a root. Lines draw the tree beside the names: from each
+  parent down to its processes, a corner at each, its last one's closing
+  the line.
+- **Folding**, in the tree with no search: a process's toggle folds away
+  the processes under it (how many shows beside its name), and the toolbar
+  folds them all, folds the operating system's own trees (its kernel's
+  threads on Linux, `kthreadd`; on Windows its kernel's processes,
+  `System`, and its services, `services.exe`), or unfolds them all. Nothing
+  is folded at first; a search shows every match, folds aside.
+- **Flat**, sorted by pid, name or user (their columns' headers), or by
+  any of those, memory, CPU time, threads or started (**Sort**), either way
+  (again: the other way; memory, CPU time, threads and started the largest
+  or the latest first). **Tree**, a toggle, turned off lists them flat by
+  pid, and turned on shows the tree again.
 - **A search** matches the name, the pid, the user, the path and the
   command line. In the tree, a match shows under its ancestors, muted where
   they do not match.
 - **Its columns**: pid; name, indented by depth, this session's minion
-  marked; user; memory; CPU time; threads; started; the command line, whole
-  in its title. Integrity, session, state and architecture where the list has
-  them: the architecture where it is not the host's (the hello's), the
-  state where it is not running or sleeping.
+  marked; user; the command line. The width goes to the pid and the name
+  first, whole, then to the user, and the command line takes the rest; the
+  widths hold as the table scrolls, a value too long for its column cut,
+  whole in its title. A click on a row opens it (another closes it): its
+  values whole and wrapped, and under its command line its memory, CPU
+  time, threads and start time. Integrity, session, state and architecture where the list has
+  them: the integrity where it says more than who (a Windows level; a Unix
+  one is its uid's, so only `root` for an account of another name), the
+  architecture where it is not the host's (the hello's), the state where it
+  is not running or sleeping.
 - **A process's context menu**: copy its pid, name, path or command line;
   **Kill…** ([`kill_process`](#kill_process)): a confirmation first, with
   the process's name and pid, **Force** (off), and for this session's
@@ -935,13 +950,21 @@ time, searched and sorted by core:
 - **Refresh**, above the table, runs [`list_processes`](#list_processes): a
   new task, which the view opens.
 
-GraphQL's `minionTaskProcesses(taskId, search, order, desc, first, after)`
-gives a page of a task's processes to a member of its operation (50, at
-most 500), each with its `depth` in the tree, its `children` in the list,
-`minion` (this session's) and `context` (shown for a match below it, not
-matching itself); `order` is `TREE` (the default), `PID`, `NAME`, `USER`,
-`MEMORY`, `CPU_TIME`, `STARTED` or `THREADS`; `totalCount` counts the
-matches, and `sep` is the host's separator. Core reads the task's data, joined, and orders it for each page.
+GraphQL's `minionTaskProcesses(taskId, search, order, desc, first, after,
+fold, flip)` gives a page of a task's processes to a member of its operation
+(50, at most 2000), each with its `depth` in the tree, its `children` in the
+list, `minion` (this session's), `context` (shown for a match below it, not
+matching itself), the lines that draw the tree to it: `last` (the last of
+its parent's processes shown) and `guides` (for each level above its
+parent's, whether a line goes on down there; a root and a flat list's rows
+have neither), `stem` (its processes shown below it), and `hidden` (how many
+under it a fold hides). `order` is `TREE` (the default), `PID`, `NAME`,
+`USER`, `MEMORY`, `CPU_TIME`, `STARTED` or `THREADS`; in the tree with no
+search, `fold` is `NONE` (the default), `SYSTEM` or `ALL`, and `flip` the
+pids folded the other way. `totalCount` counts the matches (those folds hide
+too), `hidden` how many folds hide, `systemTrees` how many of the operating
+system's own trees the list has, and `sep` is the host's separator. Core
+reads the task's data, joined, and orders and folds it for each page.
 The toggle shows the data as raw JSON.
 
 ## list_processes
