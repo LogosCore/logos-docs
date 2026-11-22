@@ -357,5 +357,5 @@ traces in SeaweedFS, Grafana) and is planned. None of it runs.
 | Core Server | guacenc | HTTP (4823) | A desktop's recording in, its video out |
 | Core Server | Redis | RESP | Sessions, caches, recent minion messages, stream chunks |
 | Core Server | SeaweedFS | HTTP (S3-compatible) | Object storage |
-| Core Server | SeaweedFS's master and volume servers | HTTP (9333, 8080) | The Storage page: volumes, slots, disks; reclaiming space, adding a volume |
+| Core Server | SeaweedFS's master and volume servers | HTTP (9333, 8080), gRPC (19333) | The Storage page: volumes, slots, disks, adding a volume (HTTP); reclaiming space, one volume at a time (the master's gRPC) |
 | Factory Modules | Core Server (or its front) | HTTP(S) | Build files in, artifacts out (`/api/factory/builds/`) |

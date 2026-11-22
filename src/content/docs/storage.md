@@ -56,12 +56,15 @@ Four tabs:
 - **Retention:** the retention policy, a cleanup now at an age, and what it
   would take by operation ([below](#retention-cleanups)).
 - **Activity:** the maintenance and the cleanups run: what, by whom, when,
-  how it went.
+  how it went, or where a running one is. Each one's details show it as it
+  goes (a reclaim's every volume), and Stop ends a running reclaim or
+  cleanup ([Maintenance](#maintenance)).
 
 The same is in the GraphQL API: `storageStatus`, `storageConsumers`,
-`storageActions` and `storageRetention` to read, `storageCleanupPreview` to
-preview a cleanup, and `reclaimStorage`, `growStorageBucket`,
-`cleanUpStorage` and `setStorageRetention` to act.
+`storageActions`, `storageAction` and `storageRetention` to read,
+`storageCleanupPreview` to preview a cleanup, and `reclaimStorage`,
+`growStorageBucket`, `cleanUpStorage`, `setStorageRetention` and
+`cancelStorageAction` to act.
 
 ### Warnings
 
@@ -83,14 +86,31 @@ the errors and warnings.
 
 Each action asks to be confirmed, and Activity keeps it: who ran it, when,
 how it went. One reclaim runs at a time, and one Add a volume for a bucket.
-A core that stops while one runs marks it failed, saying so.
+A reclaim and a cleanup run for as long as they take, each keeping its
+progress as it goes. An admin stops one (Stop, `storage:manage`): it stops
+before its next step, what it did kept, and ends cancelled, saying who
+asked. A core that stops while one runs marks it failed, saying so.
 
-- **Reclaim space.** SeaweedFS compacts every volume, in every bucket, whose
-  deleted files hold a tenth of it or more: their space comes back to the
-  disk. It runs in the background, core waiting half an hour at most, and
-  rewrites those volumes, so the store answers slower until it ends.
-  Activity says how much it freed. SeaweedFS also compacts on its own, past
-  30%.
+- **Reclaim space.** Core compacts, one at a time, every volume of every
+  bucket whose deleted files hold a tenth of it or more, the most deleted
+  first: their space comes back to the disk. It goes through SeaweedFS's
+  master over gRPC, volume by volume, and pauses SeaweedFS's own vacuum
+  meanwhile: the master runs one vacuum at a time. It resumes it as it ends,
+  or as core starts again after a core that stopped first.
+
+  Core reads each volume on its volume server before and after, and keeps
+  how it went:
+  - compacted, with the bytes it freed;
+  - skipped, with why: it is read-only, or by then deleted files hold less
+    than a tenth of it;
+  - failed, with why: the master did not compact it, asked 3 times (or, for
+    the first volume, over five minutes, while SeaweedFS's own vacuum ends
+    the volume it was on).
+
+  The details list each volume, and the step under way. Stop ends the
+  reclaim before its next volume: SeaweedFS ends the one under way. A volume
+  answers slower while it is compacted. SeaweedFS also compacts on its own,
+  past 30%.
 - **Add a volume.** SeaweedFS gives a bucket a writable volume, which takes
   one free slot: a bucket with no writable volume gets one again, or room
   before much is written to it. It works on a bucket of core's or one
@@ -111,10 +131,11 @@ Not on the page:
 | Setting | |
 |---|---|
 | `SEAWEEDFS_MASTER_URL` | SeaweedFS's master. The Compose file gives core-dev `http://seaweedfs-master:9333`. The Helm chart sets it for the SeaweedFS it bundles, and to `external.seaweedfs.masterUrl` for one of your own. Empty, the page shows what core's records say alone, and runs no maintenance. |
+| `SEAWEEDFS_MASTER_GRPC` | The master's gRPC address (`host:port`), which a reclaim compacts volumes through. Empty, the master URL's host on its port plus 10000 (SeaweedFS's own default: `seaweedfs-master:19333`). The Helm chart sets it to the bundled master's gRPC port, and to `external.seaweedfs.masterGrpc` for one of your own. |
 
-The master's API takes no credentials: whoever reaches it can delete a
-bucket's volumes. Keep it on core's network alone. The Compose file
-publishes only the S3 port.
+The master's APIs, HTTP and gRPC, take no credentials: whoever reaches them
+can delete a bucket's volumes. Keep them on core's network alone. The
+Compose file publishes only the S3 port.
 
 ## Retention cleanups
 
@@ -162,12 +183,13 @@ recordings. Core marks a recording first, then deletes its files. One whose
 files the store did not delete gets its mark taken off again, and the
 cleanup stops there, failed, for the next to take it again.
 
-One cleanup runs at a time, an admin's or the policy's. A cleanup stops
-after 6 hours, failed: what it did not reach waits for the next. A core that
-stops while one runs marks it failed, saying so. Activity keeps each run:
-who ran it (an admin, or the Retention policy), its age, the operations it
-covered (named as they were), and the recordings it took and their bytes, as
-it goes.
+One cleanup runs at a time, an admin's or the policy's, for as long as it
+takes. Stop ends it before its next recording: the one under way is taken
+whole, and what it took stays taken. A core that stops while one runs marks
+it failed, saying so. Activity keeps each run: who ran it (an admin, or the
+Retention policy), its age, the operations it covered (named as they were),
+what it found to take as it began, and the recordings it took and their
+bytes, as it goes.
 
 **Reclaim space** then gives the disk the bytes back ([Maintenance](#maintenance)).
 SeaweedFS also does it on its own, once deleted files hold 30% of a volume.
@@ -208,9 +230,17 @@ cleanup takes now.
   leave a recording or a download pointing at nothing. A cleanup deletes the
   files and marks their record together, and SeaweedFS frees the space
   afterwards.
-- **Reclaim covers every bucket.** SeaweedFS's vacuum takes a threshold, not
-  a bucket, and answers once every volume is done. So core runs it in the
-  background and says what it freed.
+- **Reclaim, volume by volume.** SeaweedFS's HTTP vacuum walks every volume,
+  ten seconds apart, and answers once all are done: core could neither see
+  where it was nor stop it. It also returns at once, having done nothing,
+  while SeaweedFS's own vacuum holds the master's one lock. So core drives
+  the reclaim itself, one volume a call over the master's gRPC, pauses
+  SeaweedFS's own vacuum, and reads each volume on its server to know what
+  happened to it.
+- **No time limit, a stop instead.** A reclaim of a large store, or a first
+  cleanup of months of recordings, takes as long as it takes: a limit would
+  fail it halfway. What an admin needs is to see where it is, and to stop
+  it.
 - **Warnings by SeaweedFS's own accounting.** A bucket grows a volume when it
   needs one, and a volume server has room for about one a GB of free disk.
   The slots free say when writes will fail, whatever the disk's percentage
