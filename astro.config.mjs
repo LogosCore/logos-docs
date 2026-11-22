@@ -119,6 +119,7 @@ export default defineConfig({
               items: [
                 { slug: "contracts/minion-build" },
                 { slug: "contracts/task-outsourcing" },
+                { slug: "contracts/factory-commands" },
                 { slug: "contracts/credentials" },
               ],
             },

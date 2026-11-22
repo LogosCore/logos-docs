@@ -57,8 +57,8 @@ renamed). The groups:
   contracts table with each one's status), then the module plumbing (AMQP
   envelope and routing, lifecycle, management, logs), the channel contracts
   (minion connection schema, HTTP sync, connections, agentless channels),
-  the factory contracts (minion build, task outsourcing, built in part, and
-  credentials), and the minion's protocol (`contracts/minion-messages/*`,
+  the factory contracts (minion build, task outsourcing, factory commands,
+  a draft, and credentials), and the minion's protocol (`contracts/minion-messages/*`,
   with task results and actions, the file browser and the VPN front). A
   page goes in the group of the parties it is between: task outsourcing is
   core ↔ factory, though it is about tasks: the minion sees only ordinary
@@ -113,7 +113,9 @@ The site's Contributing → Writing the Docs page is the reference; in short:
   not MkDocs' `!!! note`.
 - **Words**: "minion" for what a factory builds; "core" in lowercase; "the id
   it was sent under" (the build's, the temporary one, the session's), not "the
-  build id", for what a channel hands core.
+  build id", for what a channel hands core; "factory command" for one its
+  factory runs itself (Factory Commands), "a build's commands" for those a
+  minion carries.
 - **Monochrome**: the site uses Tailwind's neutral scale and no other colour
   (`src/styles/global.css` maps Starlight's tokens and the diagrams; the code
   theme is `src/styles/code-theme.mjs`). Asides differ by icon, not hue.

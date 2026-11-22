@@ -92,7 +92,7 @@ follows one minion from its build to its tasks.
 | [Minion builds](../contracts/minion-build/) | Built: build schemas, builds offered to factory instances, progress, artifacts checked, the minion recorded. |
 | Data plane | Built: the [sync call](../contracts/channel-core-sync/), connection sockets and the control link ([Connections](../contracts/channel-core-connections/)), with a registration gate and size limits. A message sent again gets the reply it got; a replay is refused ([Freshness and replay](../contracts/minion-messages/wire-format/#freshness-and-replay)). |
 | Payload crypto | Built: `aes-256-cbc-hmac-sha256`. Core generates each build's keys, gives each minion process keys of its own when it stages, and seals and opens every frame ([Wire Format](../contracts/minion-messages/wire-format/)). |
-| Tasking | Built: sessions, tasks and results, listings into the file browser, and file transfers both ways ([Minion Messages](../contracts/minion-messages/), [Task Results and Actions](../contracts/task-results-and-actions/)). |
+| Tasking | Built: sessions, tasks and results, listings into the file browser, and file transfers both ways ([Minion Messages](../contracts/minion-messages/), [Task Results and Actions](../contracts/task-results-and-actions/)). Factory commands, which a factory runs itself in every session of its builds, are a draft ([Factory Commands](../contracts/factory-commands/)). |
 | Observability | Planned: central audit logging and tracing. Core publishes lifecycle events that nothing consumes yet. |
 | [Connection kinds](../module-types/#connection-kinds) | Built: `reverse-call`, and `reverse-persistent` over a connection socket per minion connection, core pushing tasks as they are queued ([Connections](../contracts/channel-core-connections/)). `bind-call` over the control link, with targets, and `bind-persistent`: opened over the control link, then a connection socket, by the target's policy. Failover between a build's connections. |
 | [Agentless channels](../contracts/agentless-channels/) | Built: a channel acts as the minion of a host it logs in to, with nothing installed on the far side. |
@@ -202,7 +202,7 @@ Planned:
 3. ~~Database engine and schema partitioning strategy.~~ Resolved — see [Core Infrastructure](../core-infrastructure/) (MongoDB).
 4. Module packaging and lifecycle policy (enable/disable/version compatibility). Partly settled: operators block, unblock and delete instances ([Module Lifecycle](../contracts/module-lifecycle/)), and build and connection schemas carry versions. Packaging is open.
 5. ~~The payload crypto contract.~~ Resolved — see [Wire Format](../contracts/minion-messages/wire-format/).
-6. ~~The factory command contract.~~ Resolved — see [Minion Messages](../contracts/minion-messages/) and [Task Results and Actions](../contracts/task-results-and-actions/).
+6. ~~The contract for a build's commands.~~ Resolved — see [Minion Messages](../contracts/minion-messages/) and [Task Results and Actions](../contracts/task-results-and-actions/).
 7. Several core instances: see [One core instance](#one-core-instance).
 8. How channels and factories prove who they are: today core admits a
    registered, unblocked instance by the instance id it asserts.

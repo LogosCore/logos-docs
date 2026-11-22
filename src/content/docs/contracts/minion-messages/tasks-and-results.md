@@ -227,6 +227,8 @@ is in [Field Types](../../field-types/#types).
   taking none of the minion's room, while its factory's code runs the
   session's other commands as subtasks, before and after the command's own
   op, each an ordinary task; one with no `op` never goes out.
+- A [factory command](../../factory-commands/)'s task (draft) never goes
+  out: the session's factory runs it, taking none of the minion's room.
 
 ## Acknowledging
 
