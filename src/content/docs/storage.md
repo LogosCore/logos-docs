@@ -2,23 +2,19 @@
 title: "Storage"
 ---
 
-:::note[Status]
-Built in part: the Storage page, its warnings and its two maintenance
-actions. Retention cleanups are a draft ([below](#retention-cleanups)).
-:::
-
 Core keeps its files in an S3 object store, SeaweedFS ([Core
 Infrastructure](../core-infrastructure/#seaweedfs--blob-storage)): what
 minions send, recordings, builds, the wiki's attachments, skills. The
 **Storage** page shows admins what the store holds and what would stop it
 taking writes, and runs its maintenance. Core reads the store once a minute:
 SeaweedFS's master, when core is set to reach it, and core's own records of
-what it keeps in each bucket.
+what it keeps in each bucket. It also runs the retention cleanups of
+recordings ([below](#retention-cleanups)).
 
 | Who | Can |
 |---|---|
-| `storage:read` (the admin role) | See the page, and the sidebar's count of its warnings |
-| `storage:manage` (the admin role) | Run its maintenance. An agent key never does. |
+| `storage:read` (the admin role) | See the page, the retention policy, and the sidebar's count of its warnings |
+| `storage:manage` (the admin role) | Run its maintenance, preview and run cleanups, and set the retention policy. An agent key never does. |
 
 ## Where core keeps its files
 
@@ -30,7 +26,7 @@ and kind:
 | Setting (default bucket) | Core keeps | Kinds |
 |---|---|---|
 | `MINION_FILE_BUCKET` (`minion-files`) | The files minions send, and the files operators upload for tasks | Task uploads, Screenshots, Downloads (a minion's file, or a stream core kept as it passed) |
-| `DESKTOP_RECORDING_BUCKET` (`desktop-recordings`) | The desktops' and the terminals' recordings: a video once converted, else its parts | Desktops, Terminals |
+| `DESKTOP_RECORDING_BUCKET` (`desktop-recordings`) | The desktops' and the terminals' recordings: a video once converted, else its parts; none of those a cleanup took | Desktops, Terminals |
 | `BUILD_BUCKET` (`logos-builds`) | The files uploaded for builds, and their artifacts until deleted | Build files, Artifacts |
 | `WIKI_IMAGE_BUCKET` (`wiki-images`) | The wiki's images not deleted | Images |
 | `WIKI_FILE_BUCKET` (`wiki-files`) | The wiki's other attachments not deleted | Files |
@@ -43,7 +39,7 @@ name, a test's say, shows as not core's.
 
 ## The page
 
-Three tabs:
+Four tabs:
 
 - **Overview.** The store's warnings ([below](#warnings)), then three kinds
   of card:
@@ -57,10 +53,15 @@ Three tabs:
 - **What core keeps:** a bucket's records by operation and kind, the
   largest first, a page at a time, searched by the operation's name or the
   kind.
-- **Activity:** the maintenance run: what, by whom, when, how it went.
+- **Retention:** the retention policy, a cleanup now at an age, and what it
+  would take by operation ([below](#retention-cleanups)).
+- **Activity:** the maintenance and the cleanups run: what, by whom, when,
+  how it went.
 
-The same is in the GraphQL API: `storageStatus`, `storageConsumers` and
-`storageActions` to read, `reclaimStorage` and `growStorageBucket` to act.
+The same is in the GraphQL API: `storageStatus`, `storageConsumers`,
+`storageActions` and `storageRetention` to read, `storageCleanupPreview` to
+preview a cleanup, and `reclaimStorage`, `growStorageBucket`,
+`cleanUpStorage` and `setStorageRetention` to act.
 
 ### Warnings
 
@@ -117,12 +118,8 @@ publishes only the S3 port.
 
 ## Retention cleanups
 
-:::caution[Draft]
-A design, not built yet.
-:::
-
-Space comes back to the disk only once core deletes what it keeps. Today
-that happens when:
+Space comes back to the disk only once core deletes what it keeps. Besides
+the cleanups, that happens when:
 
 - an operator deletes a recording, a build's artifact bytes, or a build;
 - an operation is deleted, with everything core kept for it;
@@ -132,34 +129,61 @@ that happens when:
   no document refers to.
 
 Minion files and artifacts stay until their operation is deleted: no
-retention takes them. Retention is for **recordings** alone, the desktops'
-and the terminals', which grow with every one operators open. A cleanup
-takes the recordings that ended at least 30 days ago (an admin may name
-another age), unless their task is marked important (the star an operator
-puts on a task in a session's console). The mark keeps a task's recordings
-for as long as it stays; unmarked, they are a cleanup's again. A recording
-still recording is never taken.
+cleanup takes them. Cleanups are for **recordings** alone, the desktops'
+and the terminals', which grow with every one operators open.
 
-A recording taken loses its files, video or parts, and keeps its record,
-marked as cleaned up, with when: its task's Recordings tab still lists it.
-A cleanup keeps no copy.
+### What a cleanup takes
 
-Admins run cleanups (`storage:manage`):
+A cleanup has an age, in days (1 to 3,650; the page offers 30), and covers
+every operation or one. It takes the recordings that ended at least that
+long ago and hold something, but not:
 
-1. **Preview.** The cleanup names an age, and the operations it covers
-   (every operation, or one). The page shows what it would take, by
-   operation: recordings and bytes. Nothing is deleted.
-2. **Run**, confirmed. Core deletes the recordings' files and marks their
-   records, in batches, in the background. It takes only what still
-   matches, so a task marked important since the preview keeps its
-   recordings. Activity keeps the run: who, the age, how many recordings
-   and bytes it took, and any failure.
-3. **Reclaim space** gives the disk the bytes back. SeaweedFS also does it
-   on its own, once deleted files hold 30% of a volume.
+- those of a task marked important (the star an operator puts on a task in
+  a session's console), for as long as the mark stays;
+- one still recording, or one that did not open;
+- one being made a video, while the encoder holds it.
 
-**The policy**, one for every operation: core runs the cleanup itself each
-day, at the policy's age (30 days unless an admin sets another), each run on
-Activity as a manual one is. It is off until an admin turns it on.
+A recording taken loses its files, its parts or its video and keys. Its
+record stays, marked cleaned up, with when and by which cleanup: its task's
+Recordings tab still lists it, as cleaned up. It no longer plays or
+downloads, and its file answers 410. What core keeps no longer counts it.
+Nothing is kept elsewhere first.
+
+### Running one
+
+On the Retention tab, an admin types an age and sees what a cleanup would
+take now: in all, and by operation (recordings and their bytes, the largest
+first, a page at a time). Nothing is deleted until one is run, every
+operation's or one operation's from its row, and confirmed.
+
+A cleanup runs in the background, 50 recordings at a time, each batch read
+again as it goes: a task marked important since the preview keeps its
+recordings. Core marks a recording first, then deletes its files. One whose
+files the store did not delete gets its mark taken off again, and the
+cleanup stops there, failed, for the next to take it again.
+
+One cleanup runs at a time, an admin's or the policy's. A cleanup stops
+after 6 hours, failed: what it did not reach waits for the next. A core that
+stops while one runs marks it failed, saying so. Activity keeps each run:
+who ran it (an admin, or the Retention policy), its age, the operations it
+covered (named as they were), and the recordings it took and their bytes, as
+it goes.
+
+**Reclaim space** then gives the disk the bytes back ([Maintenance](#maintenance)).
+SeaweedFS also does it on its own, once deleted files hold 30% of a volume.
+
+### The retention policy
+
+One for every operation, off until an admin turns it on, at an age (30 days
+before anyone set one). On, core runs a cleanup of every operation's
+recordings at the policy's age: at once when an admin turns it on, then a
+day after the last began, or an hour after one that failed ended, if that is
+sooner. Core looks every 10 minutes whether one is due.
+
+The Retention tab's card shows the policy: on or off, its age, its last
+cleanup and what it took, when the next runs, and who set it last. Its Edit
+turns it on or off and sets the age; turning it on says what the first
+cleanup takes now.
 
 ## Design notes
 
@@ -170,12 +194,20 @@ Activity as a manual one is. It is off until an admin turns it on.
 - **A record stays.** A recording cleaned up keeps its record, marked, as an
   artifact deleted does: its task still says a desktop or a terminal was
   recorded, by whom and when, without its files.
+- **Marked first, then deleted.** The mark keeps the encoder off a
+  recording a cleanup takes, and comes off again when the store keeps its
+  files: no record says cleaned up while its files stay, and no file stays
+  that no record names.
+- **Off until an admin turns it on.** On a store that has gathered
+  recordings for months, a first cleanup takes all of them at once. Turning
+  the policy on says what that takes first.
 - **No copy kept.** A cleanup exports nothing first: operators keep a
   recording they need by marking its task important.
 - **Deletes go through core.** Core keeps a record of every file it stores,
   and its views read those records: a file deleted in SeaweedFS alone would
   leave a recording or a download pointing at nothing. A cleanup deletes the
-  record and the file together, and SeaweedFS frees the space afterwards.
+  files and marks their record together, and SeaweedFS frees the space
+  afterwards.
 - **Reclaim covers every bucket.** SeaweedFS's vacuum takes a threshold, not
   a bucket, and answers once every volume is done. So core runs it in the
   background and says what it freed.

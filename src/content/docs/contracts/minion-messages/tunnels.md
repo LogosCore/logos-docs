@@ -868,7 +868,11 @@ as it relays them (`pkg/recordings`), one recording each:
   recording reads as far as core kept it.
 - **Kept until the operation is deleted**, after the task ends. An
   operator deletes one that ended (`deleteRecording`), its parts, video
-  and keys with it.
+  and keys with it. A retention cleanup
+  ([Storage](../../../storage/#retention-cleanups)) deletes the files of
+  those that ended long ago, but those of tasks marked important, and keeps
+  their records, marked cleaned up (`cleanedAt`): such a one is listed
+  still, no longer plays, and its file answers 410.
 - **In the web app**, a desktop or terminal task's Recordings tab lists
   them, downloads one's file and plays one, what was typed beside it, line
   by line, each line playing from where it began. A desktop's plays in
@@ -1121,7 +1125,8 @@ restart goes on with it. Core enforces it alone, the minion unchanged:
   its streams' list starts again empty. An older core kept each stream in
   `minion_tunnel_streams`: core drops that collection as it starts.
 - **A desktop's recordings**, kept past the task's end, until the
-  operation is deleted ([Recordings](#recordings)).
+  operation is deleted or a retention cleanup takes their files
+  ([Recordings](#recordings)).
 - **The operation's Ports** (a page of its own): every operational port in
   use, the latest opened first: what it serves, its session, who opened it
   and when, its streams; searched by the port, the session's number, who

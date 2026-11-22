@@ -145,9 +145,9 @@ MongoDB resolves the database engine decision listed as pending in the
   disk the bucket written last would fail every write ("no free volumes
   left"). A bucket that cannot grow needs free disk on the volume server.
 - **Watched and maintained** on the admins' Storage page: what each
-  bucket holds, the slots left, and reclaiming deleted files' space. Core
-  reads the master's API for it (`SEAWEEDFS_MASTER_URL`), a minute apart
-  ([Storage](../storage/)).
+  bucket holds, the slots left, reclaiming deleted files' space, and the
+  retention cleanups of recordings. Core reads the master's API for it
+  (`SEAWEEDFS_MASTER_URL`), a minute apart ([Storage](../storage/)).
 - **Why SeaweedFS**: lightweight, self-hosted, S3-compatible API. Avoids external cloud dependencies and keeps binary blobs out of the document database.
 - **Connections**: Core Server alone reads and writes. A factory never
   reaches it: a build's files and its artifact go through core, which
