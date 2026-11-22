@@ -48,8 +48,10 @@ reaches.
 - **Some examples are tests.** The protocol's tests copy examples of the
   docs verbatim: the Minion Build page's build schema, build request, its
   reply, progress and results; the Module Management page's action
-  conditions; the Codecs page's JSON envelope check-in. Change one, and the
-  test changes with it.
+  conditions; the Codecs page's JSON envelope check-in; the Task Outsourcing
+  page's composite command, call, decision and end; the Factory Commands
+  page's factory command, call, output report and result. Change one, and
+  the test changes with it.
 
 ## Working against an unreleased protocol
 

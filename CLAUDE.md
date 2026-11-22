@@ -58,7 +58,7 @@ renamed). The groups:
   envelope and routing, lifecycle, management, logs), the channel contracts
   (minion connection schema, HTTP sync, connections, agentless channels),
   the factory contracts (minion build, task outsourcing, factory commands,
-  a draft, and credentials), and the minion's protocol (`contracts/minion-messages/*`,
+  built in the protocol alone, and credentials), and the minion's protocol (`contracts/minion-messages/*`,
   with task results and actions, the file browser and the VPN front). A
   page goes in the group of the parties it is between: task outsourcing is
   core ↔ factory, though it is about tasks: the minion sees only ordinary
@@ -106,7 +106,7 @@ The site's Contributing → Writing the Docs page is the reference; in short:
   "Mechanics by connection kind" table, the wire format's Registry, and the
   protocol's tests that copy the docs' JSON examples verbatim (in
   `logos-golang-protocol`: the build schema, build request and action
-  conditions examples, and Task Outsourcing's).
+  conditions examples, Task Outsourcing's and Factory Commands').
 - **Links**: relative directory URLs (`../architecture/`,
   `../contracts/minion-build/#targets`), never `.md`.
 - **Asides**: Starlight's (`:::note`, `:::tip`, `:::caution`, `:::danger`),

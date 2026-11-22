@@ -425,9 +425,10 @@ does when they build it: a minion built for one job carries nothing more.
   runs the session's other commands as subtasks before and after the
   command's own op, or in its place for a command with no `op`, which never
   reaches the minion ([Task Outsourcing](../task-outsourcing/)).
-- A factory may also declare **factory commands** (`factory_commands`,
-  draft), which it runs itself: every session of its builds has them, and
-  no build picks one or carries it ([Factory Commands](../factory-commands/)).
+- A factory may also declare **factory commands** (`factory_commands`;
+  core does not run them yet), which it runs itself: every session of its
+  builds has them, and no build picks one or carries it ([Factory
+  Commands](../factory-commands/)).
 - A command removed or renamed needs a new `version`, like a field. Adding
   one does not, a required one included: core adds it to every build of its
   targets. Nor does marking one `legacy`, the way to retire or rename a

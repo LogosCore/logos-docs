@@ -2,8 +2,11 @@
 title: "Factory Commands"
 ---
 
-:::caution[Draft]
-A design not built yet: its open questions are at its end.
+:::note[Status]
+Built in part: the protocol package has its types and checks ([In the
+protocol package](#in-the-protocol-package)). Core, factory-core and the web
+app do not run factory commands yet, and the questions at the page's end
+are open.
 :::
 
 A **factory command** is a command its factory runs itself, in the factory
@@ -64,7 +67,7 @@ schema](../minion-build/#the-build-schema), in a list of their own:
 |---|---|
 | `id` | Identifier, as a command's (`^[a-z][a-z0-9_-]{0,62}$`): unique among the schema's `commands` and `factory_commands` together, and not one of core's own. The console types it, and core and the APIs name it by it. |
 | `label`, `description` | Shown in the UI, as a command's. |
-| `params[]` | What a task of it takes: field specs as in a [management action](../module-management/), and `file` ([task files](../task-results-and-actions/#task-files)). No `num`: nothing of it goes to a minion. |
+| `params[]` | What a task of it takes: field specs as in a [management action](../module-management/), `file` ([task files](../task-results-and-actions/#task-files)) and [credentials](../credentials/) among them, as a command's: one `file` at most, no `stream` (a stream feeds a minion's task), and no `num`, since nothing of it goes to a minion. |
 | `result` | Optional. What its task's `data` is: one of core's [results](../task-results-and-actions/), its shape and view. Without one, the `data` shows as raw JSON. |
 
 - **Every session of the factory kind's builds has it**: the factory
@@ -208,11 +211,12 @@ record of it, and the build request the factory got for it. Request
 | Field | Meaning |
 |---|---|
 | `task_id` | The task. |
-| `command`, `args` | The task's command, and its args by param key, defaults filled in. |
+| `command`, `args` | The task's command, and its args by param key, defaults filled in: a `file` param's arg is the file's id, a credential param's the credential's (a credential list's, their ids). |
 | `actor` | Who queued the task, as a build's `actor` says who started the build. |
 | `session` | The session, as core keeps it ([The session](#the-session)). |
 | `build` | Its build: core's record, and the request the factory got ([The build](#the-build)). |
-| `files` | Each `file` param's file, by key: its `id`, `name`, `size`, `sha256` and a `url` to fetch it whole. Absent without one. |
+| `files` | The files the args name, by id: each its `id`, `name`, `size`, `sha256` and a `url` to fetch it whole. |
+| `credentials` | The credentials the args name, by id, with their secrets ([Credentials](../credentials/)). |
 | `upload_url` | Where the factory puts a file for the task: a `PUT` of the whole, as [a composite's code does](../task-outsourcing/#files). |
 
 A field core has no value for is absent. Links are paths on core's
@@ -239,7 +243,7 @@ twice.
 | `sleep`, `late_at`, `lost_at` | The check-in schedule its minion said (`interval` in milliseconds, `jitter` in percent), and when it turns late and lost ([Late and lost sessions](../minion-messages/sessions/#late-and-lost-sessions)). |
 | `connected` | A persistent connection serving it is open. |
 | `conn`, `conn_kind`, `conn_name`, `conn_count`, `conn_changes` | The connection its minion uses (its place, from 1), its kind and name, how many there are, and the moves the minion reported (`at`, `from`, `to`, `reason`). |
-| `connections`, `connections_at` | The minion's own connections, when its hello said them, and when they last changed; absent: its build's ([Connections](../minion-messages/sessions/#connections)). |
+| `connections`, `connections_at` | The minion's own connections, when its hello said them, each with its `channel`, `kind`, `name`, `version`, `params` and `values` (by their fields' numbers, as text), `failover_auto`, `fail_after` and `max_message`; and when they last changed. Absent: its build's ([Connections](../minion-messages/sessions/#connections)). |
 | `max_tasks`, `max_tasks_set` | How many tasks its minion runs at once, as it said, and the operators' limit. |
 | `feedback_errors`, `feedback_at`, `feedback_read_at` | Its unread errors, when its latest feedback came, and when someone last marked it read ([Feedback](../minion-messages/sessions/#feedback)). |
 | `persisted`, `restarts`, `restart_count` | A persisted session, the latest processes that claimed it (`at`, `pid`, `host`, `build_id`), and how many in all. |
@@ -306,17 +310,18 @@ Request `payload`:
 }
 ```
 
-- `state` is `done`, with how it went (`ok`, `err`, `exit`) as a minion's
-  last result part gives them
-  ([Results](../minion-messages/tasks-and-results/#results)); or `failed`,
-  with `err` saying why.
+- `state` is `done`: the command ran, and `ok`, `err` and `exit` say how,
+  as a minion's last result part does
+  ([Results](../minion-messages/tasks-and-results/#results)); an `ok` one
+  has no `err`. Or `failed`: the factory could not run it, `err` says why,
+  and nothing comes with it: no `exit`, data or files.
 - `data` is inline when its JSON is 16 KiB or less; larger, a file the
   factory put (`data_file`, its id). Core checks it against the command's
   `result` as it checks a result part's: data that does not fit is kept, and
   flagged.
 - `files` are the ids of the files the factory put that are the task's own
-  (a decoded document, a report): the task lists them as a minion's task
-  lists what its minion sent.
+  (a decoded document, a report), each once: the task lists them as a
+  minion's task lists what its minion sent.
 - The factory sends what is left of its output first, so core has all of it
   when the task ends.
 
@@ -356,8 +361,12 @@ instance](../minion-build/#choosing-an-instance)):
 
 | What | Limit |
 |---|---|
+| Factory commands in a schema | 256, as commands |
+| A factory command's params | 32, as a command's |
 | An output report's `out` | 16 KiB |
 | A result's `data` inline | 16 KiB; larger, as a file the factory put |
+| Files a result names | 32 |
+| A result's `err` | 1,000 bytes |
 | A file the factory puts | as an operator's task file (`MINION_FILE_MAX_SIZE`, 2 GiB by default) |
 | An instance's answer to `factory.command` | 10 s, the control plane's default; then core offers the task to the next |
 | No report while it runs (output or result) | 10 minutes; then the task ends failed, and core asks the factory to stop it |
@@ -366,8 +375,8 @@ instance](../minion-build/#choosing-an-instance)):
 ## Trust
 
 - **The call carries the session's and the build's secrets**: the session's
-  keys, and in the build's request the minion's keys and its credentials'
-  secrets. They are for the task alone, as a build request's are for the
+  keys, in the build's request the minion's keys and its credentials'
+  secrets, and the task's own credentials. They are for the task alone, as a build request's are for the
   build: the factory does not log them, keep them past the task, or put them
   in its output, data or files.
 - **The calls cross the broker**, as build requests do: in the clear, on
@@ -387,6 +396,20 @@ instance](../minion-build/#choosing-an-instance)):
   its protocol changes.
 - **A build's commands, core's own, and composite commands** keep every
   rule they have.
+
+## In the protocol package
+
+`logos-golang-protocol`'s `protocol` package:
+
+| Go | What |
+|---|---|
+| `BuildSchema.FactoryCommands`, `FactoryCommand` | The declaration. `ValidateBuildSchema` checks it: an id of its own among the schema's commands and factory commands, none of core's, a known `result`, and params as a command's with no `num` and no stream, one file at most |
+| `BuildSchema.FactoryCommand`, `.SessionFactoryCommands`, `FactoryCommand.Args` | One by id; a session's, but those its build's own commands come before; a task's args checked, defaults filled in |
+| `TypeFactoryCommand`, `FactoryCommandRequest`, `FactoryCommandReply` | The call and its reply: `Validate`, and `ValidateFor` against the factory's schema (its command, its args, the files and credentials they name) |
+| `SessionRecord`, `BuildRecord` | The session and the build the call carries, each with `Validate`; `BuildRecord.ReadRequest` reads its `factory.build` request |
+| `TypeFactoryCommandOutput`, `FactoryCommandOutput`, `TypeFactoryCommandResult`, `FactoryCommandResult` | The reports, their replies, and `Validate` |
+| `TypeFactoryCommandCancel`, `FactoryCommandCancelRequest`, `FactoryCommandCancelReply` | The stop |
+| `MaxFactoryCommandOut`, `MaxFactoryCommandInline`, `MaxFactoryCommandFiles`, `FactoryCommandNoReport` | The limits above |
 
 ## Design notes
 
