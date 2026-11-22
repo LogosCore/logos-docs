@@ -2,17 +2,6 @@
 title: "Factory Commands"
 ---
 
-:::note[Status]
-Built in part: the protocol package has its types and checks ([In the
-protocol package](#in-the-protocol-package)); core runs factory commands'
-tasks (it lists the commands in every session, queues their tasks, offers
-them to the factory's instances, takes their reports and serves their
-links); factory-core runs a factory's code for them ([A factory's
-code](#a-factorys-code)). No factory declares one yet, and the web app shows
-such a task's state (`FACTORY`) as it is. The questions at the page's end
-are open.
-:::
-
 A **factory command** is a command its factory runs itself, in the factory
 module, never on a minion. The factory declares it once, in its build
 schema, and every session of every build it made has it: no build picks it,
@@ -93,7 +82,8 @@ schema](../minion-build/#the-build-schema), in a list of their own:
 - **In the app**: the session's console, `help` and command forms offer it
   beside the build's commands and core's own, marked as the factory's, and
   the factory's page lists its factory commands. The build form does not:
-  no build picks one.
+  no build picks one. A task of one shows where it stands (the instance
+  that runs it, or why none took it yet), and its result's files.
 - **Who may queue one**: whoever may queue the session's tasks.
 
 ## A task's life
@@ -326,8 +316,9 @@ Request `payload`:
   `result` as it checks a result part's: data that does not fit is kept, and
   flagged.
 - `files` are the ids of the files the factory put that are the task's own
-  (a decoded document, a report), each once: the task lists them as a
-  minion's task lists what its minion sent.
+  (a decoded document, a report), each once: core keeps them as it keeps a
+  file a minion sent, and the task lists them, oldest first (its `files` in
+  the GraphQL API, its Files tab in the web app).
 - A `data_file` or a `files` id that names no file the factory put for the
   task, whole, fails the task, saying why: core answers `recorded`, since
   the factory's code would send it so again.
