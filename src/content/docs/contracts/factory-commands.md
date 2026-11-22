@@ -4,9 +4,12 @@ title: "Factory Commands"
 
 :::note[Status]
 Built in part: the protocol package has its types and checks ([In the
-protocol package](#in-the-protocol-package)). Core, factory-core and the web
-app do not run factory commands yet, and the questions at the page's end
-are open.
+protocol package](#in-the-protocol-package)), and core runs factory
+commands' tasks: it lists the commands in every session, queues their
+tasks, offers them to the factory's instances, takes their reports and
+serves their links. factory-core does not run them yet, so no factory has
+one, and the web app shows such a task's state (`FACTORY`) as it is. The
+questions at the page's end are open.
 :::
 
 A **factory command** is a command its factory runs itself, in the factory
@@ -74,9 +77,11 @@ schema](../minion-build/#the-build-schema), in a list of their own:
   commands of the kind's latest schema (the one core checks new builds
   against), whatever the build's target, commands and schema version. Core
   runs one on an instance whose schema declares it.
-- **A build's own command comes first.** In a session whose build has a
-  command of the same `id` (from an earlier schema version), that command
-  is the session's, and the factory command is not offered there.
+- **One id, one command.** The latest schema refuses a factory command
+  whose `id` one of its commands has, legacy ones included, and a session
+  runs the commands of its factory kind's latest schema alone: a build
+  whose command has left the schema cannot run it, and its sessions have
+  the factory command of that `id`.
 - **Nothing a command has for its minion**: no `op`, `targets`, `default`,
   `required`, `legacy`, `kinds`, `opens`, `serves`, `action`, `composite` or
   `uses`.
@@ -97,7 +102,7 @@ schema](../minion-build/#the-build-schema), in a list of their own:
    files](../task-results-and-actions/#task-files) it names. It takes none
    of the minion's room ([Max
    tasks](../minion-messages/tasks-and-results/#max-tasks)), and waits for no
-   check-in.
+   check-in. Its state is `FACTORY` until it ends.
 2. **Taken**: core offers it to the instances of the session's factory
    (`factory.command`) until one accepts it ([Which instance runs
    it](#which-instance-runs-it)). From then on the task is running, and
@@ -220,7 +225,7 @@ record of it, and the build request the factory got for it. Request
 | `upload_url` | Where the factory puts a file for the task: a `PUT` of the whole, as [a composite's code does](../task-outsourcing/#files). |
 
 A field core has no value for is absent. Links are paths on core's
-address, signed for the task while it runs.
+address, signed for a day, and good only while the task runs.
 
 Reply `payload`: `{ "task_id": "…", "accepted": true }`. A repeated call for
 a task the instance already accepted is accepted again, and never runs it
@@ -322,6 +327,9 @@ Request `payload`:
 - `files` are the ids of the files the factory put that are the task's own
   (a decoded document, a report), each once: the task lists them as a
   minion's task lists what its minion sent.
+- A `data_file` or a `files` id that names no file the factory put for the
+  task, whole, fails the task, saying why: core answers `recorded`, since
+  the factory's code would send it so again.
 - The factory sends what is left of its output first, so core has all of it
   when the task ends.
 
@@ -342,7 +350,8 @@ accepted and never run.
 Core offers a queued task to the registered instances of the session's
 build's factory kind whose schema declares the command, never to another
 module's, one after another, as it offers builds ([Choosing an
-instance](../minion-build/#choosing-an-instance)):
+instance](../minion-build/#choosing-an-instance)), the one that runs the
+fewest tasks first:
 
 - **`busy`, or no answer within 10 seconds**: core passes the instance over
   and tries the next.
