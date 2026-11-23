@@ -389,7 +389,9 @@ func Schema() protocol.ConnectionSchema {
   numbers ([Field numbers](../../contracts/minion-connection/#field-numbers)).
 - **Field types** are a management manifest's, and `credential` and
   `credential_list` too (their `Accept` naming the credential types), which
-  a manifest refuses. Not `file`, nor `When` and `Advanced`.
+  a manifest refuses. Not `file`, nor `Advanced`. `When` makes a field
+  depend on an enum of the same list ([Fields that depend on
+  another](../../contracts/minion-connection/#fields-that-depend-on-another)).
 
 Test it as core will:
 

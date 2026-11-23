@@ -518,8 +518,9 @@ down, and a `bind-call` kind for pages it would call:
   built from them. Core checks a target's values against the channel's
   target fields as they are now, whenever it shows the target and before
   each call. A target they no longer fit (a field now required that it
-  lacks, a field the channel dropped, a value a field no longer takes, or
-  no channel declaring the kind) shows **needs editing**, with what does
+  lacks, a field the channel dropped, a value a field no longer takes or
+  that no longer [applies](../minion-connection/#fields-that-depend-on-another),
+  or no channel declaring the kind) shows **needs editing**, with what does
   not fit, and is not called: core never sends a channel values it no
   longer reads. Retries stop; tasks for its session wait, saying so. An
   edit that fits calls it again (a dropped field's value goes with it).

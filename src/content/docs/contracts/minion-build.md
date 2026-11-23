@@ -564,7 +564,7 @@ tries them. Each one is:
 | `kind` | Optional. The connection kind, one the channel and the target both support ([Channel ↔ Core: Connections](../channel-core-connections/#kinds-in-the-build-schema-and-in-builds)); left out, the first of those in the factory's order. |
 | `name` | Optional. What the minion calls the connection, a slug like an endpoint name, unique among the build's connections. Without one, it is `<channel>-<position>`, e.g. `http-1`. |
 | `description` | Optional. The operators' note on what the connection is for, at most 500 characters. Core keeps it with the build record; it is never part of a build request. |
-| `settings` | By the field key of the kind in the channel's [connection schema](../minion-connection/), validated like an endpoint's values. A field without a value takes its default. |
+| `settings` | By the field key of the kind in the channel's [connection schema](../minion-connection/), validated like an endpoint's values. A field without a value takes its default, but one that does not apply ([`when`](../minion-connection/#fields-that-depend-on-another)) takes none. |
 | `values` | The factory's [connection parameters](#connection-parameters) for that channel kind and connection kind. |
 | `failover` | Optional. The connection's own [failover](../channel-core-connections/#failover) settings: `auto` (failover may move the minion here; `true` by default, `false` for `bind-persistent`) and `fail_after` (failures in a row before it moves off this one; the build's by default). |
 | `max_message` | Set by core, never by the operator: the largest message the connection carries, its channel's [`max_message`](../channel-core-connections/#the-connection-schema-by-kind) for the kind (left out: 768 KiB). The build request carries it; the factory builds it in, and the minion keeps its messages within it. |
@@ -635,7 +635,9 @@ milliseconds, a datetime in unix seconds, a list or a map as it is, and a
 `credential` field's value the [credential](../credentials/#what-a-module-gets)
 itself (a `credential_list`'s, the list), in place of the id; the minion
 reads them with the same functions (`protocol.ArgString`, `ArgDuration`,
-`ArgCredential`). A field with no value and every `file` field are left out:
+`ArgCredential`). A field with no value (one that does not apply has none:
+[`when`](../minion-connection/#fields-that-depend-on-another)) and every
+`file` field are left out:
 a file's bytes are the factory's to handle. The request's links, deadline and actor are
 not in it either: they are about the build, not its settings. Maps are
 written in a deterministic order, so the same request gives the same bytes; a

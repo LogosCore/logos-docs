@@ -1097,7 +1097,8 @@ connection-patch = {
   those and keeps the rest.
 - **Defaults are filled in on both sides first**, so a param left out that
   has a default does not count as gone: `null` is for an optional one
-  without a default.
+  without a default, and for one that no longer applies
+  ([`when`](../minion-connection/#fields-that-depend-on-another)).
 - **Core's view of the old one can lag** (an edit queued before the last
   one's `connection_update` came): a patch touches only what the operator
   changed, so it does not undo an edit core had not heard of, and the

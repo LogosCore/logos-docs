@@ -59,8 +59,8 @@ Declared in `module.register` under `connection`:
 | `schema_version` | Format of this structure: `"2"`. (`"1"`, one field list for every kind, is gone.) |
 | `version` | Version of the channel's parameter set, from 1. Raised when minions built against the previous set would read the new one wrongly: a field removed, renamed or given another meaning, in any kind. Adding an optional field does not need it. |
 | `kinds` | The connection kinds the channel carries (`reverse-call`, `reverse-persistent`, `bind-call`, `bind-persistent`), at least one, each with at least one field, in its `fields` or its `target`. |
-| `kinds.<kind>.fields[]` | Up to 32, each a [field spec](../field-types/#the-field-description) (`key`, `type`, label, description, group, order, required, default, bounds, pattern, options), with two things a manifest refuses: `num`, which every field has ([Field numbers](#field-numbers)), and the [credential](../credentials/) types `credential` and `credential_list` (with `accept`). `file` is not allowed, nor `when` and `advanced`, which only a command's or an action's params take. A key is used once in a kind, across its fields and its target. |
-| `kinds.<kind>.target[]` | Bind kinds only, up to 32: what core needs to reach a minion ([bind-call targets](../channel-core-connections/#bind-call-minions-targets-and-sessions)), field specs as `fields` are, numbered in the same numbering. |
+| `kinds.<kind>.fields[]` | Up to 32, each a [field spec](../field-types/#the-field-description) (`key`, `type`, label, description, group, order, required, default, bounds, pattern, options), with two things a manifest refuses: `num`, which every field has ([Field numbers](#field-numbers)), and the [credential](../credentials/) types `credential` and `credential_list` (with `accept`). `file` is not allowed, nor `advanced`, which only a command's or an action's params take; `when` makes a field depend on one of the kind's enums ([Fields that depend on another](#fields-that-depend-on-another)). A key is used once in a kind, across its fields and its target. |
+| `kinds.<kind>.target[]` | Bind kinds only, up to 32: what core needs to reach a minion ([bind-call targets](../channel-core-connections/#bind-call-minions-targets-and-sessions)), field specs as `fields` are, numbered in the same numbering; a target field's `when` names one of the target's own. |
 | `kinds.<kind>.max_message` | Optional. The largest minion message (CBOR plaintext) the channel carries each way on a connection of the kind, 1 024 to 786 432 bytes; left out, 786 432 (768 KiB). Core keeps what it sends within it, and gives it to builds ([Limits](../minion-messages/wire-format/#limits)). It counts the plaintext as sent (packed items at their packed size): the [sealed frame](../minion-messages/wire-format/#sealed-frame) adds 51 to 66 bytes, and the transport adds the 16-byte id it is sent under and its own encoding, so size it from what one message of the transport holds less all of that. |
 | `kinds.<kind>.delegated_only` | Optional: no instance of the channel carries the kind; only [delegates](../minion-messages/delegation/) do, minions serving its transport on their hosts. Core sends no call or open of the kind to the channel's instances, and a target of it names a delegate. Never with `agentless`. |
 | `kinds.<kind>.agentless` | Bind kinds only, optional: the channel acts as the minion on connections of the kind, with nothing on the target ([agentless channels](../agentless-channels/)). Core gives it the keys of each call's and open's id; every other channel never sees a key. The channel's code says it, never an operator or a factory. |
@@ -103,6 +103,67 @@ before, and a removed field's is never given to another. A channel's page
 under Modules, in the web app, shows each field with its number, a bind
 kind's target fields under their own row (GraphQL: `ModuleField.num`).
 
+### Fields that depend on another
+
+A field may apply only while an `enum` of the same list holds certain
+values: a way of connecting with settings of its own, such as a proxy's
+address only when the minion goes through a proxy. The field says so with
+`when`, as an action's or a command's param does ([Field
+Types](../field-types/#the-field-description)):
+
+```json
+{
+  "fields": [
+    { "key": "base_url", "num": 1, "type": "url", "label": "Base URL", "required": true },
+    {
+      "key": "route", "num": 17, "type": "enum", "label": "Route", "default": "direct",
+      "options": [{ "value": "direct" }, { "value": "proxy" }]
+    },
+    {
+      "key": "proxy_url", "num": 18, "type": "url", "label": "Proxy URL", "required": true,
+      "when": { "key": "route", "values": ["proxy"] }
+    }
+  ]
+}
+```
+
+- **One enum of the same list.** `when.key` names an `enum` with no `when`
+  of its own: one of the kind's fields for a field, one of its target's for
+  a target field. Each of `values` is one of its options. Core refuses
+  anything else at registration (`validation_failed`), and `channel.Run`
+  makes the same check before it starts.
+- **Its value, or else its default.** An endpoint keeps only the values that
+  differ from the defaults, so the enum counts with its default when it has
+  no value. With neither, it holds nothing, and no field that depends on it
+  applies.
+- **Shown and checked only while it applies.** The forms built from the
+  schema (an endpoint's, a build's connection, a session's connection in
+  [`edit_connection`](../task-results-and-actions/#edit_connection) and
+  [`add_connection`](../task-results-and-actions/#add_connection), a
+  target's) show the field only then, and leave its value out otherwise.
+  Core refuses a value for a field that does not apply (`proxy_url: only
+  when route is proxy`), and a `required` one is required only while it
+  applies.
+- **Left out of everything after.** A field that does not apply takes no
+  default and goes nowhere: not into an [export](#the-export), a build
+  request's connection, the [minion
+  config](../minion-build/#the-minion-config), a `connection` value's
+  numbered form, or the map a channel gets with a call or an open.
+  Factories, minions and channels get the fields that apply, as concrete
+  values, the way they get an optional field without a value: none of them
+  evaluates a condition.
+- **A value it no longer takes.** An endpoint or a target that holds a value
+  for a field that no longer applies (a channel release added the `when`)
+  shows it as a problem, as any value that no longer fits: the endpoint
+  cannot be used, and the target needs editing, until it is saved again.
+  The form drops the value.
+- **`version`.** A `when` added to a built-in field, or changed, leaves the
+  field out where minions got it before: raise `version` when they read it
+  as always there (required, or with a default). Target fields change
+  without it, as ever.
+
+A channel's page under Modules shows each field's `when` beside its number.
+
 ## Channel endpoints
 
 An endpoint is a ready-to-use set of values for one connection kind of a
@@ -129,7 +190,8 @@ come and go.
 
 Values are validated with the same rules as management properties: type,
 bounds, pattern, required, and **no undeclared keys** (another kind's field is
-undeclared). Validation runs when an endpoint is saved and again whenever it is
+undeclared), and by each field's [`when`](#fields-that-depend-on-another).
+Validation runs when an endpoint is saved and again whenever it is
 read or exported, against its connection kind's fields in the channel kind's
 **latest** schema, because a new channel release may declare different ones; a
 release that drops the kind leaves the endpoint unusable until it is moved to
@@ -176,7 +238,8 @@ Deleting an operation deletes its endpoints.
 The endpoint as a minion's connection settings: its connection kind and its
 values over that kind's defaults, so a minion needs no knowledge of the schema
 itself. A field with
-neither a value nor a default is left out, and `channel.schema_version` is the
+neither a value nor a default is left out, and so is one that does not apply
+([`when`](#fields-that-depend-on-another)); `channel.schema_version` is the
 kind's current version. An endpoint with problems cannot be exported: the API
 answers `BAD_USER_INPUT` with the problems, and the app disables Copy and
 Download as JSON (a download is named `<slug>.endpoint.json`). The export's
@@ -213,7 +276,8 @@ before saving. The export's `name` becomes the endpoint's name (an export
 without one gives `imported`), and its slug is made when it is saved; its
 `kind` must be one the channel carries; values equal to that kind's current
 defaults are dropped so those fields keep following the defaults, keys the
-kind does not declare are left out (and named), and an export for another
+kind does not declare and values of fields that do not apply are left out
+(and named), and an export for another
 schema `version` is pointed out. An export has no description, so an imported
 endpoint starts without one.
 
@@ -223,7 +287,7 @@ saved.
 
 The endpoint form has **Form** and **JSON** tabs. The JSON tab edits the export's
 shape plus the `description` (its `name` is the endpoint's name there, any
-text), lists every field of its kind with its default, takes `null` to reset
+text), lists every field of its kind that applies, with its default, takes `null` to reset
 a field, and locks `format` and `channel`; changing `kind` switches the fields
 `params` holds.
 
@@ -243,6 +307,14 @@ settings is the factory's job: see [Minion Build](../minion-build/).
   one kind, so it never carries values a minion connecting that way would not
   read. Reusing the management field specs means one
   validator and one form renderer for both.
+- **Conditions core resolves.** A connection kind is one of the transport's
+  four, so it cannot tell apart the ways of connecting within it: through a
+  proxy or not. `when` says them, on one enum of the same list and one
+  level deep, as commands have it. Only core and the app evaluate it: an
+  export, a build request, a minion config and a channel's call carry the
+  fields that apply as concrete values, so no factory, minion or channel
+  evaluates a condition, the cost [Targets, not conditional
+  fields](../minion-build/#design-notes) avoids for builds.
 - **Ready-to-use values, not configuration.** Endpoints spare operators
   retyping values; the channel does not depend on them and a minion keeps its
   own copy. That is why they can belong to a kind: nothing needs to know which
