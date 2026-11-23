@@ -470,7 +470,7 @@ func coreRequest(t *testing.T) protocol.BuildRequest {
             "kill_date": "2027-01-31T00:00:00Z", "guardrails": []any{"no_debugger"},
         }),
         // What a build that names no commands gets.
-        Commands: buildSchema.DefaultCommands(target),
+        Commands: buildSchema.DefaultCommands(target, "windows/amd64"),
         Connections: []protocol.BuildConnection{{
             Endpoint: protocol.ChannelEndpointExport{
                 Format: protocol.ChannelEndpointExportV2, Name: "edge-eu", Kind: protocol.KindReverseCall,

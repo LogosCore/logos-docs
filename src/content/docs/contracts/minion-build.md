@@ -357,9 +357,9 @@ shows it once one of its platforms is picked, core refuses a value given for
 it elsewhere (`values.goarm: only for linux/arm`) and fills in no default, and
 neither the request nor the [minion config](#the-minion-config) carries it.
 A `required` one is required only where it applies. Its `num` is its own all
-the same, as every field's. When the platforms differ in more than a field
-or two (other commands, other channels), a target per platform says it
-better.
+the same, as every field's. Commands can differ by platform the same way
+([Commands for some platforms](#commands-for-some-platforms)); when
+the platforms differ in their channels, a target per platform says it.
 
 The protocol's `BuildSchema.PlatformFields(target, platform)` gives the
 fields a build takes, the ones core checks and fills in; `FieldSpec.OnPlatform`
@@ -377,6 +377,7 @@ does when they build it: a minion built for one job carries nothing more.
 | `op` | The command's number, unique in the schema, 1 to 65 535: what a [task](../minion-messages/tasks-and-results/#tasks) names it by on the wire. |
 | `label`, `description` | Shown in the UI. |
 | `targets[]` | Optional. Narrows the command to these targets; empty means every target. |
+| `platforms[]` | Optional. Narrows the command to builds for these platforms (`os/arch`, either half `any`), as a build field's `platforms` ([Commands for some platforms](#commands-for-some-platforms)); empty means every platform of its targets. |
 | `default` | Picked in a new build until the operator unpicks it, and what a build that names no commands gets. |
 | `required` | In every build of its targets: the minion cannot run without it (`sleep`, `exit`), so the operator cannot leave it out. |
 | `legacy` | Optional. A command the factory's minions no longer get, kept for the builds that have it ([Legacy commands](#legacy-commands)): never `default` or `required`, and no new build picks it. |
@@ -387,13 +388,13 @@ does when they build it: a minion built for one job carries nothing more.
 | `serves[]` | A [delegate](../minion-messages/delegation/#the-delegates-tasks) command's alone, required there (action `delegate` or `reverse_delegate`): the channel kinds its minions serve for other minions, each `{module_name, versions, kinds}` as `channels` names them, 16 at most, each channel kind once. `delegate` serves bind kinds, `reverse_delegate` reverse ones; never an agentless kind. Such a command names its own `kinds`, never `bind-call`. A factory that serves other kinds on another target declares another command (`targets`). |
 | `kinds[]` | Optional. The [connection kinds](../../module-types/#connection-kinds) the command works over, each one the factory's minions use with some channel; empty means every kind. For a command that does not work, or not well, over the others (an interactive shell needs both sides speaking at once): core refuses its task on a session whose minion uses another kind, saying which. The build form's command list, the factory's page and `help` say where it works; the console's command line marks one the session's minion cannot take where it is ("switch first"). |
 
-- A build's commands are the ones picked, the target's required ones among
-  them, in the schema's order. Among commands with one
+- A build's commands are the ones picked, the required ones of its target
+  and platform among them, in the schema's order. Among commands with one
   [action](../task-results-and-actions/#running-an-action), that order is
   the factory's preference: core runs the first when it starts one itself
   and the operator picked none. A build that leaves `commands` out (or sends
-  `null`) gets the target's `default` and `required` ones; one that sends an
-  empty list gets the required ones only.
+  `null`) gets the `default` and `required` ones of its target and
+  platform; one that sends an empty list gets the required ones only.
 - The factory builds those in and no others: what the minion can do is its
   build's `commands`. A factory that cannot build one in fails the build.
 - `help` is core's own command, in every session's console: it lists the
@@ -433,6 +434,45 @@ does when they build it: a minion built for one job carries nothing more.
   one does not, a required one included: core adds it to every build of its
   targets. Nor does marking one `legacy`, the way to retire or rename a
   command without one.
+
+#### Commands for some platforms
+
+A factory may build a command into its minions for some platforms alone: a
+command its code has for Windows and not for Linux, say, in a target that
+builds for both. The command says so with `platforms`, by the rules of a
+build field's ([Fields for some platforms](#fields-for-some-platforms)):
+`os/arch`, either half `any` (`windows/any`: every Windows build), and an
+`any` in a build's own platform matched by `any` alone.
+
+```json
+{ "id": "keylog", "op": 9, "label": "Keylogger", "platforms": ["windows/any"] }
+```
+
+- **Each platform is one its builds can be for**: it matches a platform of
+  one of the command's targets (of every target, when it names none). Core
+  refuses anything else at registration.
+- **For a build on another platform the command does not exist.** The build
+  form offers it once one of its platforms is picked, and a pick the
+  platform no longer has goes when the platform changes. Core refuses it in
+  a build for another platform (`commands[2]: "keylog" is only for
+  windows/any`), and the factory's own check does too.
+- **`default` and `required` hold where it applies.** A build that names no
+  commands gets the default and required ones of its target and platform,
+  and a required command is required only on its platforms.
+- **A composite command's `uses`** are each on every target and platform the
+  composite is on ([Task Outsourcing](../task-outsourcing/#a-composite-command)):
+  one whose subtask could run a command its build lacks is refused at
+  registration.
+- **Nothing after the build changes.** The request, the minion config and a
+  session carry the build's commands, whichever they are: a console, `help`
+  and core's actions see what the build has.
+- **`version`.** Taking platforms from a command takes it from those
+  builds, as removing it does: it needs a new version. Giving a command
+  more platforms does not, as adding a command does not.
+
+A platform still differs from another in its channels only by a target of
+its own: commands and fields can differ by platform, channels and a
+target's `opens` by target.
 
 #### Legacy commands
 
@@ -690,9 +730,10 @@ latest schema:
   undeclared keys**) for the shared fields plus the target's own, those of
   the build's platform: a value for a field of other platforms is refused
   ([Fields for some platforms](#fields-for-some-platforms));
-- each command picked is one of the target's, picked once; core adds the
-  target's required ones (see [Commands](#commands) for a build that leaves
-  `commands` out);
+- each command picked is one of the target's, on the build's platform
+  ([Commands for some platforms](#commands-for-some-platforms)), picked
+  once; core adds the required ones of the target and platform (see
+  [Commands](#commands) for a build that leaves `commands` out);
 - at least one connection is given (there is no upper limit), each through a
   channel kind the target supports, whose current connection schema `version`
   is one the factory lists, with a `name`, when it has one, that is a slug no
@@ -801,7 +842,7 @@ Request `payload`:
 | `build_id` | UUIDv4, the identity of the build and of the minion it makes: every build operation names the build by it, and the minion sends it on the [data plane](../channel-core-sync/), where the channel passes it to core as `Logos-Build-Id`. A repeated `build_id` is the same build. |
 | `target`, `platform`, `schema_version` | What to build, against which version of the factory's schema. |
 | `values` | Every field of the target that has a value or a default. A `file` field holds the file's id. |
-| `commands` | The ids of the [commands](#commands) the minion is built with: those picked, the target's required ones among them, in the schema's order. The minion has these and no others. |
+| `commands` | The ids of the [commands](#commands) the minion is built with: those picked, the required ones of its target and platform among them, in the schema's order. The minion has these and no others. |
 | `files` | The files the values name (connection parameter values included), by id, as in [Build files](#build-files). |
 | `credentials` | The [credentials](../credentials/#what-a-module-gets) the values, the connections' `values` and their endpoints' `params` name, by id: each its `id`, `name`, `type` and the fields of its type that hold a value. Secret, as the values: for the build only. |
 | `connections` | The [connections](#connections), in the order the minion tries them: each one's settings as an endpoint [export](../minion-connection/#the-export) under `endpoint` (its `name`, channel kind, schema version, connection `kind`, and `params` with defaults filled in), its [connection parameter](#connection-parameters) `values`, defaults filled in, and its own `failover` settings when it has any. |

@@ -70,7 +70,7 @@ schema](../minion-build/#commands):
 | Field | Meaning |
 |---|---|
 | `composite` | `true`: the factory's code runs the command's task, with subtasks around its own op, or in its place. |
-| `uses[]` | Required with `composite`: the commands its subtasks may run, by `id`. Each has an `op`, and is on every target the command is on. |
+| `uses[]` | Required with `composite`: the commands its subtasks may run, by `id`. Each has an `op`, and is on every target and platform the command is on ([Commands for some platforms](../minion-build/#commands-for-some-platforms)). |
 
 - **With an `op`**, the command has its own op on the minion, built in and
   numbered as any command's. Its code decides when its own op runs, with
@@ -587,7 +587,7 @@ func rm(path string) factory.Subtask {
 
 | Go | What |
 |---|---|
-| `BuildCommand.Composite`, `.Uses`, `.HasOp` | The declaration. `ValidateBuildSchema` checks what a composite uses: commands of the schema with an op, each on every target the composite is on |
+| `BuildCommand.Composite`, `.Uses`, `.HasOp` | The declaration. `ValidateBuildSchema` checks what a composite uses: commands of the schema with an op, each on every target and platform the composite is on |
 | `BuildSchema.PickCommands`, `.SessionCommands` | A build's commands when an operator picks a composite (what it uses comes with it), and what a session can run (a composite with no op, once its build has what it uses). `ValidateBuildRequest` refuses a composite with no op among a build's commands, and one whose uses the build lacks |
 | `TypeFactoryCompose`, `ComposeRequest`, `ComposeEnd`, `ComposeEvent`, `OwnOpState`, `EndState`, `HeaderFileName` | The call and its ends; `Validate` |
 | `Decision`, `Subtask`, `OwnOpRun`, `ComposeCancel`, `Finish` | The answer: `Validate`, and `ValidateFor` against its call; `Timer` reads `after` |
