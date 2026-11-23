@@ -232,6 +232,30 @@ is in [Field Types](../../field-types/#types).
   session's other commands as subtasks, before and after the command's own
   op, each an ordinary task; one with no `op` never goes out.
 - A [factory command](../../factory-commands/)'s task never goes out: the session's factory runs it, taking none of the minion's room.
+- A task queued with a time waits in core until then
+  ([Scheduled tasks](#scheduled-tasks)).
+
+### Scheduled tasks
+
+An operator may give a task a time (`queueMinionTask`'s `at`; the
+console's command form has **Schedule**, a command line `--at=`, unless
+the command has a param called `at`, which keeps the option). Core
+keeps the task **scheduled** (`SCHEDULED`), and nothing of it goes anywhere
+before that time: the minion is not offered it, a composite command's
+factory is not called, a factory command's factory is not offered it. At
+its time it goes on as one queued then would: queued for the minion (it
+goes with the minion's next exchange, or at once over a connection kept
+open), its factory's code called, or offered to its factory.
+
+- **A date and time**, after now: one past is refused. So is a time for
+  core's own commands, which run at once, and for a tunnel's (`tunnel`,
+  `reverse_tunnel`), whose port core opens as it is queued.
+- **Checked as it is queued**, as any task: its args, its files and its
+  credentials are the task's from then on.
+- **Stop** cancels it at once, as nothing of it went out. **Run now**
+  drops its time (`runMinionTaskNow`): it goes on at once.
+- **The minion learns nothing of it**: it gets the task at its time, as
+  any task, so a minion of any build takes one.
 
 ## Acknowledging
 
