@@ -80,7 +80,11 @@ get_tasks = {
   task, whatever else its request carries.
 - **`get_tasks` can share a request** with results, acks, chunks or a
   rehello (a `hello` under the session id): a minion that finishes a task
-  sends its result and takes the next task in one round trip. A first
+  may send its result and take the next task in one round trip. Or it
+  leaves `get_tasks` to its scheduled check-ins, so its tasks come at its
+  schedule's pace: with a 5-minute check-in interval and a limit of one, a
+  queue runs one task every 5 minutes, each result sent as soon as it is
+  ready. Which one is the minion's choice. A first
   `hello`, under a temporary id or the build id, goes alone
   ([Sessions](../sessions/#hello)): the minion asks for tasks in its first
   message under the session id. The exception is a `bind-call` page's
