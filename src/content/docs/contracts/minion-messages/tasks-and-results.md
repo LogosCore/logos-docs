@@ -434,6 +434,14 @@ Operators read a task's output and data in its console; the bytes as they came
 download from `GET /api/v1/minion-tasks/{id}/output`, and the data as a CBOR
 sequence from `GET /api/v1/minion-tasks/{id}/data`.
 
+A minion sends `out` as its host wrote it, with no conversion: a Windows
+console program's output is in the host's OEM code page (CP866 on a Russian
+one), not UTF-8. Core reads the output as UTF-8 unless an operator picked
+another encoding for the session; the console's encodings table shows a
+piece of the output read in each one core knows, to pick from. The pick
+holds for every task of the session, and the download is the same bytes
+whatever it is.
+
 ## Listings
 
 What a task saw of the host's file system travels as **listings**, on its
