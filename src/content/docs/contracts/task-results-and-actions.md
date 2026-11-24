@@ -1029,6 +1029,11 @@ Moves the minion to another of its build's connections: what a session's
   `connection`: operators then pick the connection from a list of the
   session's (each its place, channel, kind and address) in the command
   form, and in the console type its place (`connect 2`; Tab lists them).
+  Core keeps with the task what that connection was when it was queued (its
+  place, channel and kind, and the settings the channel's
+  [`summary`](../minion-connection/#the-schema) names), and the task list
+  shows it beside the line: the place alone may name another connection
+  later.
 - **No result.** The task's output says how it went ("switched to connection
   2"), and it fails when the minion stays where it is ("connection 2 did not
   answer, staying on 1", "already on connection 2"). A minion that moved

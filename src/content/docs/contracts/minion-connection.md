@@ -42,7 +42,8 @@ Declared in `module.register` under `connection`:
         },
         { "key": "tls_verify", "num": 6, "type": "bool", "default": false, "group": "TLS", "order": 6 },
         { "key": "request_timeout", "num": 10, "type": "duration", "default": "40s", "min": "1s", "max": "10m", "group": "Timing", "order": 10 }
-      ]
+      ],
+      "summary": ["base_url"]
     },
     "reverse-persistent": {
       "fields": [
@@ -61,6 +62,7 @@ Declared in `module.register` under `connection`:
 | `kinds` | The connection kinds the channel carries (`reverse-call`, `reverse-persistent`, `bind-call`, `bind-persistent`), at least one, each with at least one field, in its `fields` or its `target`. |
 | `kinds.<kind>.fields[]` | Up to 32, each a [field spec](../field-types/#the-field-description) (`key`, `type`, label, description, group, order, required, default, bounds, pattern, options), with two things a manifest refuses: `num`, which every field has ([Field numbers](#field-numbers)), and the [credential](../credentials/) types `credential` and `credential_list` (with `accept`). `file` is not allowed, nor `advanced`, which only a command's or an action's params take; `when` makes a field depend on one of the kind's enums ([Fields that depend on another](#fields-that-depend-on-another)). A key is used once in a kind, across its fields and its target. |
 | `kinds.<kind>.target[]` | Bind kinds only, up to 32: what core needs to reach a minion ([bind-call targets](../channel-core-connections/#bind-call-minions-targets-and-sessions)), field specs as `fields` are, numbered in the same numbering; a target field's `when` names one of the target's own. |
+| `kinds.<kind>.summary` | Optional, up to 4 keys of the kind's `fields` (not its `target`), each once, none a `secret`, `credential` or `credential_list`: the settings that tell people one connection of the kind from another, in the order shown (an address, a mode). Wherever the web app names a connection (a session's connections, [`switch_connection`](../task-results-and-actions/#switch_connection)'s choices, a build's connections) it shows its kind and these settings' values, the ones set; left out, the first settings set, in the fields' order. It changes nothing a minion reads: no `version` with it. |
 | `kinds.<kind>.max_message` | Optional. The largest minion message (CBOR plaintext) the channel carries each way on a connection of the kind, 1 024 to 786 432 bytes; left out, 786 432 (768 KiB). Core keeps what it sends within it, and gives it to builds ([Limits](../minion-messages/wire-format/#limits)). It counts the plaintext as sent (packed items at their packed size): the [sealed frame](../minion-messages/wire-format/#sealed-frame) adds 51 to 66 bytes, and the transport adds the 16-byte id it is sent under and its own encoding, so size it from what one message of the transport holds less all of that. |
 | `kinds.<kind>.delegated_only` | Optional: no instance of the channel carries the kind; only [delegates](../minion-messages/delegation/) do, minions serving its transport on their hosts. Core sends no call or open of the kind to the channel's instances, and a target of it names a delegate. Never with `agentless`. |
 | `kinds.<kind>.agentless` | Bind kinds only, optional: the channel acts as the minion on connections of the kind, with nothing on the target ([agentless channels](../agentless-channels/)). Core gives it the keys of each call's and open's id; every other channel never sees a key. The channel's code says it, never an operator or a factory. |
@@ -339,3 +341,9 @@ settings is the factory's job: see [Minion Build](../minion-build/).
 - **Defaults resolved in the export.** The minion gets concrete values and never
   interprets a schema; a later change of a default does not change minions
   already built.
+- **The channel says what tells its connections apart.** A session's
+  connections have no names, and a list of them is only useful when each
+  says enough to pick one: two connections of the same channel and kind
+  differ in their settings. The first setting alone said too little (an
+  HTTP connection's mode, not its address), and which settings matter is
+  the channel's knowledge, not core's: `summary` names them.
