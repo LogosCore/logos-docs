@@ -1026,10 +1026,9 @@ Moves the minion to another of its build's connections: what a session's
 - **Core gives** `conn`, an `int`: the connection's place in the build's
   connections, from 1, as a [`hello`](../minion-messages/sessions/#connections)
   names it. The command's `conn` should have the [format](../field-types/#formats)
-  `connection`: operators then pick the connection by name in the command
-  form, and type its name in the console (`connect ws`; Tab completes it),
-  without knowing the build's order. A name two connections share is typed
-  as its place.
+  `connection`: operators then pick the connection from a list of the
+  session's (each its place, channel, kind and address) in the command
+  form, and in the console type its place (`connect 2`; Tab lists them).
 - **No result.** The task's output says how it went ("switched to connection
   2"), and it fails when the minion stays where it is ("connection 2 did not
   answer, staying on 1", "already on connection 2"). A minion that moved
@@ -1050,8 +1049,9 @@ or its channel. What a session's connection's **Edit** runs.
   them, else the build's), as for [`switch_connection`](#switch_connection);
   and `connection`, a [`structured`](../minion-build/#structured-values)
   value: the connection it becomes, whole. Both params should have the
-  [format](../field-types/#formats) `connection`. `conn` is then picked by
-  name, and `connection` is filled from the connection `conn` picks and
+  [format](../field-types/#formats) `connection`. `conn` is then picked
+  from the session's connections, and `connection` is filled from the one
+  it picks and
   edited as a connection's form; core checks it whole against its
   channel's fields and the factory's connection parameters.
 - **The minion gets what changed** ([below](#the-patch)): core compares the
@@ -1076,7 +1076,6 @@ or its channel. What a session's connection's **Edit** runs.
 connection-patch = {
   ? 1: tstr,            ; channel  ┐ both, or neither: with them, the
   ? 2: tstr,            ; kind     ┘ connection whole, in place of the old
-  ? 3: tstr,            ; name: the new one
   ? 4: uint,            ; version: the new one
   ? 5: { * uint => any / null },  ; params: those that changed, by num;
                         ;   null: gone
@@ -1092,7 +1091,7 @@ connection-patch = {
   old ones means nothing. The minion replaces the old one with it.
 - **Otherwise only what differs**: a param or value that changed, by its
   number, with its new value (in its type's CBOR form, as a task's args);
-  one the new connection does not have, `null`; `name`, `version`,
+  one the new connection does not have, `null`; `version`,
   `failover` and `max_message` only when they change. The minion changes
   those and keeps the rest.
 - **Defaults are filled in on both sides first**, so a param left out that
@@ -1116,9 +1115,7 @@ connection to change.
   connection whole. The form shows it as a connection's form, empty, or
   filled from one of the session's connections as a start. Core checks it
   against its channel's fields and the factory's connection parameters, as
-  a build's connection, and refuses a `name` one of the session's
-  connections has ("a connection called ws exists"). An unnamed one is
-  `<channel>-<place>`, as a build's.
+  a build's connection.
 - **The minion gets it whole**, in its numbered form (a hello's
   [connection](../minion-messages/sessions/#hello)): there is nothing to
   compare it with, so no [patch](#the-patch).

@@ -316,7 +316,7 @@ the value's own, except where a format says otherwise.
 | `format` | Value | Checked |
 |---|---|---|
 | none | any JSON value | size and depth alone |
-| `connection` | one connection, as a build's: `{"channel", "kind", "name"?, "version"?, "params"?, "values"?, "failover"?, "max_message"?}`, `params` the channel's fields for the kind and `values` the factory's connection parameters for the channel and kind, both by key; `failover` `{"auto"?, "fail_after"?}` | a channel core knows and a kind it carries; `params` against the channel's fields, `values` against the factory's connection parameters, as a build's connection; a slug `name`; `max_message` at most 768 KiB |
+| `connection` | one connection, as a build's: `{"channel", "kind", "version"?, "params"?, "values"?, "failover"?, "max_message"?}`, `params` the channel's fields for the kind and `values` the factory's connection parameters for the channel and kind, both by key; `failover` `{"auto"?, "fail_after"?}` | a channel core knows and a kind it carries; `params` against the channel's fields, `values` against the factory's connection parameters, as a build's connection; `max_message` at most 768 KiB |
 
 **The `connection` format** hands a minion a connection to take on (a
 command that adds one, or changes one, say). Core checks it as a build's

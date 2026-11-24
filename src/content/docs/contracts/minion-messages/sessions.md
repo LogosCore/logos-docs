@@ -123,8 +123,6 @@ hello = {
 connection = {
   1: tstr,              ; channel: the channel module it goes through
   2: tstr,              ; kind: the connection kind ("reverse-call", ...)
-  ? 3: tstr,            ; name: a slug, unique among the connections;
-                        ;   absent: the session's at its place
   ? 4: uint,            ; version: the connection schema version its
                         ;   params follow
   ? 5: { * uint => any },   ; params: the endpoint's, by field num
@@ -187,11 +185,11 @@ text.
   in-process `setuid`).
 - `conn` names the connection the minion uses by its place in the build's
   connections (1 for the first): a minion carries no connection names, and
-  core knows each one's name, kind and channel from the build. When it
+  core knows each one's kind and channel from the build. When it
   moves to another, it says so with a [`conn_update`](#connections).
 - `connections` says the minion's connections itself, each as a build's
   [connection](../../minion-build/#connections) is (its endpoint's channel,
-  kind, name, schema version and params, its connection parameter values,
+  kind, schema version and params, its connection parameter values,
   failover settings and `max_message`), numbered as the minion config
   numbers them. When a hello carries the list, core uses it
   for the session in place of the build's: `conn` and every `conn_update`
@@ -199,10 +197,8 @@ text.
   the build's connections, as before. A rehello with a list replaces the
   one the session kept; one without keeps it. A `connection_update`
   ([Connections](#connections)) replaces it too, without a rehello.
-  A minion need not know its connections' names: an entry without a
-  `name` keeps the one the session has at its place (its own list's,
-  else the build's), unless another entry of the list names it; one past
-  them is `<channel>-<place>`, as a build's unnamed connection is.
+  A session's connections have **no names**: each is its place, with its
+  channel, kind and address ([Design notes](#design-notes)).
 - `roundtrip_time` is the round trip the minion measured on its latest
   exchange before the hello, in milliseconds: from sending a message to
   core to receiving the reply that answers it (its `re`), by the minion's
@@ -437,7 +433,8 @@ conn_update = {
   the move from a message that came through it.
 - Core keeps the connection in use on the session, and the moves it
   reported, the latest 32, with when, from which, to which and why. The
-  session's view lists the build's connections with the one in use, and a
+  session's view lists its connections by place, channel, kind and
+  address, with the one in use, and a
   **Switch to** button on each other one when the minion has a command for
   `switch_connection`.
 - A hello's `connections` may differ from the build's (a minion that added
@@ -469,8 +466,7 @@ schedule with a `sleep_update`:
 - It goes in **any message**, beside other items; core answers nothing to
   it. A rehello with `connections` does the same.
 - Core checks the list as a hello's (a channel it knows, a kind that
-  channel carries, unique names), names its unnamed entries as a hello's
-  ([Hello](#hello)), and **replaces the session's** with it:
+  channel carries) and **replaces the session's** with it:
   `conn`, every later `conn_update` and the session's view use it from
   then on. A minion whose hello said none starts having its own here, in
   place of the build's.
@@ -482,9 +478,8 @@ schedule with a `sleep_update`:
   keeps the one it had.
 - **A connection taken out** ([`remove_connection`](../../task-results-and-actions/#remove_connection))
   is said by its place in the list before (`removed`): the ones after it
-  moved up a place, and core moves what it keeps with them. The names it
-  keeps for unnamed entries skip the removed one's, and the place in use,
-  when it was after it, is one less: the same connection, no move. An
+  moved up a place, and core moves what it keeps with them. The place in
+  use, when it was after it, is one less: the same connection, no move. An
   update that says it removed the connection in use, or a place past the
   list before, gets `bad_message`.
 - No move is recorded: the list changed, not the connection the minion
@@ -613,6 +608,14 @@ minion connects again (`reverse-persistent`) or waits for core's next dial
 - **Why the temporary id is a UUIDv4.** It takes the build id's place in the
   transport and in `Logos-Build-Id`, so channels and channel-core carry it
   without knowing staging exists.
+- **Why a session's connections have no names.** A build's connections
+  have names, and a minion carries none: it says its connections by place.
+  Core used to name a session's own list by place, from the names the
+  session had, and a list that changed under them (a persisted session
+  claimed by a rebuilt minion with other connections, an edit that swapped
+  one) kept names that no longer said what the connections were. A place
+  with its channel, kind and address is always true, and the address says
+  what a name tried to.
 - **Why a machine id, not the host.** Sessions come and go (restarts,
   persisted sessions replaced, a second minion on the same host); the
   machine stays. The file browser keeps one snapshot per machine because of

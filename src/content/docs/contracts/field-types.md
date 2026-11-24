@@ -123,7 +123,7 @@ and a format the UI does not know is ignored.
 | `path` | `string` | Generates URL paths (`/cdn/assets/`) of 1 to 6 words from word lists it ships, divided by `/`, `-`, `.` or `_`, offering only those that pass the field's `pattern` and `max_length`. |
 | `multiline` | `string`, `secret` | Edits the value in a box of several lines (a PEM key), which keeps its line breaks, a secret's too; a one-line box drops them. |
 | `timezone` | `string` | A time zone as IANA names it (`Europe/Berlin`, `UTC`): suggests the browser's own list as it is typed, by any part of the name, each with its offset now, the browser's own zone first; a name typed whole is taken as it is. |
-| `connection` | `int` | One of a minion's connections, by its place from 1: a command's param, such as [`switch_connection`](../task-results-and-actions/#switch_connection)'s `conn`. A session's command form picks it from the session's connections by name, kind and address, and its console takes and completes it by name. |
+| `connection` | `int` | One of a minion's connections, by its place from 1: a command's param, such as [`switch_connection`](../task-results-and-actions/#switch_connection)'s `conn`. A session's command form picks it from the session's connections (each its place, channel, kind and address), and its console takes its place. |
 
 A `structured` value's `format` is another thing: core checks the value
 against it, and `connection` (a connection for the minion, sent in its

@@ -776,7 +776,7 @@ operator **changes** it with a command.
 
 - The `hello` says **the connection in use** (`conn`, key 16): its place in
   the build's connections, from 1, so a minion carries no connection names;
-  core knows each one's name, kind, channel and endpoint from the build.
+  core knows each one's kind, channel and endpoint from the build.
 - **`conn_update`** (item 14, minion → core) says when it changes, whatever
   changed it: an operator's command, a fallback after failures, the
   minion's own logic; and, optionally, why ("fell back after 5 failures").

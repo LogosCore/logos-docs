@@ -164,7 +164,7 @@ record of it, and the build request the factory got for it. Request
     "late_at": "2026-11-22T14:31:04Z",
     "lost_at": "2026-11-22T14:32:16Z",
     "connected": false,
-    "conn": 1, "conn_kind": "reverse-call", "conn_name": "edge-eu", "conn_count": 1,
+    "conn": 1, "conn_kind": "reverse-call", "conn_count": 1,
     "max_tasks": 1,
     "feedback_errors": 0,
     "crypto": { "suite": "aes-256-cbc-hmac-sha256", "material": { "enc_key": "…", "mac_key": "…" } }
@@ -238,8 +238,8 @@ twice.
 | `via`, `via_since` | The delegates its messages come through, nearest first, each a session (`session_id`, `number`) and its `task_id`, and since when ([Delegation](../minion-messages/delegation/)). |
 | `sleep`, `late_at`, `lost_at` | The check-in schedule its minion said (`interval` in milliseconds, `jitter` in percent), and when it turns late and lost ([Late and lost sessions](../minion-messages/sessions/#late-and-lost-sessions)). |
 | `connected` | A persistent connection serving it is open. |
-| `conn`, `conn_kind`, `conn_name`, `conn_count`, `conn_changes` | The connection its minion uses (its place, from 1), its kind and name, how many there are, and the moves the minion reported (`at`, `from`, `to`, `reason`). |
-| `connections`, `connections_at` | The minion's own connections, when its hello said them, each with its `channel`, `kind`, `name`, `version`, `params` and `values` (by their fields' numbers, as text), `failover_auto`, `fail_after` and `max_message`; and when they last changed. Absent: its build's ([Connections](../minion-messages/sessions/#connections)). |
+| `conn`, `conn_kind`, `conn_count`, `conn_changes` | The connection its minion uses (its place, from 1), its kind, how many there are, and the moves the minion reported (`at`, `from`, `to`, `reason`). |
+| `connections`, `connections_at` | The minion's own connections, when its hello said them, each with its `channel`, `kind`, `version`, `params` and `values` (by their fields' numbers, as text), `failover_auto`, `fail_after` and `max_message`; and when they last changed. Absent: its build's ([Connections](../minion-messages/sessions/#connections)). |
 | `max_tasks`, `max_tasks_set` | How many tasks its minion runs at once, as it said, and the operators' limit. |
 | `feedback_errors`, `feedback_at`, `feedback_read_at` | Its unread errors, when its latest feedback came, and when someone last marked it read ([Feedback](../minion-messages/sessions/#feedback)). |
 | `persisted`, `restarts`, `restart_count` | A persisted session, the latest processes that claimed it (`at`, `pid`, `host`, `build_id`), and how many in all. |
