@@ -1136,6 +1136,9 @@ restart goes on with it. Core enforces it alone, the minion unchanged:
   lists the reverse port forwards the same way: where each one's minion
   listens, what to, and the rest (live by the operation's listener events,
   `minionListenerChanged`).
+  With no operation picked, the page lists those of every operation the
+  operator is a member of, each row naming its operation, as Findings
+  does: the lists' queries and events take no `operationId` then.
 
 ## Limits
 
